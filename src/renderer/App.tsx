@@ -425,11 +425,13 @@ export function App() {
   const activeSummary = active?.piState.sessionFile
     ? allSessions.find((s) => s.path === active.piState.sessionFile)
     : undefined;
+  // Pi's auto-generated names (pi-session-<timestamp>_<uuid>) are not titles; the first message is.
+  const human = (n?: string) => (n && !/^pi-session-\d{4}-/.test(n) ? n : undefined);
   const title = active
-    ? active.piState.sessionName ||
-      activeSummary?.name ||
+    ? human(active.piState.sessionName) ||
+      human(activeSummary?.name) ||
       activeSummary?.firstMessage ||
-      (active.conv.messages.length ? firstUserText(active.conv.messages) : "New session")
+      (active.conv.messages.length ? firstUserText(active.conv.messages) : undefined)
     : undefined;
   // pi-worktree publishes the session's binding through Pi's widget channel; PID only shows it.
   const worktreeLine = active
@@ -508,34 +510,33 @@ export function App() {
         {page === "settings" && <SettingsPage />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <main className="flex-1 flex flex-col min-w-0">
-            <div className="drag h-[52px] shrink-0 flex items-center gap-2.5 px-7 text-[12.5px] text-ink-3">
+            <div className="drag h-[52px] shrink-0 flex items-center gap-2.5 px-7 whitespace-nowrap">
               {active && (
                 <>
-                  <span className="text-ink truncate">{title}</span>
-                  <span>·</span>
-                  <span className="font-mono truncate">{active.cwd.replace(/^\/Users\/[^/]+/, "~")}</span>
+                  <span className={`truncate min-w-0 ${title ? "text-ink" : "text-ink-2"}`}>
+                    {title ?? "New session"}
+                  </span>
+                  <span className="text-line-2 shrink-0">·</span>
+                  <Pill title={active.cwd}>
+                    <FolderGlyph />
+                    {base(active.cwd)}
+                  </Pill>
                   {worktreeLine ? (
-                    <span
-                      className="flex items-center gap-1.5 text-ink-2"
-                      title="pi-worktree binding for this session"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                      >
-                        <title>worktree</title>
-                        <path d="M5 3v4a3 3 0 0 0 3 3h0a3 3 0 0 0 3-3V3M8 10v3" />
-                      </svg>
+                    <Pill title="pi-worktree binding for this session" tone="warn">
+                      <BranchGlyph />
                       <span className="font-mono">{worktreeLine}</span>
-                    </span>
+                    </Pill>
                   ) : (
-                    branch && <span className="font-mono">{branch}</span>
+                    branch && (
+                      <Pill title={branch}>
+                        <BranchGlyph />
+                        <span className="font-mono">
+                          {branch.length > 24 ? `${branch.slice(0, 23)}…` : branch}
+                        </span>
+                      </Pill>
+                    )
                   )}
-                  {active.exit && <span className="text-danger truncate">{active.exit}</span>}
+                  {active.exit && <span className="text-danger truncate text-[12.5px]">{active.exit}</span>}
                 </>
               )}
             </div>
@@ -649,3 +650,37 @@ function firstUserText(messages: ReturnType<typeof emptyConversation>["messages"
 }
 
 export type { RpcExtensionUIRequest };
+
+/** Title-bar pill: never wraps, never truncates; the full value lives in the tooltip. */
+function Pill({ children, title, tone }: { children: React.ReactNode; title?: string; tone?: "warn" }) {
+  return (
+    <span
+      title={title}
+      className={`no-drag shrink-0 inline-flex items-center gap-1.5 h-[22px] px-2 rounded-full bg-paper-2 text-[12px] ${
+        tone === "warn" ? "text-warn" : "text-ink-2"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function FolderGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <title>folder</title>
+      <path d="M2 5.5A1.5 1.5 0 0 1 3.5 4H6l1.5 1.5H12.5A1.5 1.5 0 0 1 14 7v4.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" />
+    </svg>
+  );
+}
+
+function BranchGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <title>branch</title>
+      <path d="M5 3v4a3 3 0 0 0 3 3h0a3 3 0 0 0 3-3V3" />
+      <circle cx="5" cy="13" r="1.5" />
+      <circle cx="11" cy="13" r="1.5" />
+    </svg>
+  );
+}
