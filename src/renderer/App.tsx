@@ -91,9 +91,10 @@ export function App() {
     },
     [settings.notifications],
   );
+  /** One toast per distinct message: several pi processes starting in one folder repeat the same notice. */
   const toast = useCallback((message: string, type: Toast["type"] = "info") => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, message, type }]);
+    setToasts((t) => (t.some((x) => x.message === message) ? t : [...t, { id, message, type }]));
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
   }, []);
 
