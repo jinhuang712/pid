@@ -23,7 +23,7 @@ const ago = (iso: string) => {
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 };
-const CLOSED_PREVIEW = 3; // closed sessions shown before the disclosure
+const CLOSED_PREVIEW = 0; // closed sessions stay folded; only live ones are rows
 const PAGE = 10; // how many more each click reveals
 
 export interface SessionActions {
@@ -308,7 +308,7 @@ export function SessionTree({
                       onClick={() => setRevealed((m) => ({ ...m, [f]: (m[f] ?? 0) + PAGE }))}
                       className="h-6 px-2 text-left text-xs text-ink-3 hover:text-ink"
                     >
-                      {hidden} earlier session{hidden === 1 ? "" : "s"} · show {Math.min(PAGE, hidden)}
+                      {hidden} closed session{hidden === 1 ? "" : "s"} · show {Math.min(PAGE, hidden)}
                     </button>
                   )}
                   {(revealed[f] ?? 0) > 0 && !filter && (
@@ -317,10 +317,10 @@ export function SessionTree({
                       onClick={() => setRevealed((m) => ({ ...m, [f]: 0 }))}
                       className="h-6 px-2 text-left text-xs text-ink-3 hover:text-ink"
                     >
-                      Fold earlier sessions
+                      Fold closed sessions
                     </button>
                   )}
-                  {list.length === 0 && unsaved.length === 0 && (
+                  {shown.length === 0 && unsaved.length === 0 && hidden === 0 && (
                     <div className="h-6 px-2 text-xs text-ink-3 flex items-center">
                       {filter ? "No matches" : "No sessions"}
                     </div>
