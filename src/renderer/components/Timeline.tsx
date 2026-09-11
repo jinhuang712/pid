@@ -1,10 +1,14 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useSettings } from "../settings";
-import type { ConversationState, Marker } from "../state/conversation";
+import type { ConversationState, Marker, ToolRun } from "../state/conversation";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
+
+/** Messages rendered at first; older ones mount as you scroll up. Long sessions run to thousands. */
+const WINDOW = 80;
+const WINDOW_STEP = 80;
 
 function userText(m: UserMessage): string {
   return typeof m.content === "string"
@@ -47,15 +51,29 @@ function Thinking({ text, live }: { text: string; live: boolean }) {
   );
 }
 
-function Assistant({ m, live, state }: { m: AssistantMessage; live: boolean; state: ConversationState }) {
+/**
+ * Memoized on the message object and the tool-run table: a streamed token changes neither for
+ * settled messages, so only the live tail re-renders per event.
+ */
+const Assistant = memo(function Assistant({
+  m,
+  live,
+  toolRuns,
+}: {
+  m: AssistantMessage;
+  live: boolean;
+  toolRuns: Record<string, ToolRun>;
+}) {
   return (
     <div className="timeline-item px-6 py-2 flex flex-col gap-2">
       {m.content.map((c, i) => {
         const key = `${m.timestamp}-${i}`;
         if (c.type === "thinking") return <Thinking key={key} text={c.thinking} live={live} />;
         if (c.type === "text")
-          return <Markdown key={key} source={c.text} className="text-[14px] leading-[1.7] text-ink" />;
-        if (c.type === "toolCall") return <ToolCard key={key} call={c} run={state.toolRuns[c.id]} />;
+          return (
+            <Markdown key={key} source={c.text} live={live} className="text-[14px] leading-[1.7] text-ink" />
+          );
+        if (c.type === "toolCall") return <ToolCard key={key} call={c} run={toolRuns[c.id]} />;
         return null;
       })}
       {m.stopReason === "error" && m.errorMessage && (
@@ -66,9 +84,9 @@ function Assistant({ m, live, state }: { m: AssistantMessage; live: boolean; sta
       {m.stopReason === "aborted" && <div className="text-[12.5px] text-ink-3">Stopped.</div>}
     </div>
   );
-}
+});
 
-function Item({ m, state }: { m: AgentMessage; state: ConversationState }) {
+const Item = memo(function Item({ m, toolRuns }: { m: AgentMessage; toolRuns: Record<string, ToolRun> }) {
   if (m.role === "user") {
     return (
       <div className="timeline-item px-6 py-3 flex justify-end">
@@ -78,12 +96,12 @@ function Item({ m, state }: { m: AgentMessage; state: ConversationState }) {
       </div>
     );
   }
-  if (m.role === "assistant") return <Assistant m={m} live={false} state={state} />;
+  if (m.role === "assistant") return <Assistant m={m} live={false} toolRuns={toolRuns} />;
   if (m.role === "toolResult") return null; // shown inside the tool line
   return (
     <div className="px-6 py-1 text-[12.5px] text-ink-3">{String((m as { role: string }).role)} message</div>
   );
-}
+});
 
 function MarkerRow({ kind, text, detail, live }: Omit<Marker, "afterIndex"> & { live?: boolean }) {
   if (kind === "turn") {
@@ -106,9 +124,16 @@ export function Timeline({ state }: { state: ConversationState }) {
   const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const [stick, setStick] = useState(true);
+  /** How many of the newest messages are mounted; grows as the user scrolls toward the top. */
+  const [shown, setShown] = useState(WINDOW);
   const { settings } = useSettings();
   const follow = stick && settings.conversation.autoScroll;
 
+  const total = state.messages.length;
+  const from = Math.max(0, total - shown);
+  const hidden = from;
+
+  // Follow the stream: the tail grows on every event, so this runs per event by design.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on every state change to follow the stream
   useEffect(() => {
     if (follow) bottom.current?.scrollIntoView({ block: "end" });
@@ -118,39 +143,60 @@ export function Timeline({ state }: { state: ConversationState }) {
     const el = scroller.current;
     if (!el) return;
     setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48);
+    if (hidden > 0 && el.scrollTop < 400) {
+      // keep the viewport anchored while older rows mount above it
+      const before = el.scrollHeight;
+      setShown((n) => n + WINDOW_STEP);
+      requestAnimationFrame(() => {
+        el.scrollTop += el.scrollHeight - before;
+      });
+    }
   };
 
   return (
     <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto pb-6">
       <div className="max-w-3xl mx-auto">
-        {state.markers
-          .filter((k) => k.afterIndex < 0)
-          .map((k) => (
-            <MarkerRow
-              key={`${k.kind}-${k.afterIndex}-${k.text}`}
-              kind={k.kind}
-              text={k.text}
-              detail={k.detail}
-            />
-          ))}
-        {state.messages.map((m, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: messages are append-only
-          <div key={i}>
-            <Item m={m} state={state} />
-            {state.markers
-              .filter((k) => k.afterIndex === i)
-              .map((k) => (
-                <MarkerRow
-                  key={`${k.kind}-${k.afterIndex}-${k.text}`}
-                  kind={k.kind}
-                  text={k.text}
-                  detail={k.detail}
-                />
-              ))}
-          </div>
-        ))}
+        {hidden > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShown(total)}
+            className="w-full px-6 py-3 text-[12.5px] text-ink-3 hover:text-ink-2 text-center"
+          >
+            {hidden} earlier message{hidden === 1 ? "" : "s"} · show all
+          </button>
+        ) : (
+          state.markers
+            .filter((k) => k.afterIndex < 0)
+            .map((k) => (
+              <MarkerRow
+                key={`${k.kind}-${k.afterIndex}-${k.text}`}
+                kind={k.kind}
+                text={k.text}
+                detail={k.detail}
+              />
+            ))
+        )}
+        {state.messages.slice(from).map((m, j) => {
+          const i = from + j;
+          return (
+            // messages are append-only, so the absolute index is a stable key
+            <div key={i}>
+              <Item m={m} toolRuns={state.toolRuns} />
+              {state.markers
+                .filter((k) => k.afterIndex === i)
+                .map((k) => (
+                  <MarkerRow
+                    key={`${k.kind}-${k.afterIndex}-${k.text}`}
+                    kind={k.kind}
+                    text={k.text}
+                    detail={k.detail}
+                  />
+                ))}
+            </div>
+          );
+        })}
         {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
-        {state.streaming && <Assistant m={state.streaming} live state={state} />}
+        {state.streaming && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
         {state.isStreaming && !state.streaming && (
           <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
