@@ -2,36 +2,7 @@ import type { ToolCall } from "@earendil-works/pi-ai";
 import { useState } from "react";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
-
-const VERB: Record<string, string> = {
-  read: "Read",
-  write: "Write",
-  edit: "Edit",
-  bash: "Run",
-  grep: "Search",
-  find: "Find",
-  ls: "List",
-};
-
-function summarize(call: ToolCall): string {
-  const a = call.arguments ?? {};
-  switch (call.name) {
-    case "read":
-    case "write":
-    case "edit":
-    case "ls":
-      return String(a.path ?? "");
-    case "bash":
-      return String(a.command ?? "");
-    case "grep":
-    case "find":
-      return String(a.pattern ?? "");
-    default: {
-      const first = Object.values(a)[0];
-      return typeof first === "string" ? first : "";
-    }
-  }
-}
+import { label, MCP_PREFIX } from "../tool-label";
 
 function resultText(run?: ToolRun): string {
   if (!run?.result) return "";
@@ -61,7 +32,8 @@ export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
   const diff: string | undefined = call.name === "edit" ? run?.result?.details?.diff : undefined;
   const stats = call.name === "edit" ? diffStats(run?.result?.details?.patch) : undefined;
   const out = resultText(run);
-  const verb = VERB[call.name] ?? call.name;
+  const lbl = label(call);
+  const verb = status === "running" ? lbl.running : lbl.done;
 
   return (
     <div className="text-[12.5px]">
@@ -82,8 +54,10 @@ export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
           <title>{open ? "collapse" : "expand"}</title>
           <path d="m6 4 4 4-4 4" />
         </svg>
-        <span className={status === "running" ? "animate-pulse" : ""}>{verb}</span>
-        <span className="font-mono text-ink-3 truncate">{summarize(call)}</span>
+        <span className={`shrink-0 ${status === "running" ? "animate-pulse" : ""}`}>{verb}</span>
+        <span className="font-mono text-ink-3 truncate" title={lbl.detail}>
+          {lbl.detail}
+        </span>
         {stats && <span className="text-ink-3 shrink-0">{stats}</span>}
         {isError && <span className="shrink-0">failed</span>}
       </button>
@@ -93,7 +67,13 @@ export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
             <pre className="font-mono whitespace-pre-wrap break-all text-ink-3 max-h-40 overflow-auto text-xs leading-relaxed">
               {call.name === "bash"
                 ? String(call.arguments?.command ?? "")
-                : JSON.stringify(call.arguments, null, 2)}
+                : JSON.stringify(
+                    call.name.startsWith(MCP_PREFIX) && call.arguments?.args
+                      ? call.arguments.args
+                      : call.arguments,
+                    null,
+                    2,
+                  )}
             </pre>
           )}
           {diff ? (
