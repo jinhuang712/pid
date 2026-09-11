@@ -15,3 +15,9 @@ describe("tokenize", () => {
     expect(tokenize("a, b; c!")).toEqual(["a", "b", "c"]);
   });
 });
+
+describe("tokenize for queries", () => {
+  it("keeps identifiers whole when parts are off", () => {
+    expect(tokenize("zzqqxxyy-no-such-term", { parts: false })).toEqual(["zzqqxxyy-no-such-term"]);
+  });
+});
