@@ -31,6 +31,13 @@ Close PID and Pi keeps working. Open a PID session in the Pi terminal and it res
 ## Run
 
 ```bash
+./install.sh         # check prerequisites, install deps, launch the dev build
+./install.sh --app   # build PID.app, copy to /Applications, open it
+```
+
+Or by hand:
+
+```bash
 pnpm install
 pnpm dev        # hot-reloading development build
 pnpm build      # production bundle in out/
