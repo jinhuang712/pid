@@ -53,7 +53,8 @@ function Assistant({ m, live, state }: { m: AssistantMessage; live: boolean; sta
       {m.content.map((c, i) => {
         const key = `${m.timestamp}-${i}`;
         if (c.type === "thinking") return <Thinking key={key} text={c.thinking} live={live} />;
-        if (c.type === "text") return <Markdown key={key} source={c.text} className="text-lg text-ink" />;
+        if (c.type === "text")
+          return <Markdown key={key} source={c.text} className="text-[14px] leading-[1.7] text-ink" />;
         if (c.type === "toolCall") return <ToolCard key={key} call={c} run={state.toolRuns[c.id]} />;
         return null;
       })}
@@ -71,7 +72,7 @@ function Item({ m, state }: { m: AgentMessage; state: ConversationState }) {
   if (m.role === "user") {
     return (
       <div className="timeline-item px-6 py-3 flex justify-end">
-        <div className="max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap text-ink leading-[1.55]">
+        <div className="max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap text-[14px] leading-[1.6] text-ink">
           {userText(m)}
         </div>
       </div>

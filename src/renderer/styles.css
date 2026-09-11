@@ -84,31 +84,42 @@ code {
   background: transparent;
 }
 
-/* markdown prose */
+/* markdown prose — one body size; headings step by 1px, never by scale */
 .prose > * + * {
-  margin-top: 0.6em;
+  margin-top: 0.7em;
 }
 .prose p {
   white-space: pre-wrap;
 }
 .prose h1,
 .prose h2,
-.prose h3 {
+.prose h3,
+.prose h4 {
   font-weight: 600;
   color: var(--color-ink);
+  line-height: 1.5;
+  margin-top: 1.1em;
 }
 .prose h1 {
-  font-size: var(--text-xl);
+  font-size: 16px;
 }
 .prose h2 {
-  font-size: 17px;
+  font-size: 15px;
 }
-.prose h3 {
-  font-size: var(--text-lg);
+.prose h3,
+.prose h4 {
+  font-size: 14px;
+}
+.prose strong {
+  font-weight: 600;
+  color: var(--color-ink);
 }
 .prose ul,
 .prose ol {
   padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
 }
 .prose ul {
   list-style: disc;
@@ -116,12 +127,17 @@ code {
 .prose ol {
   list-style: decimal;
 }
+.prose li > ul,
+.prose li > ol {
+  margin-top: 0.25em;
+}
 .prose code {
-  font-family: var(--font-mono);
-  font-size: 0.92em;
+  font-family: var(--pid-code-font);
+  font-size: 12.5px;
   background: var(--color-paper-3);
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  border-radius: 5px;
+  color: var(--color-ink);
 }
 .prose pre {
   background: var(--color-paper-2);
@@ -129,8 +145,8 @@ code {
   border-radius: 10px;
   padding: 10px 12px;
   overflow-x: auto;
-  font-size: var(--text-xs);
-  line-height: 1.55;
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 .prose pre code {
   background: none;
@@ -138,8 +154,9 @@ code {
   font-size: inherit;
 }
 .prose a {
-  color: var(--color-accent);
+  color: var(--color-ink);
   text-decoration: underline;
+  text-decoration-color: var(--color-line-2);
 }
 .prose blockquote {
   border-left: 2px solid var(--color-line-2);
@@ -148,7 +165,7 @@ code {
 }
 .prose table {
   border-collapse: collapse;
-  font-size: var(--text-xs);
+  font-size: 12.5px;
 }
 .prose th,
 .prose td {
