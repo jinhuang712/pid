@@ -14,15 +14,13 @@ export interface PidSettings {
   };
   conversation: {
     enterSends: boolean; // false → Enter inserts newline, Cmd+Enter sends
-    streamingSendMode: "steer" | "followUp"; // what Enter does while Pi is running
     autoScroll: boolean;
     referencePreviewOpen: boolean; // expand $reference inspector by default
   };
   sessions: {
     sort: "modified" | "created" | "name";
-    searchScope: "folder" | "all";
     previewLength: number;
-    showForkLineage: boolean;
+    showForkLineage: boolean; // nest forks under their parent in the session tree
   };
   files: {
     ignorePatterns: string[]; // extra globs excluded from @ search
@@ -54,13 +52,11 @@ export const DEFAULT_SETTINGS: PidSettings = {
   },
   conversation: {
     enterSends: true,
-    streamingSendMode: "steer",
     autoScroll: true,
     referencePreviewOpen: false,
   },
   sessions: {
     sort: "modified",
-    searchScope: "folder",
     previewLength: 160,
     showForkLineage: true,
   },

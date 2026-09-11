@@ -27,6 +27,13 @@ export function saveState(state: PidState) {
   writeFileSync(file(), JSON.stringify(state, null, 2));
 }
 
+export function forgetFolder(dir: string): string[] {
+  const s = loadState();
+  s.recentFolders = s.recentFolders.filter((f) => f !== dir);
+  saveState(s);
+  return s.recentFolders;
+}
+
 export function rememberFolder(dir: string): string[] {
   const s = loadState();
   s.recentFolders = [dir, ...s.recentFolders.filter((f) => f !== dir)].slice(0, 20);

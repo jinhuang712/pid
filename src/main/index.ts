@@ -14,7 +14,7 @@ import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions } from "./pi/search";
 import { readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
-import { loadState, rememberFolder } from "./pid-state";
+import { forgetFolder, loadState, rememberFolder } from "./pid-state";
 import { applyTheme, loadSettings, saveSettings } from "./settings";
 
 const PAPER_LIGHT = "#f7f7f6";
@@ -102,6 +102,7 @@ ipcMain.handle("folder:pick", async () => {
 
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
+ipcMain.handle("folders:forget", (_e, dir: string) => forgetFolder(dir));
 ipcMain.handle("git:repo", (_e, cwd: string) => repoInfo(cwd));
 ipcMain.handle("git:worktreeAdd", (_e, o: AddWorktreeOptions) => addWorktree(o));
 ipcMain.handle("git:worktreeSafety", (_e, cwd: string, path: string) => worktreeSafety(cwd, path));

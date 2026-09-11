@@ -10,7 +10,9 @@ export function ModelPicker({
   current,
   load,
   onSelect,
+  placement = "down",
 }: {
+  placement?: "up" | "down";
   current?: { provider: string; id: string };
   load: () => Promise<AnyModel[]>;
   onSelect: (m: AnyModel) => void;
@@ -49,15 +51,15 @@ export function ModelPicker({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:bg-paper-3 hover:text-ink"
-        title="Model (from Pi's local configuration)"
+        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink ${placement === "up" ? "bg-paper-3 hover:bg-paper-4" : "hover:bg-paper-3"}`}
+        title={current ? `${current.provider}/${current.id} · from Pi's model configuration` : "Model"}
       >
-        {current ? `${current.provider}/${current.id}` : "model"}
+        {current ? current.id : "model"}
       </button>
       <Popover
         open={open}
         onClose={() => setOpen(false)}
-        className="right-0 top-8 w-96 max-h-[70vh] flex flex-col"
+        className={`${placement === "up" ? "left-0 bottom-8" : "right-0 top-8"} w-96 max-h-[60vh] flex flex-col`}
       >
         <input
           ref={input}

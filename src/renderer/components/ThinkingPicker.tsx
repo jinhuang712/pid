@@ -6,7 +6,9 @@ export function ThinkingPicker({
   current,
   load,
   onSelect,
+  placement = "down",
 }: {
+  placement?: "up" | "down";
   current: ThinkingLevel;
   load: () => Promise<ThinkingLevel[]>;
   onSelect: (l: ThinkingLevel) => void;
@@ -21,12 +23,16 @@ export function ThinkingPicker({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:bg-paper-3 hover:text-ink"
+        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink ${placement === "up" ? "bg-paper-3 hover:bg-paper-4" : "hover:bg-paper-3"}`}
         title="Thinking level"
       >
         {current}
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} className="right-0 top-8 w-40 py-1">
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        className={`${placement === "up" ? "left-0 bottom-8" : "right-0 top-8"} w-40 py-1`}
+      >
         {levels.length === 0 && <div className="px-3 py-1.5 text-xs text-ink-3">not supported</div>}
         {levels.map((l) => (
           <button

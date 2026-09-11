@@ -123,17 +123,6 @@ export function SettingsPage() {
                   onChange={(enterSends) => update("conversation", { enterSends })}
                 />
               </Row>
-              <Row
-                label="While Pi is running, send as"
-                hint="Steer interrupts; follow-up waits for the current work."
-              >
-                <Segmented
-                  value={settings.conversation.streamingSendMode}
-                  options={["steer", "followUp"]}
-                  labels={{ steer: "Steer", followUp: "Follow-up" }}
-                  onChange={(streamingSendMode) => update("conversation", { streamingSendMode })}
-                />
-              </Row>
               <Row label="Auto-scroll while streaming">
                 <Toggle
                   value={settings.conversation.autoScroll}
@@ -158,14 +147,6 @@ export function SettingsPage() {
                   onChange={(sort) => update("sessions", { sort })}
                 />
               </Row>
-              <Row label="Default search scope">
-                <Segmented
-                  value={settings.sessions.searchScope}
-                  options={["folder", "all"]}
-                  labels={{ folder: "This folder", all: "All folders" }}
-                  onChange={(searchScope) => update("sessions", { searchScope })}
-                />
-              </Row>
               <Row label="Preview length" hint="Characters of the first message shown in lists.">
                 <NumberInput
                   value={settings.sessions.previewLength}
@@ -175,7 +156,7 @@ export function SettingsPage() {
                   onChange={(previewLength) => update("sessions", { previewLength })}
                 />
               </Row>
-              <Row label="Show fork lineage strip">
+              <Row label="Nest forks under their parent" hint="Off: every session is a flat row.">
                 <Toggle
                   value={settings.sessions.showForkLineage}
                   onChange={(showForkLineage) => update("sessions", { showForkLineage })}
