@@ -7,6 +7,7 @@ export type MenuCommand =
   | "fork"
   | "compact"
   | "abort"
+  | "close-session"
   | "page:sessions"
   | "page:skills"
   | "page:mcp"
@@ -56,6 +57,8 @@ export function installMenu(win: () => BrowserWindow | undefined) {
         { label: "Fork…", accelerator: "CmdOrCtrl+Shift+F", click: send("fork") },
         { label: "Compact Context", accelerator: "CmdOrCtrl+Shift+C", click: send("compact") },
         { label: "Abort Run", accelerator: "CmdOrCtrl+.", click: send("abort") },
+        { type: "separator" },
+        { label: "Close Session", accelerator: "CmdOrCtrl+W", click: send("close-session") },
       ],
     },
     {
@@ -77,7 +80,10 @@ export function installMenu(win: () => BrowserWindow | undefined) {
         { role: "togglefullscreen" },
       ],
     },
-    { role: "windowMenu" },
+    {
+      label: "Window",
+      submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }],
+    },
     {
       role: "help",
       submenu: [

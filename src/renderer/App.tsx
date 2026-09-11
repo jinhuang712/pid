@@ -393,6 +393,12 @@ export function App() {
       if (cmd === "fork") return key && setForkKey(key);
       if (cmd === "compact") return actions.compact();
       if (cmd === "abort") return abort();
+      if (cmd === "close-session") {
+        if (!key) return;
+        void bridge.pi.stop(key);
+        dispatch({ type: "remove", key });
+        setDraft("");
+      }
     });
   });
 
