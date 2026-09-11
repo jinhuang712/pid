@@ -2,14 +2,17 @@ import type { PiHandle, RpcExtensionUIRequest, RpcSessionState } from "@shared/p
 import type { SessionSummary } from "@shared/sessions";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { bridge } from "./bridge";
+import { type PiActions, useCompletion } from "./completion";
 import { Composer, type SendMode } from "./components/Composer";
 import { ForkMenu } from "./components/ForkMenu";
 import { Lineage } from "./components/Lineage";
 import { ModelPicker } from "./components/ModelPicker";
 import { QueuePanel } from "./components/QueuePanel";
+import { ReferenceChips } from "./components/ReferenceChips";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
+import { expandReferences, type SessionReference } from "./session-reference";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./state/conversation";
 
 export function App() {
@@ -19,6 +22,7 @@ export function App() {
   const [conv, dispatch] = useReducer(convReducer, undefined, emptyConversation);
   const [status, setStatus] = useState<string>();
   const [draft, setDraft] = useState("");
+  const [refs, setRefs] = useState<SessionReference[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
@@ -98,14 +102,17 @@ export function App() {
     void bridge.appInfo().then(async (info) => {
       if (!info.devOpenFolder) return;
       const handle = await startIn(info.devOpenFolder, info.devOpenSession);
+      if (handle && info.devDraft) setTimeout(() => setDraft(info.devDraft ?? ""), 500);
       if (handle && info.devPrompt)
         await bridge.pi.command(handle.key, { type: "prompt", message: info.devPrompt });
     });
   }, []);
 
   const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
-  const send = (text: string, mode: SendMode) => {
+  const send = (raw: string, mode: SendMode) => {
     if (!key) return;
+    const { text, used } = expandReferences(raw, refs);
+    if (used.length > 0) setRefs((rs) => rs.filter((r) => !used.includes(r)));
     const cmd =
       mode === "steer"
         ? ({ type: "steer", message: text } as const)
@@ -133,6 +140,30 @@ export function App() {
     if (folder) await refreshSessions(folder);
   };
 
+  const [forkOpen, setForkOpen] = useState(false);
+  const actions: PiActions = {
+    compact: () => key && void run(bridge.pi.command(key, { type: "compact" })),
+    newSession: () => folder && void startIn(folder),
+    abort,
+    clearQueue,
+    exportHtml: () =>
+      key &&
+      void run(bridge.pi.command(key, { type: "export_html" }).then((r) => setStatus(`exported ${r.path}`))),
+    setThinking: (level) =>
+      key &&
+      void run(
+        bridge.pi.command(key, { type: "set_thinking_level", level: level as never }).then(refreshState),
+      ),
+    fork: () => setForkOpen(true),
+  };
+  const { complete, pick } = useCompletion({
+    key,
+    folder,
+    sessions,
+    actions,
+    onReference: (ref) => setRefs((rs) => [...rs.filter((r) => r.token !== ref.token), ref]),
+  });
+
   const loadModels = useCallback(
     async () => (key ? (await bridge.pi.command(key, { type: "get_available_models" })).models : []),
     [key],
@@ -150,7 +181,12 @@ export function App() {
         <span className="flex-1" />
         {key && piState && (
           <div className="flex items-center gap-1">
-            <ForkMenu load={loadForkPoints} onFork={(id) => void run(fork(id))} />
+            <ForkMenu
+              open={forkOpen}
+              setOpen={setForkOpen}
+              load={loadForkPoints}
+              onFork={(id) => void run(fork(id))}
+            />
             <ModelPicker
               current={piState.model ? { provider: piState.model.provider, id: piState.model.id } : undefined}
               load={loadModels}
@@ -199,7 +235,13 @@ export function App() {
                 followUp={conv.queue.followUp}
                 onClear={clearQueue}
               />
+              <ReferenceChips
+                refs={refs}
+                onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
+              />
               <Composer
+                complete={complete}
+                pick={pick}
                 text={draft}
                 setText={setDraft}
                 streaming={conv.isStreaming}

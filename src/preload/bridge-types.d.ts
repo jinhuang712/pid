@@ -7,7 +7,7 @@ import type {
   RpcExtensionUIResponse,
   StartPiOptions,
 } from "@shared/protocol";
-import type { SessionSummary } from "@shared/sessions";
+import type { SessionMessage, SessionSummary } from "@shared/sessions";
 
 export interface AppInfo {
   version: string;
@@ -17,6 +17,7 @@ export interface AppInfo {
   devPrompt?: string;
   devFollowUp?: string;
   devOpenSession?: string;
+  devDraft?: string;
 }
 
 export interface Bridge {
@@ -26,9 +27,13 @@ export interface Bridge {
     recent(): Promise<string[]>;
     remember(dir: string): Promise<string[]>;
   };
+  files: {
+    list(cwd: string): Promise<string[]>;
+  };
   sessions: {
     list(cwd: string): Promise<SessionSummary[]>;
     listAll(): Promise<SessionSummary[]>;
+    read(path: string): Promise<SessionMessage[]>;
   };
   pi: {
     start(opts: StartPiOptions): Promise<PiHandle>;
