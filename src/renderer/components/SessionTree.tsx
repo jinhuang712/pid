@@ -151,14 +151,14 @@ export function SessionTree({
       className="shrink-0 bg-paper-2 flex flex-col min-h-0"
     >
       {/* title row: traffic lights sit at x=16, the mark starts after them */}
-      <div className="drag h-[52px] shrink-0 flex items-center pl-[76px] pr-3">
+      <div className="drag h-[52px] shrink-0 flex items-center pl-[92px] pr-3">
         <button
           type="button"
           onClick={() => onPage("sessions")}
           className="no-drag flex items-center"
           title="Sessions"
         >
-          <Logo height={14} />
+          <Logo height={16} />
         </button>
       </div>
       <div className="px-3 pb-2.5">
@@ -366,16 +366,15 @@ export function SessionTree({
           className="h-7 px-2 rounded-lg flex items-center text-ink-3 hover:text-ink hover:bg-paper-3"
         >
           <span className="flex-1 text-left">Open folder…</span>
-          <span className="font-mono text-[11px]">⌘O</span>
         </button>
         {(
           [
-            ["skills", "Skills", "⌘2"],
-            ["mcp", "MCP", "⌘3"],
-            ["extensions", "Extensions", "⌘4"],
-            ["settings", "Settings", "⌘,"],
-          ] as [Page, string, string][]
-        ).map(([id, label, hint]) => (
+            ["skills", "Skills"],
+            ["mcp", "MCP"],
+            ["extensions", "Extensions"],
+            ["settings", "Settings"],
+          ] as [Page, string][]
+        ).map(([id, label]) => (
           <button
             type="button"
             key={id}
@@ -383,7 +382,6 @@ export function SessionTree({
             className={`h-7 px-2 rounded-lg flex items-center hover:bg-paper-3 ${page === id ? "text-ink bg-paper-3" : "text-ink-3 hover:text-ink"}`}
           >
             <span className="flex-1 text-left">{label}</span>
-            <span className="font-mono text-[11px] text-ink-3">{hint}</span>
           </button>
         ))}
       </div>

@@ -35,7 +35,7 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     title: "PID",
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 18 },
+    trafficLightPosition: { x: 18, y: 20 },
     backgroundColor: paperColor(),
     show: false,
     webPreferences: {
