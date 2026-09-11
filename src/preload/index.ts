@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { Bridge } from "./bridge-types";
 
 function on<T>(channel: string, listener: (payload: T) => void) {
@@ -9,6 +9,14 @@ function on<T>(channel: string, listener: (payload: T) => void) {
 
 const bridge: Bridge = {
   appInfo: () => ipcRenderer.invoke("app:info"),
+  onMenuCommand: (l) => on("menu:command", l),
+  pathOf: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || undefined;
+    } catch {
+      return undefined;
+    }
+  },
   pickFolder: () => ipcRenderer.invoke("folder:pick"),
   folders: {
     recent: () => ipcRenderer.invoke("folders:recent"),

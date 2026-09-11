@@ -27,6 +27,9 @@ export interface AppInfo {
 
 export interface Bridge {
   appInfo(): Promise<AppInfo>;
+  onMenuCommand(listener: (cmd: string) => void): () => void;
+  /** Absolute path of a dropped File, via Electron's webUtils. */
+  pathOf(file: File): string | undefined;
   pickFolder(): Promise<string | undefined>;
   folders: {
     recent(): Promise<string[]>;

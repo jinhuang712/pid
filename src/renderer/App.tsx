@@ -98,6 +98,19 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Native menu → renderer commands.
+  useEffect(() => {
+    return bridge.onMenuCommand((cmd) => {
+      if (cmd.startsWith("page:")) return setPage(cmd.slice(5) as Page);
+      if (cmd === "search") return setSearchOpen((o) => !o);
+      if (cmd === "open-folder") return void openFolder();
+      if (cmd === "new-session") return folder && void startIn(folder);
+      if (cmd === "fork") return setForkOpen(true);
+      if (cmd === "compact") return key && void run(bridge.pi.command(key, { type: "compact" }));
+      if (cmd === "abort") return abort();
+    });
+  });
+
   const referenceSession = useCallback((s: SessionSummary) => {
     const token = refToken(s);
     setDraft((d) => (d.includes(token) ? d : `${d}${d && !d.endsWith(" ") ? " " : ""}${token} `));
@@ -394,6 +407,7 @@ export function App() {
                 />
                 <StatusStrip statuses={statuses} />
                 <Composer
+                  folder={folder}
                   complete={complete}
                   pick={pick}
                   text={draft}

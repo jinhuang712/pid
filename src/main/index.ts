@@ -8,6 +8,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electro
 import windowStateKeeper from "electron-window-state";
 import { listFiles } from "./files";
 import { addWorktree, removeWorktree, repoInfo, worktreeSafety } from "./git";
+import { installMenu } from "./menu";
 import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions } from "./pi/search";
@@ -129,6 +130,7 @@ ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
 
 app.whenReady().then(() => {
   applyTheme(); // decide the theme before the first frame
+  installMenu(() => mainWindow);
   mainWindow = createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();

@@ -61,7 +61,6 @@ export function ExtensionDialog({
           <div className="px-4 pb-3">
             {req.method === "input" ? (
               <input
-                // biome-ignore lint/a11y/noAutofocus: modal prompt from an extension
                 autoFocus
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
@@ -73,7 +72,6 @@ export function ExtensionDialog({
               />
             ) : (
               <textarea
-                // biome-ignore lint/a11y/noAutofocus: modal prompt from an extension
                 autoFocus
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
