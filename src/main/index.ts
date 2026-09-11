@@ -4,6 +4,8 @@ import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { PiRegistry } from "./pi/registry";
+import { listAllSessions, listSessions } from "./pi/sessions";
+import { loadState, rememberFolder } from "./pid-state";
 
 const PAPER_LIGHT = "#f7f7f6";
 const PAPER_DARK = "#131314";
@@ -77,12 +79,18 @@ ipcMain.handle("app:info", () => ({
   devOpenFolder: process.env.PID_OPEN_FOLDER,
   devPrompt: process.env.PID_PROMPT,
   devFollowUp: process.env.PID_FOLLOWUP,
+  devOpenSession: process.env.PID_OPEN_SESSION,
 }));
 
 ipcMain.handle("folder:pick", async () => {
   const r = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
   return r.canceled ? undefined : r.filePaths[0];
 });
+
+ipcMain.handle("folders:recent", () => loadState().recentFolders);
+ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
+ipcMain.handle("sessions:list", (_e, cwd: string) => listSessions(cwd));
+ipcMain.handle("sessions:listAll", () => listAllSessions());
 
 ipcMain.handle("pi:start", (_e, opts: StartPiOptions) => pi.start(opts));
 ipcMain.handle("pi:command", (_e, key: string, command: PiCommand) => pi.command(key, command));
