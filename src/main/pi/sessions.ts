@@ -1,3 +1,4 @@
+import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { SessionSummary } from "@shared/sessions";
 
 /** Lazy import: the SDK is ~1s to load and only needed for read-only discovery. */
@@ -15,7 +16,8 @@ function toSummary(s: Info): SessionSummary {
     created: s.created.toISOString(),
     modified: s.modified.toISOString(),
     messageCount: s.messageCount,
-    firstMessage: s.firstMessage,
+    // the words only: PID's attachment and $session blocks are shown as chips, never as a title
+    firstMessage: stripPromptBlocks(s.firstMessage),
   };
 }
 

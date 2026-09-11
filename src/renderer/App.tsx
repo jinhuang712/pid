@@ -1,7 +1,9 @@
 import type { RepoInfo } from "@shared/git";
+import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { PiEvent, RpcExtensionUIRequest, RpcExtensionUIResponse } from "@shared/protocol";
 import type { SessionSummary } from "@shared/sessions";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type Attachment, appendAttachments, parseAttachments, toAttachment } from "./attachments";
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
@@ -11,7 +13,6 @@ import { Home } from "./components/Home";
 import type { Page } from "./components/NavRail";
 import { Palette, type PaletteAction } from "./components/Palette";
 import { QueuePanel } from "./components/QueuePanel";
-import { ReferenceChips } from "./components/ReferenceChips";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
 import { Timeline } from "./components/Timeline";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
@@ -35,6 +36,7 @@ export function App() {
   const [ws, dispatch] = useReducer(workspaceReducer, undefined, emptyWorkspace);
   const [draft, setDraft] = useState("");
   const [refs, setRefs] = useState<SessionReference[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [status, setStatus] = useState<string>();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -289,11 +291,41 @@ export function App() {
     forgetFolder: (dir) => void bridge.folders.forget(dir).then(setFolders),
   };
 
+  // ---- attachments: absolute paths only, stat'd for the chip, appended to the message as text ----
+  const attach = useCallback((paths: string[]) => {
+    void bridge.files.stat(paths).then((infos) =>
+      setAttachments((cur) => {
+        const have = new Set(cur.map((a) => a.path));
+        return [...cur, ...infos.filter((i) => !have.has(i.path)).map(toAttachment)];
+      }),
+    );
+  }, []);
+  const removeAttachment = useCallback(
+    (path: string) => setAttachments((cur) => cur.filter((a) => a.path !== path)),
+    [],
+  );
+  /** Pasted image → temp file → attached by path, the same way the Pi terminal treats a paste. */
+  const pasteImage = (file: File) =>
+    void run(
+      file
+        .arrayBuffer()
+        .then((buf) => bridge.files.saveClipboardImage(new Uint8Array(buf), file.type))
+        .then((path) => attach([path])),
+    );
+
+  /** The text Pi receives: draft, then `$session` blocks, then the attachment paths. Nothing hidden. */
+  const compose = (raw: string) => {
+    const { text, used } = expandReferences(raw, refs);
+    if (used.length > 0) setRefs((rs) => rs.filter((r) => !used.includes(r)));
+    const full = appendAttachments(text, attachments);
+    if (attachments.length > 0) setAttachments([]);
+    return full;
+  };
+
   // ---- sending, queue ----
   const send = (raw: string) => {
     if (!key) return;
-    const { text, used } = expandReferences(raw, refs);
-    if (used.length > 0) setRefs((rs) => rs.filter((r) => !used.includes(r)));
+    const text = compose(raw);
     void run(
       bridge.pi.command(
         key,
@@ -321,9 +353,7 @@ export function App() {
         }
         const k = await start(dir);
         if (!k) return;
-        const { text, used } = expandReferences(raw, refs);
-        if (used.length > 0) setRefs((rs) => rs.filter((r) => !used.includes(r)));
-        await bridge.pi.command(k, { type: "prompt", message: text });
+        await bridge.pi.command(k, { type: "prompt", message: compose(raw) });
       })(),
     );
   };
@@ -499,6 +529,7 @@ export function App() {
       const k = await start(info.devOpenFolder, info.devOpenSession);
       if (!k) return;
       if (info.devDraft) setTimeout(() => setDraft(info.devDraft ?? ""), 500);
+      if (info.devAttach) attach(info.devAttach.split(":").filter(Boolean));
       if (info.devPrompt) await bridge.pi.command(k, { type: "prompt", message: info.devPrompt });
       if (info.devFollowUp)
         setTimeout(
@@ -675,10 +706,6 @@ export function App() {
                   onSteerNow={steerNow}
                   onRemove={removeQueued}
                 />
-                <ReferenceChips
-                  refs={refs}
-                  onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
-                />
                 <Composer
                   disabled={false}
                   folder={active?.cwd ?? folder}
@@ -689,6 +716,12 @@ export function App() {
                   streaming={conv.isStreaming}
                   onSend={active ? send : homeSend}
                   onAbort={abort}
+                  attachments={attachments}
+                  onAttach={attach}
+                  onRemoveAttachment={removeAttachment}
+                  onPasteImage={pasteImage}
+                  refs={refs}
+                  onRemoveRef={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
                   model={
                     active?.piState.model
                       ? {
@@ -735,10 +768,6 @@ export function App() {
                 composer={
                   <>
                     {status && <div className="px-6 py-1 text-xs text-warn text-center">{status}</div>}
-                    <ReferenceChips
-                      refs={refs}
-                      onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
-                    />
                     <Composer
                       disabled={!folder}
                       folder={folder}
@@ -749,6 +778,12 @@ export function App() {
                       streaming={false}
                       onSend={homeSend}
                       onAbort={() => {}}
+                      attachments={attachments}
+                      onAttach={attach}
+                      onRemoveAttachment={removeAttachment}
+                      onPasteImage={pasteImage}
+                      refs={refs}
+                      onRemoveRef={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
                       loadModels={loadModels}
                       loadLevels={loadLevels}
                       onModel={() => {}}
@@ -768,9 +803,12 @@ export function App() {
 function firstUserText(messages: ReturnType<typeof emptyConversation>["messages"]): string {
   const m = messages.find((x) => x.role === "user");
   if (!m || m.role !== "user") return "New session";
-  return typeof m.content === "string"
-    ? m.content
-    : m.content.map((c) => (c.type === "text" ? c.text : "")).join(" ");
+  const raw =
+    typeof m.content === "string"
+      ? m.content
+      : m.content.map((c) => (c.type === "text" ? c.text : "")).join(" ");
+  // the words only: attachment paths and $session blocks are shown as chips, not as a title
+  return stripPromptBlocks(raw) || (parseAttachments(raw).attachments[0]?.name ?? "New session");
 }
 
 export type { RpcExtensionUIRequest };

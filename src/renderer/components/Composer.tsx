@@ -1,12 +1,25 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { type Attachment, segment, urlsIn } from "../attachments";
+import type { SessionReference } from "../session-reference";
 import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
 import { fmtDuration } from "../turn-summary";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
+import { ContextTray } from "./ContextTray";
 import { Keys, SigilChip } from "./Key";
 import { ModelPicker } from "./ModelPicker";
+import { Popover } from "./Popover";
 import { ThinkingPicker } from "./ThinkingPicker";
 
 // biome-ignore lint/suspicious/noExplicitAny: Pi models are Model<any> on the wire
@@ -34,6 +47,14 @@ export interface ComposerProps {
   onModel: (m: AnyModel) => void;
   onLevel: (l: ThinkingLevel) => void;
   disabled?: boolean;
+  /** Paths the next message carries. Dropped, pasted, or picked; always absolute; never copied. */
+  attachments: Attachment[];
+  onAttach: (paths: string[]) => void;
+  onRemoveAttachment: (path: string) => void;
+  /** A pasted image has no path yet; App writes it to the temp dir the way the Pi terminal does. */
+  onPasteImage: (file: File) => void;
+  refs: SessionReference[];
+  onRemoveRef: (token: string) => void;
 }
 
 const TITLES: Record<Sigil, string> = {
@@ -45,10 +66,13 @@ const TITLES: Record<Sigil, string> = {
 
 /** Never disabled while Pi runs: Enter queues a follow-up. */
 export function Composer(p: ComposerProps) {
-  const { text, setText, streaming, onSend, complete, pick, folder } = p;
+  const { text, setText, streaming, onSend, complete, pick, attachments } = p;
   const { settings } = useSettings();
   const { enterSends } = settings.conversation;
   const ref = useRef<HTMLTextAreaElement>(null);
+  const mirror = useRef<HTMLDivElement>(null);
+  const [attachMenu, setAttachMenu] = useState(false);
+  const urls = useMemo(() => urlsIn(text), [text]);
   const [token, setToken] = useState<ActiveToken>();
   const [items, setItems] = useState<AutocompleteItem[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -126,10 +150,10 @@ export function Composer(p: ComposerProps) {
     });
   };
 
+  const canSend = (text.trim().length > 0 || attachments.length > 0) && !p.disabled;
   const send = () => {
-    const t = text.trim();
-    if (!t || p.disabled) return;
-    onSend(t);
+    if (!canSend) return;
+    onSend(text.trim());
     setText("");
     setToken(undefined);
     setExpanded(false);
@@ -160,6 +184,12 @@ export function Composer(p: ComposerProps) {
       setToken(undefined);
       return;
     }
+    // Backspace on an empty draft takes back the last attachment, like deleting a word.
+    if (e.key === "Backspace" && text === "" && attachments.length > 0) {
+      e.preventDefault();
+      p.onRemoveAttachment(attachments[attachments.length - 1].path);
+      return;
+    }
     if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
     if (e.shiftKey) return; // newline
     const mod = e.metaKey || e.ctrlKey;
@@ -168,19 +198,42 @@ export function Composer(p: ComposerProps) {
     send();
   };
 
+  /** Files from Finder carry a path; pasted screenshots do not. */
+  const takeFiles = (files: FileList | File[]) => {
+    const paths: string[] = [];
+    for (const f of Array.from(files)) {
+      const path = window.bridge.pathOf(f);
+      if (path) paths.push(path);
+      else if (f.type.startsWith("image/")) p.onPasteImage(f);
+    }
+    if (paths.length > 0) p.onAttach(paths);
+  };
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const paths = Array.from(e.dataTransfer.files)
-      .map((f) => window.bridge.pathOf(f))
-      .filter((x): x is string => !!x);
-    if (paths.length === 0) return;
-    const mentions = paths
-      .map((x) => (folder && x.startsWith(`${folder}/`) ? x.slice(folder.length + 1) : x))
-      .map((x) => `@${x}`)
-      .join(" ");
-    setText(`${text}${text && !text.endsWith(" ") ? " " : ""}${mentions} `);
+    takeFiles(e.dataTransfer.files);
     requestAnimationFrame(() => ref.current?.focus());
+  };
+
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files);
+    if (files.length === 0) return; // plain text paste: let the textarea handle it
+    e.preventDefault();
+    takeFiles(files);
+  };
+
+  const pickAttachments = (kind: "file" | "folder") => {
+    setAttachMenu(false);
+    void window.bridge.files.pick(kind).then((paths) => {
+      if (paths.length > 0) p.onAttach(paths);
+      requestAnimationFrame(() => ref.current?.focus());
+    });
+  };
+
+  /** Keep the highlight layer scrolled with the textarea. */
+  const syncScroll = () => {
+    if (mirror.current && ref.current) mirror.current.scrollTop = ref.current.scrollTop;
   };
 
   const placeholder = p.disabled
@@ -239,24 +292,86 @@ export function Composer(p: ComposerProps) {
             onPick={applyPick}
           />
         )}
-        <textarea
-          ref={ref}
-          value={text}
-          disabled={p.disabled}
-          onChange={(e) => {
-            setText(e.target.value);
-            requestAnimationFrame(refreshToken);
-          }}
-          onKeyDown={onKey}
-          onKeyUp={(e) => {
-            if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") refreshToken();
-          }}
-          onClick={refreshToken}
-          rows={2}
-          placeholder={placeholder}
-          className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 outline-none text-[14px] leading-relaxed text-ink placeholder:text-ink-3 disabled:opacity-60"
+        <ContextTray
+          attachments={attachments}
+          refs={p.refs}
+          urls={urls}
+          onRemoveAttachment={p.onRemoveAttachment}
+          onRemoveRef={p.onRemoveRef}
         />
+        <div className="relative">
+          {/* Highlight layer: same box and font as the textarea, painted behind transparent text. */}
+          <div
+            ref={mirror}
+            aria-hidden
+            className={`${EDITOR_BOX} absolute inset-0 pointer-events-none overflow-hidden text-ink`}
+          >
+            <Highlights text={text} />
+          </div>
+          <textarea
+            ref={ref}
+            value={text}
+            disabled={p.disabled}
+            onChange={(e) => {
+              setText(e.target.value);
+              requestAnimationFrame(refreshToken);
+            }}
+            onKeyDown={onKey}
+            onKeyUp={(e) => {
+              if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") refreshToken();
+            }}
+            onClick={refreshToken}
+            onPaste={onPaste}
+            onScroll={syncScroll}
+            rows={2}
+            placeholder={placeholder}
+            className={`${EDITOR_BOX} relative w-full resize-none bg-transparent outline-none text-transparent caret-ink placeholder:text-ink-3 disabled:opacity-60`}
+          />
+        </div>
         <div className="flex items-center gap-0.5 pl-2.5 pr-2.5 pb-2.5 pt-1">
+          <span className="relative">
+            <button
+              type="button"
+              onClick={() => setAttachMenu((v) => !v)}
+              disabled={p.disabled}
+              title="Attach files or folders (paths only, nothing is copied)"
+              aria-haspopup="menu"
+              aria-expanded={attachMenu}
+              className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-ink-3 hover:text-ink hover:bg-paper-3 transition-colors disabled:opacity-40"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <title>attach</title>
+                <path d="M10.5 5.5 6 10a1.75 1.75 0 0 0 2.5 2.5l5-5a3.5 3.5 0 0 0-5-5l-5.5 5.5a5 5 0 0 0 7 7L13 12" />
+              </svg>
+            </button>
+            <Popover
+              open={attachMenu}
+              onClose={() => setAttachMenu(false)}
+              className="bottom-full mb-2 left-0 w-56 p-1"
+            >
+              <AttachMenuItem
+                label="Files…"
+                hint="images, PDFs, anything"
+                onClick={() => pickAttachments("file")}
+              />
+              <AttachMenuItem
+                label="Folder…"
+                hint="attached by path"
+                onClick={() => pickAttachments("folder")}
+              />
+              <div className="px-2.5 pt-1.5 pb-1 text-[11px] leading-snug text-ink-3 border-t border-line mt-1">
+                Or drop from Finder, or paste an image. Pi reads the path itself; nothing is copied.
+              </div>
+            </Popover>
+          </span>
           {p.model && (
             <>
               <ModelPicker current={p.model} load={p.loadModels} onSelect={p.onModel} placement="up" />
@@ -315,7 +430,7 @@ export function Composer(p: ComposerProps) {
           <button
             type="button"
             onClick={send}
-            disabled={!text.trim() || p.disabled}
+            disabled={!canSend}
             title={streaming ? "Queue as follow-up" : "Send"}
             className="w-[30px] h-[30px] rounded-full bg-accent text-paper flex items-center justify-center disabled:opacity-30 transition-opacity"
           >
@@ -346,6 +461,62 @@ function Elapsed({ since }: { since: number }): ReactNode {
     return () => clearInterval(id);
   }, []);
   return <span className="font-mono tabular-nums text-ink-3/80">{fmtDuration(now - since)}</span>;
+}
+
+/** Shared by the textarea and its highlight layer so glyphs line up exactly. */
+const EDITOR_BOX =
+  "px-4 pt-3.5 pb-1 text-[14px] leading-relaxed font-sans whitespace-pre-wrap break-words [overflow-wrap:break-word]";
+
+/**
+ * Inline tokens drawn under the transparent textarea text: links, `$session` tokens, `@path`
+ * mentions. Only colour and a soft ground change; metrics stay identical so the caret never drifts.
+ */
+function Highlights({ text }: { text: string }) {
+  const parts = useMemo(() => segment(text), [text]);
+  return (
+    <>
+      {parts.map((s, i) => {
+        const key = `${i}-${s.text.length}`;
+        switch (s.type) {
+          case "url":
+            return (
+              <span key={key} className="text-ink underline decoration-line-2 underline-offset-2">
+                {s.text}
+              </span>
+            );
+          case "session":
+            return (
+              <span key={key} className="text-warn rounded-[4px] bg-warn-soft">
+                {s.text}
+              </span>
+            );
+          case "mention":
+            return (
+              <span key={key} className="text-ink rounded-[4px] bg-accent-soft">
+                {s.text}
+              </span>
+            );
+          default:
+            return <span key={key}>{s.text}</span>;
+        }
+      })}
+      {/* keeps a trailing newline's empty row the same height as in the textarea */}
+      {text.endsWith("\n") && "​"}
+    </>
+  );
+}
+
+function AttachMenuItem({ label, hint, onClick }: { label: string; hint: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center justify-between gap-3 h-7 px-2.5 rounded-lg text-[12.5px] text-ink hover:bg-paper-3"
+    >
+      <span>{label}</span>
+      <span className="text-ink-3 text-[11.5px]">{hint}</span>
+    </button>
+  );
 }
 
 const fmt = (n: number) =>

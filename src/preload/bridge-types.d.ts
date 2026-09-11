@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionView, McpToggle, McpView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
+import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
 import type {
   PiCommand,
@@ -30,6 +31,8 @@ export interface AppInfo {
   devDraft?: string;
   devSearch?: string;
   devPage?: string;
+  /** Colon-separated absolute paths to attach on launch. */
+  devAttach?: string;
 }
 
 export interface Bridge {
@@ -50,6 +53,13 @@ export interface Bridge {
   };
   files: {
     list(cwd: string): Promise<string[]>;
+    /** Existence, kind and size for attachment chips. Content is never read. */
+    stat(paths: string[]): Promise<PathInfo[]>;
+    /** Small data-URL preview (images, and PDFs where the OS renders them); undefined when it cannot. */
+    thumbnail(path: string): Promise<string | undefined>;
+    pick(kind: "file" | "folder"): Promise<string[]>;
+    /** Pasted image bytes → a temp file path, the way the Pi terminal handles paste. */
+    saveClipboardImage(bytes: Uint8Array, mime: string): Promise<string>;
   };
   git: {
     repo(cwd: string): Promise<RepoInfo | undefined>;

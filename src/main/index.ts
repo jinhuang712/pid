@@ -6,7 +6,7 @@ import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
-import { listFiles } from "./files";
+import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
 import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
@@ -103,6 +103,7 @@ ipcMain.handle("app:info", () => ({
   devDraft: process.env.PID_DRAFT,
   devSearch: process.env.PID_SEARCH,
   devPage: process.env.PID_PAGE,
+  devAttach: process.env.PID_ATTACH,
 }));
 
 ipcMain.handle("folder:pick", async () => {
@@ -133,6 +134,17 @@ ipcMain.handle("eco:setMcp", (_e, req: McpToggle) => setMcpDisabled(req));
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(path));
 ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(path));
 ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
+ipcMain.handle("files:stat", (_e, paths: string[]) => statPaths(paths));
+ipcMain.handle("files:thumbnail", (_e, path: string) => thumbnail(path));
+ipcMain.handle("files:saveClipboardImage", (_e, bytes: Uint8Array, mime: string) =>
+  saveClipboardImage(bytes, mime),
+);
+ipcMain.handle("files:pick", async (_e, kind: "file" | "folder") => {
+  const r = await dialog.showOpenDialog({
+    properties: kind === "folder" ? ["openDirectory", "multiSelections"] : ["openFile", "multiSelections"],
+  });
+  return r.canceled ? [] : r.filePaths;
+});
 ipcMain.handle("sessions:list", (_e, cwd: string) => listSessions(cwd));
 ipcMain.handle("sessions:listAll", () => listAllSessions());
 ipcMain.handle("sessions:search", (_e, query: string, scope: SearchScope) => searchSessions(query, scope));
