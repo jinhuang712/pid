@@ -5,7 +5,15 @@ import { defineConfig } from "electron-vite";
 
 export default defineConfig({
   main: {
-    build: { rollupOptions: { input: resolve(__dirname, "src/main/index.ts") } },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, "src/main/index.ts"),
+          // utility process entry: the BM25 index is built off the main process
+          "search-worker": resolve(__dirname, "src/main/pi/search-worker.ts"),
+        },
+      },
+    },
     resolve: { alias: { "@shared": resolve(__dirname, "src/shared") } },
   },
   preload: {
