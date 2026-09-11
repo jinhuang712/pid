@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { JsonAgentSessionEvent } from "@shared/protocol";
+import { addUsage, emptyUsage, summarizeTurn, type Usage } from "../turn-summary";
 
 export interface ToolRun {
   toolCallId: string;
@@ -14,8 +15,10 @@ export interface ToolRun {
 export interface Marker {
   /** Rendered after messages[afterIndex] (−1 = before the first message). */
   afterIndex: number;
-  kind: "compaction" | "retry";
+  kind: "compaction" | "retry" | "turn";
   text: string;
+  /** Hover detail, used by turn markers for the token breakdown. */
+  detail?: string;
 }
 
 export interface ConversationState {
@@ -27,6 +30,10 @@ export interface ConversationState {
   /** Assistant message currently being streamed, rebuilt from deltas. */
   streaming?: AssistantMessage;
   isStreaming: boolean;
+  /** Wall clock at agent_start; drives the live elapsed counter while running. */
+  turnStartedAt?: number;
+  /** Usage summed over the assistant messages of the running turn. */
+  turnUsage?: Usage;
   toolRuns: Record<string, ToolRun>;
   queue: { steering: readonly string[]; followUp: readonly string[] };
   lastError?: string;
@@ -44,8 +51,18 @@ export const emptyConversation = (): ConversationState => ({
 export function fromMessages(messages: AgentMessage[]): ConversationState {
   const s = emptyConversation();
   s.messages = messages;
-  for (const m of messages) {
-    if (m.role === "assistant") s.lastUsage = m.usage;
+  let turn: Usage | undefined;
+  const closeTurn = (afterIndex: number) => {
+    const summary = turn && summarizeTurn(turn);
+    if (summary) s.markers.push({ afterIndex, kind: "turn", ...summary });
+    turn = undefined;
+  };
+  for (const [i, m] of messages.entries()) {
+    if (m.role === "user" && turn) closeTurn(i - 1);
+    if (m.role === "assistant") {
+      s.lastUsage = m.usage;
+      turn = addUsage(turn ?? emptyUsage(), m.usage);
+    }
     if (m.role === "toolResult") {
       s.toolRuns[m.toolCallId] = {
         toolCallId: m.toolCallId,
@@ -57,15 +74,42 @@ export function fromMessages(messages: AgentMessage[]): ConversationState {
       };
     }
   }
+  closeTurn(messages.length - 1);
   return s;
 }
 
-export function reduce(state: ConversationState, ev: JsonAgentSessionEvent): ConversationState {
+export function reduce(
+  state: ConversationState,
+  ev: JsonAgentSessionEvent,
+  now: () => number = Date.now,
+): ConversationState {
   switch (ev.type) {
     case "agent_start":
-      return { ...state, isStreaming: true, lastError: undefined };
-    case "agent_end":
-      return { ...state, isStreaming: false, streaming: undefined };
+      return {
+        ...state,
+        isStreaming: true,
+        lastError: undefined,
+        turnStartedAt: now(),
+        turnUsage: emptyUsage(),
+      };
+    case "agent_end": {
+      const summary =
+        state.turnUsage &&
+        summarizeTurn(
+          state.turnUsage,
+          state.turnStartedAt === undefined ? undefined : now() - state.turnStartedAt,
+        );
+      return {
+        ...state,
+        isStreaming: false,
+        streaming: undefined,
+        turnStartedAt: undefined,
+        turnUsage: undefined,
+        markers: summary
+          ? [...state.markers, { afterIndex: state.messages.length - 1, kind: "turn", ...summary }]
+          : state.markers,
+      };
+    }
     case "compaction_start":
       return { ...state, compacting: true };
     case "compaction_end": {
@@ -114,6 +158,7 @@ export function reduce(state: ConversationState, ev: JsonAgentSessionEvent): Con
       if (m.role === "assistant") {
         next.streaming = undefined;
         next.lastUsage = m.usage;
+        if (state.turnUsage) next.turnUsage = addUsage(state.turnUsage, m.usage);
         if (m.stopReason === "error" && m.errorMessage) next.lastError = m.errorMessage;
       }
       if (m.role === "toolResult") {

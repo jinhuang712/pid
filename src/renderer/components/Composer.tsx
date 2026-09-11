@@ -3,6 +3,7 @@ import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
+import { fmtDuration } from "../turn-summary";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
 import { Keys, SigilChip } from "./Key";
 import { ModelPicker } from "./ModelPicker";
@@ -26,6 +27,8 @@ export interface ComposerProps {
   thinkingLevel?: ThinkingLevel;
   usage?: AssistantMessage["usage"];
   compacting?: boolean;
+  /** Wall clock at agent_start; shown as a live elapsed counter while running. */
+  turnStartedAt?: number;
   loadModels: () => Promise<AnyModel[]>;
   loadLevels: () => Promise<ThinkingLevel[]>;
   onModel: (m: AnyModel) => void;
@@ -274,6 +277,7 @@ export function Composer(p: ComposerProps) {
             <span className="flex items-center gap-2 text-[12.5px] text-ink-3 pr-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
               <span>Running</span>
+              {p.turnStartedAt !== undefined && <Elapsed since={p.turnStartedAt} />}
               <Keys keys={["⏎"]} label="queue" className="ml-1" />
               <button
                 type="button"
@@ -331,6 +335,17 @@ export function Composer(p: ComposerProps) {
       </section>
     </div>
   );
+}
+
+/** Seconds since the turn started, ticking once a second. */
+function Elapsed({ since }: { since: number }): ReactNode {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="font-mono tabular-nums text-ink-3/80">{fmtDuration(now - since)}</span>;
 }
 
 const fmt = (n: number) =>
