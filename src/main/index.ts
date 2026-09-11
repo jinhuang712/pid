@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
+import type { PidSettings } from "@shared/settings";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { listFiles } from "./files";
@@ -11,6 +12,7 @@ import { dropIndex, searchSessions } from "./pi/search";
 import { readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
 import { loadState, rememberFolder } from "./pid-state";
+import { applyTheme, loadSettings, saveSettings } from "./settings";
 
 const PAPER_LIGHT = "#f7f7f6";
 const PAPER_DARK = "#131314";
@@ -97,6 +99,8 @@ ipcMain.handle("folder:pick", async () => {
 
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
+ipcMain.handle("settings:get", () => loadSettings());
+ipcMain.handle("settings:set", (_e, s: PidSettings) => saveSettings(s));
 ipcMain.handle("pi:home", () => readPiHome());
 ipcMain.handle("eco:skills", (_e, cwd?: string) => listSkills(cwd));
 ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
@@ -118,6 +122,7 @@ ipcMain.handle("pi:uiResponse", (_e, key: string, response: RpcExtensionUIRespon
 ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
 
 app.whenReady().then(() => {
+  applyTheme(); // decide the theme before the first frame
   mainWindow = createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();

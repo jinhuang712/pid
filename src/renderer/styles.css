@@ -44,6 +44,20 @@
 
 :root {
   color-scheme: light dark;
+  --pid-font-size: 13px;
+  --pid-code-font: var(--font-mono);
+}
+body {
+  font-size: var(--pid-font-size);
+}
+.font-mono,
+pre,
+code {
+  font-family: var(--pid-code-font);
+}
+[data-density="compact"] .timeline-item {
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
 }
 
 .drag {

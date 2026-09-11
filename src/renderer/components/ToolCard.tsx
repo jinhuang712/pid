@@ -1,5 +1,6 @@
 import type { ToolCall } from "@earendil-works/pi-ai";
 import { useState } from "react";
+import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
 
 function summarize(call: ToolCall): string {
@@ -28,7 +29,8 @@ function resultText(run?: ToolRun): string {
 }
 
 export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
-  const [open, setOpen] = useState(false);
+  const { settings } = useSettings();
+  const [open, setOpen] = useState(!settings.appearance.toolCardsCollapsed);
   const status = run?.status ?? "running";
   const isError = run?.isError === true;
   const dot = isError ? "bg-danger" : status === "running" ? "bg-accent animate-pulse" : "bg-ok";

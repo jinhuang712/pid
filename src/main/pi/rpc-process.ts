@@ -14,6 +14,9 @@ type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 export interface PiProcessOptions {
   cwd: string;
   sessionPath?: string;
+  /** Override for the pi executable; default resolves `pi` on the login shell PATH. */
+  binary?: string;
+  extraArgs?: string[];
   onEvent: (event: PiEvent) => void;
   onExit: (code: number | null, signal: NodeJS.Signals | null, stderr: string) => void;
 }
@@ -34,7 +37,12 @@ export class PiProcess {
     this.cwd = opts.cwd;
     const args = ["--mode", "rpc"];
     if (opts.sessionPath) args.push("--session", opts.sessionPath);
-    this.child = spawn("pi", args, { cwd: opts.cwd, env: shellEnv(), stdio: ["pipe", "pipe", "pipe"] });
+    if (opts.extraArgs) args.push(...opts.extraArgs);
+    this.child = spawn(opts.binary || "pi", args, {
+      cwd: opts.cwd,
+      env: shellEnv(),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     this.child.stdout.setEncoding("utf8");
     this.child.stdout.on("data", (chunk: string) => this.onStdout(chunk));
     this.child.stderr.setEncoding("utf8");

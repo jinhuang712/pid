@@ -17,6 +17,10 @@ const bridge: Bridge = {
   files: {
     list: (cwd) => ipcRenderer.invoke("files:list", cwd),
   },
+  settings: {
+    get: () => ipcRenderer.invoke("settings:get"),
+    set: (s) => ipcRenderer.invoke("settings:set", s),
+  },
   eco: {
     home: () => ipcRenderer.invoke("pi:home"),
     skills: (cwd) => ipcRenderer.invoke("eco:skills", cwd),

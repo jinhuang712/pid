@@ -6,6 +6,7 @@ import { defineConfig } from "electron-vite";
 export default defineConfig({
   main: {
     build: { rollupOptions: { input: resolve(__dirname, "src/main/index.ts") } },
+    resolve: { alias: { "@shared": resolve(__dirname, "src/shared") } },
   },
   preload: {
     // sandboxed preload scripts must be CommonJS
@@ -15,6 +16,7 @@ export default defineConfig({
         output: { format: "cjs", entryFileNames: "[name].cjs" },
       },
     },
+    resolve: { alias: { "@shared": resolve(__dirname, "src/shared") } },
   },
   renderer: {
     root: resolve(__dirname, "src/renderer"),
