@@ -359,31 +359,49 @@ export function SessionTree({
         )}
       </div>
 
-      <div className="shrink-0 mx-3 mt-2 pt-2 pb-2 border-t border-line flex flex-col gap-px text-[12.5px]">
-        <button
-          type="button"
-          onClick={() => actions.openFolder("")}
-          className="h-7 px-2 rounded-lg flex items-center text-ink-3 hover:text-ink hover:bg-paper-3"
-        >
-          <span className="flex-1 text-left">Open folder…</span>
-        </button>
-        {(
-          [
-            ["skills", "Skills"],
-            ["mcp", "MCP"],
-            ["extensions", "Extensions"],
-            ["settings", "Settings"],
-          ] as [Page, string][]
-        ).map(([id, label]) => (
+      <div className="shrink-0 mx-3 mt-2 pt-2 pb-2 border-t border-line flex flex-col text-[12.5px]">
+        {/* Pi's ecosystem: pages */}
+        <div className="flex flex-col gap-px">
+          {(
+            [
+              ["skills", "Skills"],
+              ["mcp", "MCP"],
+              ["extensions", "Extensions"],
+            ] as [Page, string][]
+          ).map(([id, label]) => (
+            <button
+              type="button"
+              key={id}
+              onClick={() => onPage(id)}
+              className={`h-7 px-2 rounded-lg flex items-center hover:bg-paper-3 ${
+                page === id ? "text-ink bg-paper-3" : "text-ink-3 hover:text-ink"
+              }`}
+            >
+              <span className="flex-1 text-left">{label}</span>
+            </button>
+          ))}
+        </div>
+        {/* PID itself: actions, with their shortcuts */}
+        <div className="flex flex-col gap-px mt-3">
           <button
             type="button"
-            key={id}
-            onClick={() => onPage(id)}
-            className={`h-7 px-2 rounded-lg flex items-center hover:bg-paper-3 ${page === id ? "text-ink bg-paper-3" : "text-ink-3 hover:text-ink"}`}
+            onClick={() => actions.openFolder("")}
+            className="h-7 px-2 rounded-lg flex items-center text-ink-3 hover:text-ink hover:bg-paper-3"
           >
-            <span className="flex-1 text-left">{label}</span>
+            <span className="flex-1 text-left">Open folder…</span>
+            <span className="font-mono text-[11px]">⌘O</span>
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => onPage("settings")}
+            className={`h-7 px-2 rounded-lg flex items-center hover:bg-paper-3 ${
+              page === "settings" ? "text-ink bg-paper-3" : "text-ink-3 hover:text-ink"
+            }`}
+          >
+            <span className="flex-1 text-left">Settings</span>
+            <span className="font-mono text-[11px] text-ink-3">⌘,</span>
+          </button>
+        </div>
       </div>
 
       {menu && (
