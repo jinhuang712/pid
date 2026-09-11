@@ -17,8 +17,8 @@ import { listAllSessions, listSessions } from "./pi/sessions";
 import { forgetFolder, loadState, rememberFolder } from "./pid-state";
 import { applyTheme, loadSettings, saveSettings } from "./settings";
 
-const PAPER_LIGHT = "#f7f7f6";
-const PAPER_DARK = "#131314";
+const PAPER_LIGHT = "#f4f3ef";
+const PAPER_DARK = "#121211";
 const paperColor = () => (nativeTheme.shouldUseDarkColors ? PAPER_DARK : PAPER_LIGHT);
 
 let mainWindow: BrowserWindow | undefined;

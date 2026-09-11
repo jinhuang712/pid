@@ -23,15 +23,27 @@ export function ThinkingPicker({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink ${placement === "up" ? "bg-paper-3 hover:bg-paper-4" : "hover:bg-paper-3"}`}
+        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink ${placement === "up" ? "h-[26px] rounded-full text-[12.5px] hover:bg-paper-3" : "hover:bg-paper-3"}`}
         title="Thinking level"
       >
         {current}
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          className="ml-1 inline-block opacity-70"
+        >
+          <title>open</title>
+          <path d="m5 6 3 3 3-3" />
+        </svg>
       </button>
       <Popover
         open={open}
         onClose={() => setOpen(false)}
-        className={`${placement === "up" ? "left-0 bottom-8" : "right-0 top-8"} w-40 py-1`}
+        className={`${placement === "up" ? "left-0 bottom-9" : "right-0 top-8"} w-40 py-1`}
       >
         {levels.length === 0 && <div className="px-3 py-1.5 text-xs text-ink-3">not supported</div>}
         {levels.map((l) => (
