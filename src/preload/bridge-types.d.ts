@@ -14,6 +14,7 @@ export interface AppInfo {
   platform: NodeJS.Platform;
   devOpenFolder?: string;
   devPrompt?: string;
+  devFollowUp?: string;
 }
 
 export interface Bridge {

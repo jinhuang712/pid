@@ -76,6 +76,7 @@ ipcMain.handle("app:info", () => ({
   // Dev hooks for headless smoke tests: open a folder and send one prompt on launch.
   devOpenFolder: process.env.PID_OPEN_FOLDER,
   devPrompt: process.env.PID_PROMPT,
+  devFollowUp: process.env.PID_FOLLOWUP,
 }));
 
 ipcMain.handle("folder:pick", async () => {

@@ -1,8 +1,9 @@
 import type { PiHandle, RpcExtensionUIRequest, RpcSessionState } from "@shared/protocol";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { bridge } from "./bridge";
-import { Composer } from "./components/Composer";
+import { Composer, type SendMode } from "./components/Composer";
 import { ModelPicker } from "./components/ModelPicker";
+import { QueuePanel } from "./components/QueuePanel";
 import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
 import { emptyConversation, reduce } from "./state/conversation";
@@ -79,7 +80,17 @@ export function App() {
   }, []);
 
   const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
-  const send = (text: string) => key && void run(bridge.pi.command(key, { type: "prompt", message: text }));
+  const send = (text: string, mode: SendMode) => {
+    if (!key) return;
+    const cmd =
+      mode === "steer"
+        ? ({ type: "steer", message: text } as const)
+        : mode === "followUp"
+          ? ({ type: "follow_up", message: text } as const)
+          : ({ type: "prompt", message: text } as const);
+    void run(bridge.pi.command(key, cmd));
+  };
+  const clearQueue = () => key && void run(bridge.pi.command(key, { type: "clear_queue" }));
   const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
 
   const loadModels = useCallback(
@@ -136,6 +147,12 @@ export function App() {
             <>
               <Timeline state={conv} />
               {status && <div className="px-4 py-1 text-xs text-warn">{status}</div>}
+              <QueuePanel
+                streaming={conv.isStreaming}
+                steering={conv.queue.steering}
+                followUp={conv.queue.followUp}
+                onClear={clearQueue}
+              />
               <Composer streaming={conv.isStreaming} onSend={send} onAbort={abort} />
             </>
           ) : (
