@@ -69,6 +69,17 @@ function Item({ m, state }: { m: AgentMessage; state: ConversationState }) {
   return <div className="px-4 py-1 text-xs text-ink-3">{String((m as { role: string }).role)} message</div>;
 }
 
+function MarkerRow({ kind, text, live }: { kind: "compaction" | "retry"; text: string; live?: boolean }) {
+  const tone = kind === "retry" ? "text-warn border-warn/40" : "text-ink-3 border-line";
+  return (
+    <div className="px-4 py-2 flex items-center gap-3 text-xs">
+      <div className={`flex-1 border-t ${tone}`} />
+      <span className={`${tone} ${live ? "animate-pulse" : ""}`}>{text}</span>
+      <div className={`flex-1 border-t ${tone}`} />
+    </div>
+  );
+}
+
 export function Timeline({ state }: { state: ConversationState }) {
   const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -88,10 +99,23 @@ export function Timeline({ state }: { state: ConversationState }) {
   return (
     <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto py-3">
       <div className="max-w-3xl mx-auto">
+        {state.markers
+          .filter((k) => k.afterIndex < 0)
+          .map((k) => (
+            <MarkerRow key={`${k.kind}-${k.text}`} kind={k.kind} text={k.text} />
+          ))}
         {state.messages.map((m, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: messages are append-only
-          <Item key={i} m={m} state={state} />
+          <div key={i}>
+            <Item m={m} state={state} />
+            {state.markers
+              .filter((k) => k.afterIndex === i)
+              .map((k) => (
+                <MarkerRow key={`${k.kind}-${k.text}`} kind={k.kind} text={k.text} />
+              ))}
+          </div>
         ))}
+        {state.compacting && <MarkerRow kind="compaction" text="compacting context…" live />}
         {state.streaming && <Assistant m={state.streaming} live state={state} />}
         {state.isStreaming && !state.streaming && (
           <div className="px-4 py-2 text-xs text-accent animate-pulse">working…</div>

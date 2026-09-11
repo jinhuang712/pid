@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   PiCommand,
+  PiEvent,
   PiEventEnvelope,
   PiExitEnvelope,
   RpcExtensionUIResponse,
@@ -17,10 +18,14 @@ export class PiRegistry {
 
   async start(opts: StartPiOptions) {
     const key = randomUUID();
+    let early: PiEvent[] | undefined = [];
     const proc = new PiProcess({
       cwd: opts.cwd,
       sessionPath: opts.sessionPath,
-      onEvent: (event) => this.send("pi:event", { key, event } satisfies PiEventEnvelope),
+      onEvent: (event) => {
+        if (early) early.push(event);
+        else this.send("pi:event", { key, event } satisfies PiEventEnvelope);
+      },
       onExit: (code, signal, stderr) => {
         this.procs.delete(key);
         this.send("pi:exit", { key, code, signal, stderr } satisfies PiExitEnvelope);
@@ -28,7 +33,9 @@ export class PiRegistry {
     });
     this.procs.set(key, proc);
     const state = await proc.request({ type: "get_state" });
-    return { key, cwd: opts.cwd, state };
+    const earlyEvents = early;
+    early = undefined;
+    return { key, cwd: opts.cwd, state, earlyEvents };
   }
 
   command(key: string, command: PiCommand) {
