@@ -28,9 +28,6 @@ const bridge: Bridge = {
   },
   git: {
     repo: (cwd) => ipcRenderer.invoke("git:repo", cwd),
-    addWorktree: (o) => ipcRenderer.invoke("git:worktreeAdd", o),
-    worktreeSafety: (cwd, path) => ipcRenderer.invoke("git:worktreeSafety", cwd, path),
-    removeWorktree: (o) => ipcRenderer.invoke("git:worktreeRemove", o),
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

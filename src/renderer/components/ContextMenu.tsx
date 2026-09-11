@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
+import { Keys } from "./Key";
 
 export interface MenuItem {
   label: string;
@@ -62,7 +63,7 @@ export function ContextMenu({
             }`}
           >
             <span className="flex-1 truncate">{it.label}</span>
-            {it.hint && <span className="text-xs text-ink-3">{it.hint}</span>}
+            {it.hint && <Keys keys={[...it.hint]} />}
           </button>
         ),
       )}

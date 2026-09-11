@@ -16,8 +16,8 @@ const SECTIONS: { id: SectionId; label: string; note: string }[] = [
   { id: "sessions", label: "Sessions", note: "Listing and search preferences for Pi session files." },
   {
     id: "files",
-    label: "Files & Worktrees",
-    note: "The @ file picker and Git worktree defaults. Git remains the source of truth.",
+    label: "Files",
+    note: "The @ file picker. Worktrees belong to Pi (pi-worktree) and show on the session title bar.",
   },
   { id: "notifications", label: "Notifications", note: "Desktop notifications for things that need you." },
   {
@@ -184,19 +184,6 @@ export function SettingsPage() {
                 <Toggle
                   value={settings.files.showHidden}
                   onChange={(showHidden) => update("files", { showHidden })}
-                />
-              </Row>
-              <Row label="Worktree parent directory" hint="Empty: create worktrees next to the repository.">
-                <TextInput
-                  value={settings.files.worktreeParentDir}
-                  placeholder="~/worktrees"
-                  onChange={(worktreeParentDir) => update("files", { worktreeParentDir })}
-                />
-              </Row>
-              <Row label="Confirm before removing a worktree">
-                <Toggle
-                  value={settings.files.confirmWorktreeRemoval}
-                  onChange={(confirmWorktreeRemoval) => update("files", { confirmWorktreeRemoval })}
                 />
               </Row>
             </>

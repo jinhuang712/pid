@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
-import { type DialogRequest, ExtensionDialog, type Toast, Toasts } from "./components/ExtensionUI";
+import { type DialogRequest, ExtensionDialog, stripAnsi, type Toast, Toasts } from "./components/ExtensionUI";
 import { ForkDialog } from "./components/ForkDialog";
 import { Home } from "./components/Home";
 import type { Page } from "./components/NavRail";
@@ -13,7 +13,6 @@ import { QueuePanel } from "./components/QueuePanel";
 import { ReferenceChips } from "./components/ReferenceChips";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
 import { Timeline } from "./components/Timeline";
-import { WorktreeAddForm, WorktreeRemoveConfirm } from "./components/WorktreePanel";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { McpPage } from "./pages/McpPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -41,11 +40,6 @@ export function App() {
   const filterRef = useRef<HTMLInputElement>(null);
   const [forkKey, setForkKey] = useState<string>();
   const [renameKey, setRenameKey] = useState<string>();
-  const [worktreeDialog, setWorktreeDialog] = useState<{
-    kind: "add" | "remove";
-    folder: string;
-    path: string;
-  }>();
 
   const active = ws.activeKey ? ws.procs[ws.activeKey] : undefined;
   const key = active?.key;
@@ -70,7 +64,6 @@ export function App() {
   useEffect(() => {
     void bridge.folders.recent().then((fs) => {
       setFolders(fs);
-      setFolder((cur) => cur ?? fs[0]); // the entry view defaults to the most recent folder
       for (const f of fs) void loadFolder(f);
     });
   }, [loadFolder]);
@@ -239,8 +232,6 @@ export function App() {
       dispatch({ type: "remove", key: live.key });
     },
     reveal: (path) => void bridge.shell.reveal(path),
-    newWorktree: (dir) => setWorktreeDialog({ kind: "add", folder: dir, path: "" }),
-    removeWorktree: (dir, path) => setWorktreeDialog({ kind: "remove", folder: dir, path }),
     forgetFolder: (dir) => void bridge.folders.forget(dir).then(setFolders),
   };
 
@@ -343,8 +334,13 @@ export function App() {
   };
   const allSessions = useMemo(() => Object.values(sessionsByFolder).flat(), [sessionsByFolder]);
   const recentSessions = useMemo(
-    () => [...allSessions].sort((x, y) => y.modified.localeCompare(x.modified)).slice(0, 6),
-    [allSessions],
+    () =>
+      folder
+        ? [...(sessionsByFolder[folder] ?? [])]
+            .sort((x, y) => y.modified.localeCompare(x.modified))
+            .slice(0, 5)
+        : [],
+    [sessionsByFolder, folder],
   );
   const { complete, pick } = useCompletion({
     key,
@@ -428,6 +424,12 @@ export function App() {
       activeSummary?.firstMessage ||
       (active.conv.messages.length ? firstUserText(active.conv.messages) : "New session")
     : undefined;
+  // pi-worktree publishes the session's binding through Pi's widget channel; PID only shows it.
+  const worktreeLine = active
+    ? stripAnsi(active.widgets["pi-worktree"] ?? active.statuses["pi-worktree"] ?? "")
+        .replace(/^\s*🌲\s*/, "")
+        .trim() || undefined
+    : undefined;
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
@@ -469,59 +471,6 @@ export function App() {
           onClose={() => setForkKey(undefined)}
         />
       )}
-      {worktreeDialog && (
-        <div className="absolute inset-0 z-40 bg-black/30 flex items-start justify-center pt-[16vh]">
-          <button
-            type="button"
-            aria-label="Close"
-            className="absolute inset-0 cursor-default"
-            onMouseDown={() => setWorktreeDialog(undefined)}
-          />
-          <dialog
-            open
-            aria-label="Worktree"
-            className="relative m-0 p-2 w-[420px] rounded-xl border border-line bg-paper-2 shadow-2xl text-ink text-sm"
-          >
-            {worktreeDialog.kind === "add" && repos[worktreeDialog.folder] && (
-              <WorktreeAddForm
-                repo={repos[worktreeDialog.folder] as RepoInfo}
-                folder={worktreeDialog.folder}
-                defaultParent={settings.files.worktreeParentDir}
-                onDone={(path) => {
-                  setWorktreeDialog(undefined);
-                  void loadFolder(worktreeDialog.folder);
-                  if (path) void selectFolder(path);
-                }}
-                onStatus={(m) => toast(m)}
-              />
-            )}
-            {worktreeDialog.kind === "remove" && repos[worktreeDialog.folder] && (
-              <WorktreeRemoveConfirm
-                folder={(repos[worktreeDialog.folder] as RepoInfo).root}
-                worktree={{ path: worktreeDialog.path, head: "", isMain: false, isCurrent: false }}
-                onCancel={() => setWorktreeDialog(undefined)}
-                onConfirm={(force) =>
-                  void run(
-                    bridge.git
-                      .removeWorktree({
-                        cwd: (repos[worktreeDialog.folder] as RepoInfo).root,
-                        path: worktreeDialog.path,
-                        force,
-                      })
-                      .then(() => {
-                        setWorktreeDialog(undefined);
-                        toast(`removed worktree ${base(worktreeDialog.path)}`);
-                        const root = (repos[worktreeDialog.folder] as RepoInfo).root;
-                        if (folder === worktreeDialog.path) void selectFolder(root);
-                        void loadFolder(root);
-                      }),
-                  )
-                }
-              />
-            )}
-          </dialog>
-        </div>
-      )}
       <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
 
       <div className="flex-1 flex min-h-0">
@@ -558,7 +507,27 @@ export function App() {
                   <span className="text-ink truncate">{title}</span>
                   <span>·</span>
                   <span className="font-mono truncate">{active.cwd.replace(/^\/Users\/[^/]+/, "~")}</span>
-                  {branch && <span className="font-mono">{branch}</span>}
+                  {worktreeLine ? (
+                    <span
+                      className="flex items-center gap-1.5 text-ink-2"
+                      title="pi-worktree binding for this session"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                      >
+                        <title>worktree</title>
+                        <path d="M5 3v4a3 3 0 0 0 3 3h0a3 3 0 0 0 3-3V3M8 10v3" />
+                      </svg>
+                      <span className="font-mono">{worktreeLine}</span>
+                    </span>
+                  ) : (
+                    branch && <span className="font-mono">{branch}</span>
+                  )}
                   {active.exit && <span className="text-danger truncate">{active.exit}</span>}
                 </>
               )}
@@ -625,6 +594,8 @@ export function App() {
               <Home
                 folder={folder}
                 folders={folders}
+                repo={folder ? repos[folder] : undefined}
+                sessionCount={folder ? (sessionsByFolder[folder]?.length ?? 0) : 0}
                 recent={recentSessions}
                 onPickFolder={() => sessionActions.openFolder("")}
                 onChooseFolder={(dir) => void selectFolder(dir)}
@@ -637,7 +608,7 @@ export function App() {
                       onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
                     />
                     <Composer
-                      disabled={false}
+                      disabled={!folder}
                       folder={folder}
                       complete={complete}
                       pick={pick}

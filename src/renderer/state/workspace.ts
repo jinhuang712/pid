@@ -12,6 +12,8 @@ export interface Proc {
   piState: RpcSessionState;
   conv: ConversationState;
   statuses: Record<string, string>;
+  /** setWidget lines by widget key, e.g. pi-worktree's "🌲 branch → main · ↑2 · 1 dirty". */
+  widgets: Record<string, string>;
   dialogs: DialogRequest[];
   /** Set when the process exited; the entry stays until dismissed so the user sees why. */
   exit?: string;
@@ -45,6 +47,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         piState: a.handle.state,
         conv: emptyConversation(),
         statuses: {},
+        widgets: {},
         dialogs: [],
       };
       let next: Workspace = { ...ws, procs: { ...ws.procs, [proc.key]: proc }, activeKey: proc.key };
@@ -79,6 +82,8 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
               return { ...p, dialogs: [...p.dialogs, ev] };
             case "setStatus":
               return { ...p, statuses: { ...p.statuses, [ev.statusKey]: ev.statusText ?? "" } };
+            case "setWidget":
+              return { ...p, widgets: { ...p.widgets, [ev.widgetKey]: (ev.widgetLines ?? []).join(" ") } };
             default:
               return p;
           }

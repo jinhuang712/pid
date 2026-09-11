@@ -68,7 +68,7 @@ export function ModelPicker({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink ${placement === "up" ? "h-[26px] rounded-full text-[12.5px] hover:bg-paper-3" : "hover:bg-paper-3"}`}
+        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink inline-flex items-center whitespace-nowrap ${placement === "up" ? "h-[26px] rounded-full text-[12.5px] hover:bg-paper-3" : "hover:bg-paper-3"}`}
         title={current ? `${current.provider}/${current.id} · from Pi's model configuration` : "Model"}
       >
         {current ? current.id : "model"}

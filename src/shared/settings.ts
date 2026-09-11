@@ -25,8 +25,6 @@ export interface PidSettings {
   files: {
     ignorePatterns: string[]; // extra globs excluded from @ search
     showHidden: boolean;
-    worktreeParentDir: string; // "" → sibling of the repository
-    confirmWorktreeRemoval: boolean;
   };
   notifications: {
     runCompleted: boolean;
@@ -63,8 +61,6 @@ export const DEFAULT_SETTINGS: PidSettings = {
   files: {
     ignorePatterns: [],
     showHidden: false,
-    worktreeParentDir: "",
-    confirmWorktreeRemoval: true,
   },
   notifications: {
     runCompleted: true,

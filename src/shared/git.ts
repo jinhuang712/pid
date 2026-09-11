@@ -18,27 +18,3 @@ export interface RepoInfo {
   worktrees: WorktreeInfo[];
   branches: string[];
 }
-
-export interface AddWorktreeOptions {
-  cwd: string;
-  path: string;
-  /** Existing branch to check out, or the name of a new branch when createBranch is true. */
-  branch: string;
-  createBranch: boolean;
-  /** Start point for a new branch; defaults to HEAD. */
-  from?: string;
-}
-
-export interface RemoveWorktreeOptions {
-  cwd: string;
-  path: string;
-  /** Remove even when the worktree has local modifications. */
-  force: boolean;
-}
-
-export interface WorktreeSafety {
-  clean: boolean;
-  /** `git status --porcelain` lines, capped. */
-  changes: string[];
-  isMain: boolean;
-}

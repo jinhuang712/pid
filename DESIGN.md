@@ -60,18 +60,19 @@ folder, and branch. It has no controls.
 
 ## Worktree Model
 
-A Git worktree is a Folder. Nothing more.
+Worktrees belong to sessions, not to the sidebar. Pi's `pi-worktree` extension binds a session to a
+worktree (`/worktree`, `worktree_create`), keeps the session's folder at the origin, re-roots the
+session's tool calls into the worktree, and lands or abandons it later (`/land`, `worktree_abandon`).
 
-PID understands that several folders belong to one repository and which branch each one is on, but that relationship is used only for navigation and for choosing where a session runs. The worktree panel lets a user:
+PID does not list worktrees as folders and does not create or remove them. It shows the binding
+where it matters: on the session's title bar, from the extension's own status line —
 
-- see the worktrees of the current repository and their branches
-- jump to a sibling worktree
-- create a worktree, optionally with a new branch
-- start a session in a worktree
-- see sessions that already exist under a worktree
-- remove a worktree when Git reports it is safe
+```text
+Sidebar tree redesign · ~/dev/pi/pid   ⑂ wt-sidebar-tree → main · ↑3 · 2 dirty
+```
 
-Git is the source of truth. PID never stores its own worktree registry.
+Git remains the source of truth for branches; the extension remains the source of truth for the
+binding. A folder's own branch shows on its row and on the title bar when no worktree is bound.
 
 ## Conversation Timeline
 
