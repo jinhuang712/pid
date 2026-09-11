@@ -1,24 +1,40 @@
-import type { PiHandle, RpcExtensionUIRequest } from "@shared/protocol";
+import type { PiHandle, RpcExtensionUIRequest, RpcSessionState } from "@shared/protocol";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { bridge } from "./bridge";
 import { Composer } from "./components/Composer";
+import { ModelPicker } from "./components/ModelPicker";
+import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
 import { emptyConversation, reduce } from "./state/conversation";
 
 export function App() {
   const [folder, setFolder] = useState<string>();
   const [pi, setPi] = useState<PiHandle>();
+  const [piState, setPiState] = useState<RpcSessionState>();
   const [conv, dispatch] = useReducer(reduce, undefined, emptyConversation);
   const [status, setStatus] = useState<string>();
 
+  const key = pi?.key;
+  const refreshState = useCallback(async () => {
+    if (!key) return;
+    setPiState(await bridge.pi.command(key, { type: "get_state" }));
+  }, [key]);
+
   useEffect(() => {
-    const offEvent = bridge.pi.onEvent(({ key, event }) => {
-      if (key !== pi?.key) return;
-      if (event.type === "extension_ui_request") return handleUI(key, event);
+    const offEvent = bridge.pi.onEvent(({ key: k, event }) => {
+      if (k !== key) return;
+      if (event.type === "extension_ui_request") return handleUI(k, event);
       dispatch(event);
+      if (
+        event.type === "thinking_level_changed" ||
+        event.type === "session_info_changed" ||
+        event.type === "agent_end"
+      ) {
+        void refreshState();
+      }
     });
-    const offExit = bridge.pi.onExit(({ key, code, stderr }) => {
-      if (key !== pi?.key) return;
+    const offExit = bridge.pi.onExit(({ key: k, code, stderr }) => {
+      if (k !== key) return;
       setStatus(`pi exited (${code}) ${stderr.split("\n").slice(-3).join(" ")}`);
       setPi(undefined);
     });
@@ -26,7 +42,7 @@ export function App() {
       offEvent();
       offExit();
     };
-  }, [pi?.key]);
+  }, [key, refreshState]);
 
   const startIn = useCallback(
     async (dir: string) => {
@@ -36,6 +52,7 @@ export function App() {
       try {
         const handle = await bridge.pi.start({ cwd: dir });
         setPi(handle);
+        setPiState(handle.state);
         setStatus(undefined);
         return handle;
       } catch (e) {
@@ -61,11 +78,18 @@ export function App() {
     });
   }, []);
 
-  const send = (text: string) => {
-    if (!pi) return;
-    void bridge.pi.command(pi.key, { type: "prompt", message: text }).catch((e) => setStatus(String(e)));
-  };
-  const abort = () => pi && void bridge.pi.command(pi.key, { type: "abort" });
+  const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
+  const send = (text: string) => key && void run(bridge.pi.command(key, { type: "prompt", message: text }));
+  const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
+
+  const loadModels = useCallback(
+    async () => (key ? (await bridge.pi.command(key, { type: "get_available_models" })).models : []),
+    [key],
+  );
+  const loadLevels = useCallback(
+    async () => (key ? (await bridge.pi.command(key, { type: "get_available_thinking_levels" })).levels : []),
+    [key],
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -73,10 +97,27 @@ export function App() {
         <span className="font-medium text-ink">PID</span>
         {folder && <span className="font-mono text-xs truncate">{folder}</span>}
         <span className="flex-1" />
-        {pi?.state.model && (
-          <span className="text-xs">
-            {pi.state.model.provider}/{pi.state.model.id} · {pi.state.thinkingLevel}
-          </span>
+        {key && piState && (
+          <div className="flex items-center gap-1">
+            <ModelPicker
+              current={piState.model ? { provider: piState.model.provider, id: piState.model.id } : undefined}
+              load={loadModels}
+              onSelect={(m) =>
+                void run(
+                  bridge.pi
+                    .command(key, { type: "set_model", provider: m.provider, modelId: m.id })
+                    .then(refreshState),
+                )
+              }
+            />
+            <ThinkingPicker
+              current={piState.thinkingLevel}
+              load={loadLevels}
+              onSelect={(level) =>
+                void run(bridge.pi.command(key, { type: "set_thinking_level", level }).then(refreshState))
+              }
+            />
+          </div>
         )}
       </header>
       <div className="flex-1 flex min-h-0">
