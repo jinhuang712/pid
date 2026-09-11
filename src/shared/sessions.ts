@@ -16,3 +16,14 @@ export interface SessionMessage {
   role: "user" | "assistant";
   text: string;
 }
+
+export interface SearchScope {
+  /** Restrict to sessions under this folder; omit for all folders. */
+  cwd?: string;
+}
+
+export interface SearchHit {
+  session: SessionSummary;
+  snippet: string;
+  score: number;
+}

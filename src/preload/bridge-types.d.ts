@@ -7,7 +7,7 @@ import type {
   RpcExtensionUIResponse,
   StartPiOptions,
 } from "@shared/protocol";
-import type { SessionMessage, SessionSummary } from "@shared/sessions";
+import type { SearchHit, SearchScope, SessionMessage, SessionSummary } from "@shared/sessions";
 
 export interface AppInfo {
   version: string;
@@ -18,6 +18,7 @@ export interface AppInfo {
   devFollowUp?: string;
   devOpenSession?: string;
   devDraft?: string;
+  devSearch?: string;
 }
 
 export interface Bridge {
@@ -34,6 +35,8 @@ export interface Bridge {
     list(cwd: string): Promise<SessionSummary[]>;
     listAll(): Promise<SessionSummary[]>;
     read(path: string): Promise<SessionMessage[]>;
+    search(query: string, scope: SearchScope): Promise<SearchHit[]>;
+    dropIndex(): Promise<void>;
   };
   pi: {
     start(opts: StartPiOptions): Promise<PiHandle>;
