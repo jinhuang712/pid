@@ -50,16 +50,21 @@ export function Home({
         <div className="w-full max-w-3xl flex flex-col gap-2.5">
           <div className="px-1 text-[12px] text-ink-3">Folder</div>
           {folder ? (
-            <div className="h-10 px-3.5 rounded-xl bg-paper-2 border border-line flex items-center gap-2 text-ink">
+            <div className="h-10 px-3.5 rounded-xl bg-paper-2 border border-line flex items-center gap-2.5 text-ink whitespace-nowrap">
               <FolderGlyph muted={false} />
-              <span>{base(folder)}</span>
-              <span className="font-mono text-xs text-ink-3 truncate">{home(folder)}</span>
-              {branch && <span className="font-mono text-xs text-ink-3">{branch}</span>}
-              <span className="flex-1" />
-              <span className="text-[12px] text-ink-3">
+              <span className="shrink-0">{base(folder)}</span>
+              <span className="font-mono text-xs text-ink-3 flex-1 min-w-0 truncate" title={folder}>
+                {home(folder)}
+              </span>
+              {branch && <span className="font-mono text-xs text-ink-3 shrink-0">{branch}</span>}
+              <span className="text-[12px] text-ink-3 shrink-0">
                 {sessionCount} session{sessionCount === 1 ? "" : "s"}
               </span>
-              <button type="button" onClick={onPickFolder} className="text-[12px] text-ink-2 hover:text-ink">
+              <button
+                type="button"
+                onClick={onPickFolder}
+                className="text-[12px] text-ink-2 hover:text-ink shrink-0"
+              >
                 Change
               </button>
             </div>
