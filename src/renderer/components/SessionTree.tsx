@@ -23,7 +23,8 @@ const ago = (iso: string) => {
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 };
-const SHOW = 6;
+const CLOSED_PREVIEW = 3; // closed sessions shown before the disclosure
+const PAGE = 10; // how many more each click reveals
 
 export interface SessionActions {
   openFolder: (dir: string) => void;
@@ -69,7 +70,7 @@ export function SessionTree({
 }) {
   const { settings } = useSettings();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [more, setMore] = useState<Record<string, boolean>>({});
+  const [revealed, setRevealed] = useState<Record<string, number>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; items: (MenuItem | "sep")[]; header?: string }>();
 
   const orderedFolders = folders;
@@ -170,8 +171,12 @@ export function SessionTree({
           const liveHere = Object.values(ws.procs).filter((p) => p.cwd === f);
           const liveStatus = liveHere.map(procStatus);
           const isActive = f === activeFolder;
-          const shown = more[f] || filter ? list : list.slice(0, SHOW);
-          const hidden = list.length - shown.length;
+          // live sessions always show; closed ones stay folded except the most recent few
+          const live = list.filter((x) => procForSession(ws, x.path));
+          const closed = list.filter((x) => !procForSession(ws, x.path));
+          const limit = filter ? closed.length : CLOSED_PREVIEW + (revealed[f] ?? 0);
+          const shown = [...live, ...closed.slice(0, limit)];
+          const hidden = closed.length - Math.min(closed.length, limit);
           // forks nest under their parent when both are in this folder
           const byPath = new Map(list.map((s) => [s.path, s]));
           const roots = settings.sessions.showForkLineage
@@ -300,19 +305,19 @@ export function SessionTree({
                   {hidden > 0 && (
                     <button
                       type="button"
-                      onClick={() => setMore((m) => ({ ...m, [f]: true }))}
+                      onClick={() => setRevealed((m) => ({ ...m, [f]: (m[f] ?? 0) + PAGE }))}
                       className="h-6 px-2 text-left text-xs text-ink-3 hover:text-ink"
                     >
-                      Show {hidden} more
+                      {hidden} earlier session{hidden === 1 ? "" : "s"} · show {Math.min(PAGE, hidden)}
                     </button>
                   )}
-                  {more[f] && list.length > SHOW && (
+                  {(revealed[f] ?? 0) > 0 && !filter && (
                     <button
                       type="button"
-                      onClick={() => setMore((m) => ({ ...m, [f]: false }))}
+                      onClick={() => setRevealed((m) => ({ ...m, [f]: 0 }))}
                       className="h-6 px-2 text-left text-xs text-ink-3 hover:text-ink"
                     >
-                      Show less
+                      Fold earlier sessions
                     </button>
                   )}
                   {list.length === 0 && unsaved.length === 0 && (
