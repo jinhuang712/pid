@@ -16,12 +16,21 @@ import { Logo } from "./Logo";
 import type { Page } from "./NavRail";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+/** Pi's generated names (pi-session-<timestamp>_<uuid>) are not titles. */
+const titleOf = (s: SessionSummary) =>
+  (s.name && !/^pi-session-\d{4}-/.test(s.name) ? s.name : "") || s.firstMessage || "(empty session)";
 const ago = (iso: string) => {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
   if (s < 60) return "now";
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
+};
+const displayName = (f: string, all: string[]) => {
+  const b = base(f);
+  const dup = all.filter((x) => base(x) === b).length > 1;
+  const parent = f.split("/").filter(Boolean).slice(-2, -1)[0];
+  return dup && parent ? `${parent}/${b}` : b;
 };
 const CLOSED_PREVIEW = 0; // closed sessions stay folded; only live ones are rows
 const PAGE = 10; // how many more each click reveals
@@ -162,9 +171,6 @@ export function SessionTree({
 
       <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-px">
         {orderedFolders.map((f) => {
-          const repo = repos[f];
-          const wt = repo?.worktrees.find((w) => w.path === f);
-          const branch = wt?.branch ?? (repo && repo.root === f ? repo.branch : undefined);
           const list = visible(f);
           const total = sessionsByFolder[f]?.length ?? 0;
           const open = isOpen(f) || (filter.length > 0 && list.length > 0);
@@ -214,11 +220,8 @@ export function SessionTree({
                   title={f}
                   className={`flex-1 min-w-0 text-left truncate ${isActive ? "font-medium" : ""}`}
                 >
-                  {base(f)}
+                  {displayName(f, orderedFolders)}
                 </button>
-                {branch && (
-                  <span className="font-mono text-xs text-ink-3 truncate max-w-[40%]">{branch}</span>
-                )}
                 {!open && liveStatus.includes("running") && <Dot status="running" />}
                 {!open && liveStatus.includes("needs-you") && <Dot status="needs-you" />}
                 {!open && <span className="text-xs text-ink-3 tabular-nums">{total}</span>}
@@ -267,7 +270,7 @@ export function SessionTree({
                   {roots.map((s) => (
                     <div key={s.path}>
                       <SessionRow
-                        title={s.name || s.firstMessage || "(empty session)"}
+                        title={titleOf(s)}
                         meta={metaFor(s, procForSession(ws, s.path))}
                         status={
                           procForSession(ws, s.path)
@@ -277,15 +280,13 @@ export function SessionTree({
                         active={s.path === activePath}
                         onActivate={() => actions.openSession(s)}
                         onFork={() => actions.fork(s)}
-                        onMenu={(e) =>
-                          openMenu(e, sessionMenu(s, procForSession(ws, s.path)), s.name || s.firstMessage)
-                        }
+                        onMenu={(e) => openMenu(e, sessionMenu(s, procForSession(ws, s.path)), titleOf(s))}
                       />
                       {childrenOf(s).map((c) => (
                         <SessionRow
                           key={c.path}
                           nested
-                          title={c.name || c.firstMessage || "(fork)"}
+                          title={titleOf(c)}
                           meta={metaFor(c, procForSession(ws, c.path))}
                           status={
                             procForSession(ws, c.path)
@@ -295,9 +296,7 @@ export function SessionTree({
                           active={c.path === activePath}
                           onActivate={() => actions.openSession(c)}
                           onFork={() => actions.fork(c)}
-                          onMenu={(e) =>
-                            openMenu(e, sessionMenu(c, procForSession(ws, c.path)), c.name || c.firstMessage)
-                          }
+                          onMenu={(e) => openMenu(e, sessionMenu(c, procForSession(ws, c.path)), titleOf(c))}
                         />
                       ))}
                     </div>
@@ -311,7 +310,7 @@ export function SessionTree({
                       {hidden} closed session{hidden === 1 ? "" : "s"} · show {Math.min(PAGE, hidden)}
                     </button>
                   )}
-                  {(revealed[f] ?? 0) > 0 && !filter && (
+                  {(revealed[f] ?? 0) > 0 && closed.length > 0 && !filter && (
                     <button
                       type="button"
                       onClick={() => setRevealed((m) => ({ ...m, [f]: 0 }))}
