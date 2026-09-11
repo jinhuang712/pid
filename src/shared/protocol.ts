@@ -25,6 +25,8 @@ export interface PiHandle {
   key: string;
   cwd: string;
   state: RpcSessionState;
+  /** Events pi emitted while starting, before the renderer knew this key (extension status etc.). */
+  earlyEvents: PiEvent[];
 }
 
 export interface StartPiOptions {

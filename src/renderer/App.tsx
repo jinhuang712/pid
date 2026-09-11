@@ -4,6 +4,14 @@ import { useCallback, useEffect, useReducer, useState } from "react";
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer, type SendMode } from "./components/Composer";
+import { ContextGauge } from "./components/ContextGauge";
+import {
+  type DialogRequest,
+  ExtensionDialog,
+  StatusStrip,
+  type Toast,
+  Toasts,
+} from "./components/ExtensionUI";
 import { ForkMenu } from "./components/ForkMenu";
 import { Lineage } from "./components/Lineage";
 import { ModelPicker } from "./components/ModelPicker";
@@ -25,6 +33,32 @@ export function App() {
   const [draft, setDraft] = useState("");
   const [refs, setRefs] = useState<SessionReference[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [dialogs, setDialogs] = useState<DialogRequest[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
+
+  const handleUI = useCallback((_k: string, req: RpcExtensionUIRequest) => {
+    switch (req.method) {
+      case "select":
+      case "confirm":
+      case "input":
+      case "editor":
+        setDialogs((d) => [...d, req]);
+        break;
+      case "notify": {
+        const id = Date.now() + Math.random();
+        setToasts((t) => [...t, { id, message: req.message, type: req.notifyType ?? "info" }]);
+        setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+        break;
+      }
+      case "setStatus":
+        setStatuses((s) => ({ ...s, [req.statusKey]: req.statusText ?? "" }));
+        break;
+      default:
+        // setWidget / setTitle / set_editor_text are TUI layout concerns; nothing to do here.
+        break;
+    }
+  }, []);
   const [searchInitial, setSearchInitial] = useState("");
 
   useEffect(() => {
@@ -87,7 +121,7 @@ export function App() {
       offEvent();
       offExit();
     };
-  }, [key, refreshState, folder, refreshSessions]);
+  }, [key, refreshState, folder, refreshSessions, handleUI]);
 
   const startIn = useCallback(
     async (dir: string, sessionPath?: string) => {
@@ -97,12 +131,18 @@ export function App() {
       if (pi) await bridge.pi.stop(pi.key);
       setPi(undefined);
       dispatch({ reset: emptyConversation() });
+      setDialogs([]);
+      setStatuses({});
       setStatus(sessionPath ? "resuming session…" : "starting pi…");
       try {
         const handle = await bridge.pi.start({ cwd: dir, sessionPath });
         if (sessionPath) {
           const { messages } = await bridge.pi.command(handle.key, { type: "get_messages" });
           dispatch({ reset: fromMessages(messages) });
+        }
+        for (const ev of handle.earlyEvents) {
+          if (ev.type === "extension_ui_request") handleUI(handle.key, ev);
+          else dispatch(ev);
         }
         setPi(handle);
         setPiState(handle.state);
@@ -112,7 +152,7 @@ export function App() {
         setStatus(String(e));
       }
     },
-    [pi, refreshSessions],
+    [pi, refreshSessions, handleUI],
   );
 
   const openFolder = useCallback(async () => {
@@ -212,6 +252,17 @@ export function App() {
           onReference={referenceSession}
         />
       )}
+      {key && dialogs[0] && (
+        <ExtensionDialog
+          key={dialogs[0].id}
+          req={dialogs[0]}
+          onRespond={(r) => {
+            void bridge.pi.uiResponse(key, r);
+            setDialogs((d) => d.slice(1));
+          }}
+        />
+      )}
+      <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
       <header className="drag h-11 shrink-0 pl-[84px] pr-3 flex items-center gap-3 border-b border-line text-ink-2">
         <span className="font-medium text-ink">PID</span>
         {folder && <span className="font-mono text-xs truncate">{folder}</span>}
@@ -225,7 +276,12 @@ export function App() {
           ⌕ Search
         </button>
         {key && piState && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <ContextGauge
+              usage={conv.lastUsage}
+              contextWindow={piState.model?.contextWindow}
+              compacting={conv.compacting}
+            />
             <ForkMenu
               open={forkOpen}
               setOpen={setForkOpen}
@@ -284,6 +340,7 @@ export function App() {
                 refs={refs}
                 onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
               />
+              <StatusStrip statuses={statuses} />
               <Composer
                 complete={complete}
                 pick={pick}
@@ -309,18 +366,4 @@ export function App() {
 type ConvAction = Parameters<typeof reduce>[1] | { reset: ConversationState };
 function convReducer(state: ConversationState, action: ConvAction): ConversationState {
   return "reset" in action ? action.reset : reduce(state, action);
-}
-
-/** Extension UI requests. Fire-and-forget methods are ignored for now; dialogs are cancelled. */
-function handleUI(key: string, req: RpcExtensionUIRequest) {
-  switch (req.method) {
-    case "select":
-    case "confirm":
-    case "input":
-    case "editor":
-      void bridge.pi.uiResponse(key, { type: "extension_ui_response", id: req.id, cancelled: true });
-      break;
-    default:
-      break;
-  }
 }

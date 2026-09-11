@@ -11,8 +11,19 @@ export interface ToolRun {
   result?: ToolResultMessage;
 }
 
+export interface Marker {
+  /** Rendered after messages[afterIndex] (−1 = before the first message). */
+  afterIndex: number;
+  kind: "compaction" | "retry";
+  text: string;
+}
+
 export interface ConversationState {
   messages: AgentMessage[];
+  markers: Marker[];
+  /** Usage of the last assistant message; drives the context gauge. */
+  lastUsage?: AssistantMessage["usage"];
+  compacting: boolean;
   /** Assistant message currently being streamed, rebuilt from deltas. */
   streaming?: AssistantMessage;
   isStreaming: boolean;
@@ -23,6 +34,8 @@ export interface ConversationState {
 
 export const emptyConversation = (): ConversationState => ({
   messages: [],
+  markers: [],
+  compacting: false,
   isStreaming: false,
   toolRuns: {},
   queue: { steering: [], followUp: [] },
@@ -32,6 +45,7 @@ export function fromMessages(messages: AgentMessage[]): ConversationState {
   const s = emptyConversation();
   s.messages = messages;
   for (const m of messages) {
+    if (m.role === "assistant") s.lastUsage = m.usage;
     if (m.role === "toolResult") {
       s.toolRuns[m.toolCallId] = {
         toolCallId: m.toolCallId,
@@ -52,6 +66,35 @@ export function reduce(state: ConversationState, ev: JsonAgentSessionEvent): Con
       return { ...state, isStreaming: true, lastError: undefined };
     case "agent_end":
       return { ...state, isStreaming: false, streaming: undefined };
+    case "compaction_start":
+      return { ...state, compacting: true };
+    case "compaction_end": {
+      const summary = ev.aborted
+        ? "compaction aborted"
+        : ev.errorMessage
+          ? `compaction failed: ${ev.errorMessage}`
+          : `context compacted (${ev.reason})${ev.result ? ` · ${ev.result.tokensBefore.toLocaleString()} tokens before` : ""}`;
+      return {
+        ...state,
+        compacting: false,
+        markers: [
+          ...state.markers,
+          { afterIndex: state.messages.length - 1, kind: "compaction", text: summary },
+        ],
+      };
+    }
+    case "auto_retry_start":
+      return {
+        ...state,
+        markers: [
+          ...state.markers,
+          {
+            afterIndex: state.messages.length - 1,
+            kind: "retry",
+            text: `retry ${ev.attempt}/${ev.maxAttempts} in ${Math.round(ev.delayMs / 1000)}s · ${ev.errorMessage}`,
+          },
+        ],
+      };
     case "queue_update":
       return { ...state, queue: { steering: ev.steering, followUp: ev.followUp } };
     case "message_start": {
@@ -70,6 +113,7 @@ export function reduce(state: ConversationState, ev: JsonAgentSessionEvent): Con
       const next: ConversationState = { ...state, messages: [...state.messages, m] };
       if (m.role === "assistant") {
         next.streaming = undefined;
+        next.lastUsage = m.usage;
         if (m.stopReason === "error" && m.errorMessage) next.lastError = m.errorMessage;
       }
       if (m.role === "toolResult") {
