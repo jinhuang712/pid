@@ -31,3 +31,6 @@ Thumbs.db
 
 # PID derived caches (rebuildable, never authoritative)
 .pid-cache/
+
+# git worktrees other Claude Code sessions park inside the repo
+.claude/worktrees/
