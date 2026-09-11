@@ -12,12 +12,20 @@ import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
-import { dropIndex, searchSessions } from "./pi/search";
-import { readSessionMessages } from "./pi/session-read";
+import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
+import { readSessionBranch, readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
 import { setMcpDisabled, setResourceState } from "./pi/toggles";
-import { forgetFolder, loadState, type OpenSession, rememberFolder, saveOpenSessions } from "./pid-state";
+import {
+  flushState,
+  forgetFolder,
+  loadState,
+  type OpenSession,
+  rememberFolder,
+  saveOpenSessions,
+} from "./pid-state";
 import { applyTheme, loadSettings, saveSettings } from "./settings";
+import { warmShellEnv } from "./shell-env";
 
 const PAPER_LIGHT = "#f4f3ef";
 const PAPER_DARK = "#121211";
@@ -130,6 +138,7 @@ ipcMain.handle("sessions:listAll", () => listAllSessions());
 ipcMain.handle("sessions:search", (_e, query: string, scope: SearchScope) => searchSessions(query, scope));
 ipcMain.handle("sessions:dropIndex", () => dropIndex());
 ipcMain.handle("sessions:read", (_e, path: string) => readSessionMessages(path));
+ipcMain.handle("sessions:readBranch", (_e, path: string) => readSessionBranch(path));
 
 ipcMain.handle("pi:start", (_e, opts: StartPiOptions) => pi.start(opts));
 ipcMain.handle("pi:command", (_e, key: string, command: PiCommand) => pi.command(key, command));
@@ -142,6 +151,9 @@ app.whenReady().then(() => {
   applyTheme(); // decide the theme before the first frame
   installMenu(() => mainWindow);
   mainWindow = createWindow();
+  // Pay the slow start-up costs now, off the click path: the login-shell PATH probe and the search index.
+  void warmShellEnv();
+  setTimeout(warmSearchIndex, 3000);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
   });
@@ -189,6 +201,10 @@ app.on("before-quit", (e) => {
         app.quit();
       }
     });
+});
+app.on("will-quit", () => {
+  flushState(); // debounced writes must land before the process ends
+  stopSearchWorker();
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
