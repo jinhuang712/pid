@@ -97,6 +97,26 @@ Its footer holds what describes the next message: the model, the thinking level,
 gauge reading used / limit for the selected model (for example `380k / 1M · 38%`). To the right sits
 one Send button. While Pi runs, a running indicator with a small stop glyph replaces the hint text.
 
+### Attachments
+
+Images, PDFs, files, and folders can be attached to the next message: drop them from Finder, paste an
+image, or pick them with the paperclip. An attachment is an absolute path and nothing else. PID never
+copies the bytes anywhere and never inlines them into the session file; the paths are appended to the
+message as a visible block, and Pi opens them with its own tools, exactly as the terminal does when an
+image is pasted. A pasted screenshot has no path yet, so it is written to the OS temp directory first,
+the same way the Pi terminal handles paste.
+
+Attachments sit in a tray at the top of the composer: images and PDFs as small previews, everything
+else as a chip with its size or item count. A path that no longer exists is marked. Backspace on an
+empty draft takes back the last attachment.
+
+### Inline tokens
+
+Links, `$session` tokens, and `@path` mentions are tinted inside the draft as you type. The tray also
+lists every link found in the draft, and every `$session` reference with how much of it will be sent;
+one click shows the exact text. In the timeline a sent message shows its words in the bubble and its
+attachments, links, and session references as the same chips underneath.
+
 Four sigils open four pickers:
 
 ```text

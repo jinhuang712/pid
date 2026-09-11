@@ -127,7 +127,8 @@ docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS,
 ```
 
 Dev hooks for headless verification: `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`,
-`PID_FOLLOWUP`, `PID_DRAFT`, `PID_SEARCH`, `PID_PAGE`, `PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`.
+`PID_FOLLOWUP`, `PID_DRAFT`, `PID_ATTACH` (colon-separated absolute paths), `PID_SEARCH`, `PID_PAGE`,
+`PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`.
 
 ## Verification
 
