@@ -15,16 +15,21 @@ import {
 import { ForkMenu } from "./components/ForkMenu";
 import { Lineage } from "./components/Lineage";
 import { ModelPicker } from "./components/ModelPicker";
+import { NavRail, type Page } from "./components/NavRail";
 import { QueuePanel } from "./components/QueuePanel";
 import { ReferenceChips } from "./components/ReferenceChips";
 import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
+import { ExtensionsPage } from "./pages/ExtensionsPage";
+import { McpPage } from "./pages/McpPage";
+import { SkillsPage } from "./pages/SkillsPage";
 import { expandReferences, refToken, type SessionReference } from "./session-reference";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./state/conversation";
 
 export function App() {
+  const [page, setPage] = useState<Page>("sessions");
   const [folder, setFolder] = useState<string>();
   const [pi, setPi] = useState<PiHandle>();
   const [piState, setPiState] = useState<RpcSessionState>();
@@ -164,6 +169,7 @@ export function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
     void bridge.appInfo().then(async (info) => {
+      if (info.devPage) setPage(info.devPage as Page);
       if (info.devSearch !== undefined) {
         setSearchInitial(info.devSearch);
         setSearchOpen(true);
@@ -310,54 +316,73 @@ export function App() {
         )}
       </header>
       <div className="flex-1 flex min-h-0">
-        <Sidebar
-          folders={folders}
-          folder={folder}
-          sessions={sessions}
-          activeSessionPath={piState?.sessionFile}
-          onOpenFolder={(dir) => void startIn(dir)}
-          onPickFolder={() => void openFolder()}
-          onNewSession={() => folder && void startIn(folder)}
-          onOpenSession={(s) => void startIn(s.cwd, s.path)}
-        />
-        <main className="flex-1 flex flex-col min-w-0">
-          {pi ? (
-            <>
-              <Lineage
-                current={sessions.find((s) => s.path === piState?.sessionFile)}
-                sessions={sessions}
-                onOpen={(s) => void startIn(s.cwd, s.path)}
-              />
-              <Timeline state={conv} />
-              {status && <div className="px-4 py-1 text-xs text-warn">{status}</div>}
-              <QueuePanel
-                streaming={conv.isStreaming}
-                steering={conv.queue.steering}
-                followUp={conv.queue.followUp}
-                onClear={clearQueue}
-              />
-              <ReferenceChips
-                refs={refs}
-                onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
-              />
-              <StatusStrip statuses={statuses} />
-              <Composer
-                complete={complete}
-                pick={pick}
-                text={draft}
-                setText={setDraft}
-                streaming={conv.isStreaming}
-                onSend={send}
-                onAbort={abort}
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-ink-3 gap-2">
-              <div>Open a folder to start a Pi session.</div>
-              {status && <div className="text-xs text-warn max-w-lg text-center">{status}</div>}
-            </div>
-          )}
-        </main>
+        <NavRail page={page} onSelect={setPage} />
+        {page === "skills" && (
+          <SkillsPage
+            folder={folder}
+            onUse={(name) => {
+              setDraft((d) => `${d}${d && !d.endsWith(" ") ? " " : ""}/${name} `);
+              setPage("sessions");
+            }}
+          />
+        )}
+        {page === "mcp" && <McpPage folder={folder} />}
+        {page === "extensions" && <ExtensionsPage folder={folder} />}
+        {page === "settings" && (
+          <div className="flex-1 flex items-center justify-center text-ink-3 text-sm">
+            Settings are coming next.
+          </div>
+        )}
+        <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
+          <Sidebar
+            folders={folders}
+            folder={folder}
+            sessions={sessions}
+            activeSessionPath={piState?.sessionFile}
+            onOpenFolder={(dir) => void startIn(dir)}
+            onPickFolder={() => void openFolder()}
+            onNewSession={() => folder && void startIn(folder)}
+            onOpenSession={(s) => void startIn(s.cwd, s.path)}
+          />
+          <main className="flex-1 flex flex-col min-w-0">
+            {pi ? (
+              <>
+                <Lineage
+                  current={sessions.find((s) => s.path === piState?.sessionFile)}
+                  sessions={sessions}
+                  onOpen={(s) => void startIn(s.cwd, s.path)}
+                />
+                <Timeline state={conv} />
+                {status && <div className="px-4 py-1 text-xs text-warn">{status}</div>}
+                <QueuePanel
+                  streaming={conv.isStreaming}
+                  steering={conv.queue.steering}
+                  followUp={conv.queue.followUp}
+                  onClear={clearQueue}
+                />
+                <ReferenceChips
+                  refs={refs}
+                  onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
+                />
+                <StatusStrip statuses={statuses} />
+                <Composer
+                  complete={complete}
+                  pick={pick}
+                  text={draft}
+                  setText={setDraft}
+                  streaming={conv.isStreaming}
+                  onSend={send}
+                  onAbort={abort}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-ink-3 gap-2">
+                <div>Open a folder to start a Pi session.</div>
+                {status && <div className="text-xs text-warn max-w-lg text-center">{status}</div>}
+              </div>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );

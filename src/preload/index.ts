@@ -17,6 +17,16 @@ const bridge: Bridge = {
   files: {
     list: (cwd) => ipcRenderer.invoke("files:list", cwd),
   },
+  eco: {
+    home: () => ipcRenderer.invoke("pi:home"),
+    skills: (cwd) => ipcRenderer.invoke("eco:skills", cwd),
+    extensions: (cwd) => ipcRenderer.invoke("eco:extensions", cwd),
+    mcp: (cwd) => ipcRenderer.invoke("eco:mcp", cwd),
+  },
+  shell: {
+    reveal: (path) => ipcRenderer.invoke("shell:reveal", path),
+    openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
+  },
   sessions: {
     list: (cwd) => ipcRenderer.invoke("sessions:list", cwd),
     listAll: () => ipcRenderer.invoke("sessions:listAll"),

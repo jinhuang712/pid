@@ -1,3 +1,4 @@
+import type { ExtensionView, McpView, PiHome, SkillView } from "@shared/ecosystem";
 import type {
   PiCommand,
   PiEventEnvelope,
@@ -19,6 +20,7 @@ export interface AppInfo {
   devOpenSession?: string;
   devDraft?: string;
   devSearch?: string;
+  devPage?: string;
 }
 
 export interface Bridge {
@@ -30,6 +32,16 @@ export interface Bridge {
   };
   files: {
     list(cwd: string): Promise<string[]>;
+  };
+  eco: {
+    home(): Promise<PiHome>;
+    skills(cwd?: string): Promise<SkillView[]>;
+    extensions(cwd?: string): Promise<ExtensionView[]>;
+    mcp(cwd?: string): Promise<McpView>;
+  };
+  shell: {
+    reveal(path: string): Promise<void>;
+    openPath(path: string): Promise<string>;
   };
   sessions: {
     list(cwd: string): Promise<SessionSummary[]>;
