@@ -24,12 +24,29 @@ import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { McpPage } from "./pages/McpPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { expandReferences, refToken, type SessionReference } from "./session-reference";
+import { useSettings } from "./settings";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./state/conversation";
 
 export function App() {
   const [page, setPage] = useState<Page>("sessions");
+  const { settings } = useSettings();
+
+  const notify = useCallback(
+    (kind: "runCompleted" | "inputRequired" | "error", title: string, body?: string) => {
+      const n = settings.notifications;
+      if (!n[kind]) return;
+      if (n.onlyWhenUnfocused && document.hasFocus()) return;
+      try {
+        new Notification(title, { body, silent: true });
+      } catch {
+        // notifications unavailable
+      }
+    },
+    [settings.notifications],
+  );
   const [folder, setFolder] = useState<string>();
   const [pi, setPi] = useState<PiHandle>();
   const [piState, setPiState] = useState<RpcSessionState>();
@@ -42,28 +59,32 @@ export function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
 
-  const handleUI = useCallback((_k: string, req: RpcExtensionUIRequest) => {
-    switch (req.method) {
-      case "select":
-      case "confirm":
-      case "input":
-      case "editor":
-        setDialogs((d) => [...d, req]);
-        break;
-      case "notify": {
-        const id = Date.now() + Math.random();
-        setToasts((t) => [...t, { id, message: req.message, type: req.notifyType ?? "info" }]);
-        setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
-        break;
+  const handleUI = useCallback(
+    (_k: string, req: RpcExtensionUIRequest) => {
+      switch (req.method) {
+        case "select":
+        case "confirm":
+        case "input":
+        case "editor":
+          setDialogs((d) => [...d, req]);
+          notify("inputRequired", req.title, "An extension is waiting for your input");
+          break;
+        case "notify": {
+          const id = Date.now() + Math.random();
+          setToasts((t) => [...t, { id, message: req.message, type: req.notifyType ?? "info" }]);
+          setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+          break;
+        }
+        case "setStatus":
+          setStatuses((s) => ({ ...s, [req.statusKey]: req.statusText ?? "" }));
+          break;
+        default:
+          // setWidget / setTitle / set_editor_text are TUI layout concerns; nothing to do here.
+          break;
       }
-      case "setStatus":
-        setStatuses((s) => ({ ...s, [req.statusKey]: req.statusText ?? "" }));
-        break;
-      default:
-        // setWidget / setTitle / set_editor_text are TUI layout concerns; nothing to do here.
-        break;
-    }
-  }, []);
+    },
+    [notify],
+  );
   const [searchInitial, setSearchInitial] = useState("");
 
   useEffect(() => {
@@ -116,6 +137,14 @@ export function App() {
         void refreshState();
       }
       if (event.type === "agent_end" && folder) void refreshSessions(folder);
+      if (event.type === "agent_end" && !event.willRetry) notify("runCompleted", "Pi finished", folder);
+      if (
+        event.type === "message_end" &&
+        event.message.role === "assistant" &&
+        event.message.stopReason === "error"
+      ) {
+        notify("error", "Pi error", event.message.errorMessage);
+      }
     });
     const offExit = bridge.pi.onExit(({ key: k, code, stderr }) => {
       if (k !== key) return;
@@ -126,7 +155,7 @@ export function App() {
       offEvent();
       offExit();
     };
-  }, [key, refreshState, folder, refreshSessions, handleUI]);
+  }, [key, refreshState, folder, refreshSessions, handleUI, notify]);
 
   const startIn = useCallback(
     async (dir: string, sessionPath?: string) => {
@@ -328,11 +357,7 @@ export function App() {
         )}
         {page === "mcp" && <McpPage folder={folder} />}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
-        {page === "settings" && (
-          <div className="flex-1 flex items-center justify-center text-ink-3 text-sm">
-            Settings are coming next.
-          </div>
-        )}
+        {page === "settings" && <SettingsPage />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <Sidebar
             folders={folders}
@@ -347,11 +372,13 @@ export function App() {
           <main className="flex-1 flex flex-col min-w-0">
             {pi ? (
               <>
-                <Lineage
-                  current={sessions.find((s) => s.path === piState?.sessionFile)}
-                  sessions={sessions}
-                  onOpen={(s) => void startIn(s.cwd, s.path)}
-                />
+                {settings.sessions.showForkLineage && (
+                  <Lineage
+                    current={sessions.find((s) => s.path === piState?.sessionFile)}
+                    sessions={sessions}
+                    onOpen={(s) => void startIn(s.cwd, s.path)}
+                  />
+                )}
                 <Timeline state={conv} />
                 {status && <div className="px-4 py-1 text-xs text-warn">{status}</div>}
                 <QueuePanel

@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import { useEffect, useRef, useState } from "react";
+import { useSettings } from "../settings";
 import type { ConversationState } from "../state/conversation";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
@@ -12,7 +13,8 @@ function userText(m: UserMessage): string {
 }
 
 function Thinking({ text, live }: { text: string; live: boolean }) {
-  const [open, setOpen] = useState(false);
+  const { settings } = useSettings();
+  const [open, setOpen] = useState(!settings.appearance.thinkingCollapsed);
   if (!text) return null;
   return (
     <div className="my-1.5">
@@ -84,11 +86,13 @@ export function Timeline({ state }: { state: ConversationState }) {
   const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const [stick, setStick] = useState(true);
+  const { settings } = useSettings();
+  const follow = stick && settings.conversation.autoScroll;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on every state change to follow the stream
   useEffect(() => {
-    if (stick) bottom.current?.scrollIntoView({ block: "end" });
-  }, [state, stick]);
+    if (follow) bottom.current?.scrollIntoView({ block: "end" });
+  }, [state, follow]);
 
   const onScroll = () => {
     const el = scroller.current;

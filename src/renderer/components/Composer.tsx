@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
 
@@ -28,6 +29,8 @@ const TITLES: Record<Sigil, string> = {
  * Cmd/Ctrl+Enter queues a follow-up (runs after the current work finishes).
  */
 export function Composer({ text, setText, streaming, onSend, onAbort, complete, pick }: ComposerProps) {
+  const { settings } = useSettings();
+  const { enterSends, streamingSendMode } = settings.conversation;
   const ref = useRef<HTMLTextAreaElement>(null);
   const [token, setToken] = useState<ActiveToken>();
   const [items, setItems] = useState<AutocompleteItem[]>([]);
@@ -115,9 +118,13 @@ export function Composer({ text, setText, streaming, onSend, onAbort, complete, 
     }
     if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
     if (e.shiftKey) return; // newline
+    const mod = e.metaKey || e.ctrlKey;
+    if (!enterSends && !mod) return; // Enter is a newline in this mode
     e.preventDefault();
     if (!streaming) return send("prompt");
-    send(e.metaKey || e.ctrlKey ? "followUp" : "steer");
+    // Modifier flips the configured default between steer and follow-up.
+    const other = streamingSendMode === "steer" ? "followUp" : "steer";
+    send(mod && enterSends ? other : streamingSendMode);
   };
 
   const btn = "h-7 px-3 rounded-md text-xs disabled:opacity-40";

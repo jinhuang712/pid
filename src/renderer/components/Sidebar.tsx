@@ -1,4 +1,5 @@
 import type { SessionSummary } from "@shared/sessions";
+import { useSettings } from "../settings";
 
 function base(p: string) {
   return p.split("/").filter(Boolean).pop() ?? p;
@@ -31,8 +32,12 @@ export function Sidebar({
   onNewSession: () => void;
   onOpenSession: (s: SessionSummary) => void;
 }) {
+  const { settings } = useSettings();
   return (
-    <aside className="w-[272px] shrink-0 border-r border-line bg-paper-2 flex flex-col min-h-0">
+    <aside
+      style={{ width: settings.appearance.sidebarWidth }}
+      className="shrink-0 border-r border-line bg-paper-2 flex flex-col min-h-0"
+    >
       <div className="px-2 pt-3 pb-1 flex items-center justify-between">
         <span className="px-1 text-xs text-ink-3">Folders</span>
         <button

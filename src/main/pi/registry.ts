@@ -8,6 +8,7 @@ import type {
   StartPiOptions,
 } from "@shared/protocol";
 import type { BrowserWindow } from "electron";
+import { loadSettings } from "../settings";
 import { PiProcess } from "./rpc-process";
 
 /** Live pi processes owned by this window. Nothing here is persisted. */
@@ -19,9 +20,12 @@ export class PiRegistry {
   async start(opts: StartPiOptions) {
     const key = randomUUID();
     let early: PiEvent[] | undefined = [];
+    const adv = loadSettings().advanced;
     const proc = new PiProcess({
       cwd: opts.cwd,
       sessionPath: opts.sessionPath,
+      binary: adv.piBinary || undefined,
+      extraArgs: adv.piExtraArgs.split(/\s+/).filter(Boolean),
       onEvent: (event) => {
         if (early) early.push(event);
         else this.send("pi:event", { key, event } satisfies PiEventEnvelope);

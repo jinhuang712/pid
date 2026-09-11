@@ -9,6 +9,7 @@ import type {
   StartPiOptions,
 } from "@shared/protocol";
 import type { SearchHit, SearchScope, SessionMessage, SessionSummary } from "@shared/sessions";
+import type { PidSettings } from "@shared/settings";
 
 export interface AppInfo {
   version: string;
@@ -32,6 +33,10 @@ export interface Bridge {
   };
   files: {
     list(cwd: string): Promise<string[]>;
+  };
+  settings: {
+    get(): Promise<PidSettings>;
+    set(s: PidSettings): Promise<PidSettings>;
   };
   eco: {
     home(): Promise<PiHome>;
