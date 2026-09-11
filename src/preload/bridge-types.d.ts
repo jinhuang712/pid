@@ -34,6 +34,7 @@ export interface Bridge {
   folders: {
     recent(): Promise<string[]>;
     remember(dir: string): Promise<string[]>;
+    forget(dir: string): Promise<string[]>;
   };
   files: {
     list(cwd: string): Promise<string[]>;

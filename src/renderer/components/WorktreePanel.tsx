@@ -66,7 +66,7 @@ export function WorktreePanel({
         </button>
       </div>
       {adding && (
-        <AddForm
+        <WorktreeAddForm
           repo={repo}
           folder={folder}
           defaultParent={settings.files.worktreeParentDir}
@@ -114,7 +114,7 @@ export function WorktreePanel({
         })}
       </div>
       {removing && (
-        <RemoveConfirm
+        <WorktreeRemoveConfirm
           folder={folder}
           worktree={removing}
           onCancel={() => setRemoving(undefined)}
@@ -125,7 +125,7 @@ export function WorktreePanel({
   );
 }
 
-function AddForm({
+export function WorktreeAddForm({
   repo,
   folder,
   defaultParent,
@@ -205,7 +205,7 @@ function AddForm({
   );
 }
 
-function RemoveConfirm({
+export function WorktreeRemoveConfirm({
   folder,
   worktree,
   onCancel,

@@ -21,6 +21,7 @@ const bridge: Bridge = {
   folders: {
     recent: () => ipcRenderer.invoke("folders:recent"),
     remember: (dir) => ipcRenderer.invoke("folders:remember", dir),
+    forget: (dir) => ipcRenderer.invoke("folders:forget", dir),
   },
   files: {
     list: (cwd) => ipcRenderer.invoke("files:list", cwd),

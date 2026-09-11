@@ -34,7 +34,29 @@ A Folder is a real directory on disk. PID shows "sessions under this folder".
 
 There is no Project entity. Without project memory, a project is only a folder with a nicer name, and PID does not do project memory. Pi itself reads whatever the repository provides (AGENTS.md, README, source). PID adds nothing implicit on top.
 
-The sidebar lists recent folders. Selecting a folder lists its sessions. Selecting a session opens its conversation.
+The sidebar is one tree: Folder → Sessions. The active folder is expanded; the others are collapsed
+with a session count. A collapsed folder that has a live session shows a pulsing dot. Long lists fold
+behind "Show N more". Forks nest under their parent. A filter box at the top of the tree narrows it
+(⌘K focuses it).
+
+Each session row carries a status dot fed by the live Pi process:
+
+```text
+running    Pi is streaming or compacting
+needs you  an extension dialog or approval is waiting
+idle       a process is open, nothing running
+error      the last turn ended in a provider error
+closed     only the session file on disk
+```
+
+Several sessions can be open at once, each with its own Pi process; switching rows never stops a run.
+
+Row actions live on the row: hover shows Fork and a menu with Fork from…, Reference in composer,
+Rename, Export HTML, Reveal session file, Close process. Folder rows offer New session, New worktree…,
+Remove this worktree, Forget folder.
+
+The header carries only identity on the left and, over the conversation column, the session title,
+folder, and branch. It has no controls.
 
 ## Worktree Model
 
@@ -69,6 +91,10 @@ Default density is clean. Details are one expand, hover, or click away.
 ## Composer
 
 The composer is the primary interaction point. It is never disabled, including while Pi is running.
+
+Its footer holds what describes the next message: the model, the thinking level, and a context
+gauge reading used / limit for the selected model (for example `380k / 1M · 38%`). To the right sits
+one Send button. While Pi runs, a running indicator with a small stop glyph replaces the hint text.
 
 Four sigils open four pickers:
 
@@ -120,36 +146,42 @@ Fork is different from `$session`:
 - `$session` keeps two histories separate and copies content from one into the other.
 - Fork makes a new history that shares a prefix with the old one.
 
+Fork lives on the session row in the sidebar (hover icon, context menu, or ⌘⇧F for the active
+session). Picking a user message creates the new session before that message and puts its text in the
+composer for editing, exactly like the terminal's `/fork`.
+
 The GUI supports:
 
 - fork from the current end of the session
 - fork from an earlier message, where Pi's session model allows it
-- clear parent and child indication on the session header
-- one-click return to the parent
-- a list of sibling forks
+- forks nested under their parent in the session tree
+- one-click switch to the parent or a sibling from the same tree
 
 Lineage comes from Pi's own session data. PID keeps no separate fork database.
 
 ## Active Run
 
-While Pi is responding, the composer stays open. Sending offers two explicit choices:
+While Pi is responding, the composer stays open and has one button. Enter sends the text as a
+**follow-up**: it waits for the current work to finish.
 
-- **Steer**: interrupts the current work and redirects it.
-- **Follow-up**: waits for the current work to finish, then runs.
-
-The queue panel shows:
+The queue panel above the composer lists what Pi holds, in Pi's order:
 
 ```text
 Active response
     ↓
-Queued steer
+Queued steer          delivered after the current tool call, before the next model call
     ↓
-Queued follow-up
-    ↓
-Queued follow-up
+Queued follow-up      delivered when the run ends
 ```
 
-Queue semantics are Pi's. PID visualizes them and adds keyboard shortcuts. Reordering and cancellation appear only where Pi supports them.
+A queued follow-up can be promoted from its row:
+
+- **Steer after tool**: Pi's native steer. Delivered before the next model call.
+- **Steer now**: abort the current turn, then send it immediately. Pi has no mid-generation injection,
+  so this is the earliest possible delivery.
+- **×**: drop it.
+
+Queue semantics are Pi's; PID rebuilds the queue through Pi's own clear and re-add commands.
 
 ## Tool Presentation
 
@@ -159,9 +191,9 @@ Every tool call, whether from Pi's built-in tools, an extension, or an MCP serve
 
 Search is retrieval infrastructure. It is not memory.
 
-Scope: current folder, or all folders. Fields: session title, message content, folder, time, Git branch, worktree. Results are fast, fuzzy, incremental, keyboard-friendly, and show a content preview. Selecting a result opens it or, from the composer, references it.
-
-The search index is derived from Pi session files and can be deleted and rebuilt at any time.
+The filter box at the top of the session tree narrows every folder by title and first message as you
+type; folders with matches expand. Content search across all session files powers the `$` picker and
+uses a derived index over the Pi session files that can be deleted and rebuilt at any time.
 
 ## First-class Ecosystem Pages
 

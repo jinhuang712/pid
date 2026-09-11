@@ -1,22 +1,35 @@
-import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
+import { ModelPicker } from "./ModelPicker";
+import { ThinkingPicker } from "./ThinkingPicker";
 
-export type SendMode = "prompt" | "steer" | "followUp";
+// biome-ignore lint/suspicious/noExplicitAny: Pi models are Model<any> on the wire
+type AnyModel = Model<any>;
 
 export interface ComposerProps {
   text: string;
   setText: (t: string) => void;
   streaming: boolean;
-  onSend: (text: string, mode: SendMode) => void;
+  /** Idle: prompt. Running: follow-up. The queue panel is where a follow-up becomes a steer. */
+  onSend: (text: string) => void;
   onAbort: () => void;
-  /** Items for a sigil query. */
   complete: (sigil: Sigil, query: string) => Promise<AutocompleteItem[]>;
-  /** Text to put in place of the token, or undefined when the pick performed an action instead. */
   pick: (sigil: Sigil, item: AutocompleteItem) => string | undefined;
-  /** Current folder, used to turn dropped absolute paths into @relative mentions. */
   folder?: string;
+  /** Footer controls: model, effort, context. All read from Pi. */
+  model?: { provider: string; id: string; contextWindow?: number };
+  thinkingLevel?: ThinkingLevel;
+  usage?: AssistantMessage["usage"];
+  compacting?: boolean;
+  loadModels: () => Promise<AnyModel[]>;
+  loadLevels: () => Promise<ThinkingLevel[]>;
+  onModel: (m: AnyModel) => void;
+  onLevel: (l: ThinkingLevel) => void;
+  disabled?: boolean;
 }
 
 const TITLES: Record<Sigil, string> = {
@@ -26,41 +39,16 @@ const TITLES: Record<Sigil, string> = {
   $: "Session references",
 };
 
-/**
- * Never disabled. While Pi is running, Enter steers (interrupt and redirect) and
- * Cmd/Ctrl+Enter queues a follow-up (runs after the current work finishes).
- */
-export function Composer({
-  text,
-  setText,
-  streaming,
-  onSend,
-  onAbort,
-  complete,
-  pick,
-  folder,
-}: ComposerProps) {
-  const [dragging, setDragging] = useState(false);
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const paths = Array.from(e.dataTransfer.files)
-      .map((f) => window.bridge.pathOf(f))
-      .filter((p): p is string => !!p);
-    if (paths.length === 0) return;
-    const mentions = paths
-      .map((p) => (folder && p.startsWith(`${folder}/`) ? p.slice(folder.length + 1) : p))
-      .map((p) => `@${p}`)
-      .join(" ");
-    setText(`${text}${text && !text.endsWith(" ") ? " " : ""}${mentions} `);
-    requestAnimationFrame(() => ref.current?.focus());
-  };
+/** Never disabled while Pi runs: Enter queues a follow-up. */
+export function Composer(p: ComposerProps) {
+  const { text, setText, streaming, onSend, complete, pick, folder } = p;
   const { settings } = useSettings();
-  const { enterSends, streamingSendMode } = settings.conversation;
+  const { enterSends } = settings.conversation;
   const ref = useRef<HTMLTextAreaElement>(null);
   const [token, setToken] = useState<ActiveToken>();
   const [items, setItems] = useState<AutocompleteItem[]>([]);
   const [cursor, setCursor] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const seq = useRef(0);
 
   const refreshToken = useCallback(() => {
@@ -69,7 +57,6 @@ export function Composer({
     setToken(activeToken(el.value, el.selectionStart));
   }, []);
 
-  // Focus on mount; re-detect the token when text is set from outside (fork, dev hooks).
   useEffect(() => {
     ref.current?.focus();
   }, []);
@@ -111,10 +98,10 @@ export function Composer({
     });
   };
 
-  const send = (mode: SendMode) => {
+  const send = () => {
     const t = text.trim();
-    if (!t) return;
-    onSend(t, mode);
+    if (!t || p.disabled) return;
+    onSend(t);
     setText("");
     setToken(undefined);
     requestAnimationFrame(() => ref.current?.focus());
@@ -147,13 +134,32 @@ export function Composer({
     const mod = e.metaKey || e.ctrlKey;
     if (!enterSends && !mod) return; // Enter is a newline in this mode
     e.preventDefault();
-    if (!streaming) return send("prompt");
-    // Modifier flips the configured default between steer and follow-up.
-    const other = streamingSendMode === "steer" ? "followUp" : "steer";
-    send(mod && enterSends ? other : streamingSendMode);
+    send();
   };
 
-  const btn = "h-7 px-3 rounded-md text-xs disabled:opacity-40";
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const paths = Array.from(e.dataTransfer.files)
+      .map((f) => window.bridge.pathOf(f))
+      .filter((x): x is string => !!x);
+    if (paths.length === 0) return;
+    const mentions = paths
+      .map((x) => (folder && x.startsWith(`${folder}/`) ? x.slice(folder.length + 1) : x))
+      .map((x) => `@${x}`)
+      .join(" ");
+    setText(`${text}${text && !text.endsWith(" ") ? " " : ""}${mentions} `);
+    requestAnimationFrame(() => ref.current?.focus());
+  };
+
+  const placeholder = p.disabled
+    ? "Open a folder or pick a session to talk to Pi."
+    : streaming
+      ? "Pi is working…  Enter queues a follow-up"
+      : enterSends
+        ? "Message Pi…  / skill · @ file · # action · $ session"
+        : "Message Pi…  ⌘Enter to send";
+
   return (
     <div className="shrink-0 border-t border-line bg-paper px-4 py-3">
       <section
@@ -180,6 +186,7 @@ export function Composer({
         <textarea
           ref={ref}
           value={text}
+          disabled={p.disabled}
           onChange={(e) => {
             setText(e.target.value);
             requestAnimationFrame(refreshToken);
@@ -190,54 +197,91 @@ export function Composer({
           }}
           onClick={refreshToken}
           rows={Math.min(8, Math.max(2, text.split("\n").length))}
-          placeholder={
-            streaming
-              ? "Pi is working…  Enter to steer · ⌘Enter to queue a follow-up"
-              : "Message Pi…  / skill · @ file · # action · $ session"
-          }
-          className="w-full resize-none bg-transparent px-3 pt-3 pb-1 outline-none text-ink placeholder:text-ink-3"
+          placeholder={placeholder}
+          className="w-full resize-none bg-transparent px-3 pt-3 pb-1 outline-none text-ink placeholder:text-ink-3 disabled:opacity-60"
         />
-        <div className="flex items-center gap-2 px-2 pb-2">
-          {streaming && <span className="text-xs text-accent animate-pulse pl-1">running</span>}
+        <div className="flex items-center gap-1 px-2 pb-2">
+          {p.model && (
+            <>
+              <ModelPicker current={p.model} load={p.loadModels} onSelect={p.onModel} placement="up" />
+              {p.thinkingLevel && (
+                <ThinkingPicker
+                  current={p.thinkingLevel}
+                  load={p.loadLevels}
+                  onSelect={p.onLevel}
+                  placement="up"
+                />
+              )}
+              <ContextChip usage={p.usage} contextWindow={p.model.contextWindow} compacting={p.compacting} />
+            </>
+          )}
           <span className="flex-1" />
           {streaming ? (
-            <>
+            <span className="flex items-center gap-1.5 text-xs text-accent pr-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+              <span>running</span>
               <button
                 type="button"
-                onClick={onAbort}
-                className={`${btn} border border-line text-ink-2 hover:text-danger hover:border-danger`}
+                onClick={p.onAbort}
+                title="Abort the current run (⌘.)"
+                className="ml-1 w-4 h-4 rounded flex items-center justify-center text-ink-3 hover:text-danger"
               >
-                Abort
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                  <title>abort</title>
+                  <rect x="3" y="3" width="10" height="10" rx="2" />
+                </svg>
               </button>
-              <button
-                type="button"
-                onClick={() => send("followUp")}
-                disabled={!text.trim()}
-                className={`${btn} border border-line text-ink`}
-              >
-                Follow-up
-              </button>
-              <button
-                type="button"
-                onClick={() => send("steer")}
-                disabled={!text.trim()}
-                className={`${btn} bg-accent text-white`}
-              >
-                Steer
-              </button>
-            </>
+            </span>
           ) : (
-            <button
-              type="button"
-              onClick={() => send("prompt")}
-              disabled={!text.trim()}
-              className={`${btn} bg-accent text-white`}
-            >
-              Send
-            </button>
+            <span className="text-xs text-ink-3 pr-1">
+              {enterSends ? "Enter to send · ⇧Enter newline" : "⌘Enter to send"}
+            </span>
           )}
+          <button
+            type="button"
+            onClick={send}
+            disabled={!text.trim() || p.disabled}
+            className="h-7 px-3 rounded-md bg-accent text-white text-xs font-medium disabled:opacity-40"
+          >
+            Send
+          </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+const fmt = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`;
+
+/** Context used by the last assistant message against the selected model's context window. */
+function ContextChip({
+  usage,
+  contextWindow,
+  compacting,
+}: {
+  usage?: AssistantMessage["usage"];
+  contextWindow?: number;
+  compacting?: boolean;
+}): ReactNode {
+  if (!contextWindow) return null;
+  const used = usage ? usage.input + usage.cacheRead + usage.cacheWrite + usage.output : 0;
+  const pct = Math.min(100, Math.round((used / contextWindow) * 100));
+  const tone = pct > 85 ? "bg-danger" : pct > 65 ? "bg-warn" : "bg-accent";
+  return (
+    <div
+      className="h-6.5 px-2 flex items-center gap-1.5 text-xs text-ink-3"
+      title={`context: ${used.toLocaleString()} of ${contextWindow.toLocaleString()} tokens${compacting ? " · compacting" : ""}`}
+    >
+      <div className="w-12 h-1.5 rounded-full bg-paper-3 overflow-hidden">
+        <div
+          className={`h-full ${compacting ? "bg-warn animate-pulse" : tone}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="font-mono text-ink-2 tabular-nums">{fmt(used)}</span>
+      <span>/ {fmt(contextWindow)}</span>
+      <span className="tabular-nums">· {pct}%</span>
     </div>
   );
 }
