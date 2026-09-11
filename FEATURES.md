@@ -56,8 +56,10 @@ $   Session References
 - fuzzy search `[Desktop]`
 - keyboard navigation `[Desktop]`
 - mouse selection `[Desktop]`
-- visual tokens for mentions and references `[Presentation]`
+- visual tokens for mentions, links, and references, in the draft and in the timeline `[Presentation]`
 - session reference preview `[Presentation]`
+- attachments by absolute path: images, PDFs, files, folders via drop, paste, or picker `[Desktop]`
+- attachment previews and chips, in the composer tray and on sent messages `[Presentation]`
 
 ## P3 — Folder & Session UX
 
