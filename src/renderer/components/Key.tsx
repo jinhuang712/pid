@@ -14,7 +14,7 @@ export function Keys({
   className?: string;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1 whitespace-nowrap ${className}`}>
+    <span className={`inline-flex items-center gap-[3px] whitespace-nowrap ${className}`}>
       {keys.map((k) => (
         <Key key={k}>{k}</Key>
       ))}
@@ -24,11 +24,13 @@ export function Keys({
 }
 
 export function Key({ children, small }: { children: ReactNode; small?: boolean }) {
+  const text = typeof children === "string" ? children : "";
+  const single = text.length <= 1;
   return (
     <kbd
-      className={`inline-flex items-center justify-center rounded-[5px] bg-paper-3 border border-line-2 text-ink-2 font-sans leading-none shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)] ${
-        small ? "h-4 min-w-4 px-1 text-[11px]" : "h-[18px] min-w-[18px] px-1.5 text-[11px]"
-      }`}
+      className={`inline-flex items-center justify-center rounded-[5px] bg-paper-3 border border-line text-ink-2 font-sans leading-none tabular-nums shadow-[inset_0_-1px_0_rgba(0,0,0,0.3)] ${
+        small ? "h-4 text-[10.5px]" : "h-[18px] text-[11px]"
+      } ${single ? (small ? "w-4" : "w-[20px]") : small ? "px-1" : "px-1.5"}`}
     >
       {children}
     </kbd>
