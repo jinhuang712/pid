@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: -apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: "SF Mono", Menlo, "JetBrains Mono", ui-monospace, monospace;
+
+  /* neutral cool-grey ground. paper is the page, paper-2/3/4 rise step by step */
+  --color-paper: light-dark(#f7f7f6, #131314);
+  --color-paper-2: light-dark(#f0f0ee, #18181a);
+  --color-paper-3: light-dark(#e6e6e3, #1f1f22);
+  --color-paper-4: light-dark(#dcdcd8, #27272b);
+  --color-ink: light-dark(#1c1c1e, #e8e8e6);
+  --color-ink-2: light-dark(#66666a, #9b9b9a);
+  --color-ink-3: light-dark(#9a9a9d, #66666a);
+  --color-line: light-dark(#e3e3e0, #2a2a2e);
+  --color-line-2: light-dark(#cfcfcb, #36363b);
+  /* accent marks "running / interactive" only */
+  --color-accent: light-dark(#3b6fb6, #8fb1e0);
+  --color-accent-soft: light-dark(#e2ebf7, #1f2a3a);
+  --color-ok: light-dark(#2f7d4a, #7fc79a);
+  --color-ok-soft: light-dark(#dff0e5, #1c2f24);
+  /* warn marks "waiting for you" */
+  --color-warn: light-dark(#a8741a, #e0b35a);
+  --color-warn-soft: light-dark(#f7ecd4, #332a18);
+  --color-danger: light-dark(#b3261e, #e07f7a);
+  --color-danger-soft: light-dark(#f9dedc, #3a2321);
+  --color-add: light-dark(#e2f3e6, #1a2e21);
+  --color-add-strong: light-dark(#b6e0c1, #2c5a3a);
+  --color-del: light-dark(#fbe1de, #362020);
+  --color-del-strong: light-dark(#f1b8b2, #6b2f2b);
+
+  /* type scale: 12 auxiliary · 13 UI and conversation · 15 prose · 20 title */
+  --text-xs: 12px;
+  --text-xs--line-height: 1.5;
+  --text-sm: 13px;
+  --text-sm--line-height: 1.65;
+  --text-base: 13px;
+  --text-base--line-height: 1.65;
+  --text-lg: 15px;
+  --text-lg--line-height: 1.75;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.35;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

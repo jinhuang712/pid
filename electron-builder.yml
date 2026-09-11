@@ -1,0 +1,16 @@
+appId: dev.pid.app
+productName: PID
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+asar: true
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dir
+      arch: [arm64]
+    - target: dmg
+      arch: [arm64]
+  darkModeSupport: true
