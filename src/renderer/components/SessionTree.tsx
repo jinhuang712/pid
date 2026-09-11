@@ -1,7 +1,6 @@
 import type { RepoInfo } from "@shared/git";
 import type { SessionSummary } from "@shared/sessions";
 import { type MouseEvent, useEffect, useState } from "react";
-import { fuzzyScore } from "../fuzzy";
 import { useSettings } from "../settings";
 import {
   type Proc,
@@ -58,9 +57,7 @@ export function SessionTree({
   repos,
   ws,
   activeFolder,
-  filter,
-  filterRef,
-  onFilter,
+  onSearch,
   actions,
   page,
   onPage,
@@ -72,9 +69,7 @@ export function SessionTree({
   repos: Record<string, RepoInfo | null>;
   ws: Workspace;
   activeFolder?: string;
-  filter: string;
-  filterRef: React.RefObject<HTMLInputElement | null>;
-  onFilter: (q: string) => void;
+  onSearch: () => void;
   actions: SessionActions;
 }) {
   const { settings } = useSettings();
@@ -100,16 +95,7 @@ export function SessionTree({
   const isOpen = (f: string) => expanded[f] ?? f === activeFolder;
   const toggle = (f: string) => setExpanded((e) => ({ ...e, [f]: !isOpen(f) }));
 
-  const visible = (f: string) => {
-    const list = sessionsByFolder[f] ?? [];
-    if (!filter) return list;
-    const q = filter.toLowerCase();
-    return list
-      .map((s) => ({ s, score: Math.max(fuzzyScore(q, s.name ?? ""), fuzzyScore(q, s.firstMessage)) }))
-      .filter((x) => x.score >= 0)
-      .sort((a, b) => b.score - a.score)
-      .map((x) => x.s);
-  };
+  const visible = (f: string) => sessionsByFolder[f] ?? [];
 
   const openMenu = (e: MouseEvent, items: (MenuItem | "sep")[], header?: string) => {
     e.preventDefault();
@@ -153,7 +139,11 @@ export function SessionTree({
         </button>
       </div>
       <div className="px-3 pb-2.5">
-        <div className="h-[30px] px-2.5 rounded-lg bg-paper-3 flex items-center gap-2 focus-within:ring-1 focus-within:ring-line-2">
+        <button
+          type="button"
+          onClick={onSearch}
+          className="w-full h-[30px] px-2.5 rounded-lg bg-paper-3 flex items-center gap-2 text-left hover:bg-paper-4"
+        >
           <svg
             width="14"
             height="14"
@@ -163,34 +153,27 @@ export function SessionTree({
             strokeWidth="1.5"
             className="text-ink-3"
           >
-            <title>filter</title>
+            <title>search</title>
             <circle cx="7" cy="7" r="4.5" />
             <path d="m10.5 10.5 3 3" />
           </svg>
-          <input
-            ref={filterRef}
-            value={filter}
-            onChange={(e) => onFilter(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && onFilter("")}
-            placeholder="Search sessions"
-            className="flex-1 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink-3"
-          />
+          <span className="flex-1 text-[12.5px] text-ink-3">Search</span>
           <Keys keys={["⌘", "K"]} />
-        </div>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-px">
         {orderedFolders.map((f) => {
           const list = visible(f);
           const total = sessionsByFolder[f]?.length ?? 0;
-          const open = isOpen(f) || (filter.length > 0 && list.length > 0);
+          const open = isOpen(f);
           const liveHere = Object.values(ws.procs).filter((p) => p.cwd === f);
           const liveStatus = liveHere.map(procStatus);
           const isActive = f === activeFolder;
           // live sessions always show; closed ones stay folded except the most recent few
           const live = list.filter((x) => procForSession(ws, x.path));
           const closed = list.filter((x) => !procForSession(ws, x.path));
-          const limit = filter ? closed.length : CLOSED_PREVIEW + (revealed[f] ?? 0);
+          const limit = CLOSED_PREVIEW + (revealed[f] ?? 0);
           const shown = [...live, ...closed.slice(0, limit)];
           const hidden = closed.length - Math.min(closed.length, limit);
           // forks nest under their parent when both are in this folder
@@ -320,7 +303,7 @@ export function SessionTree({
                       {hidden} closed session{hidden === 1 ? "" : "s"} · show {Math.min(PAGE, hidden)}
                     </button>
                   )}
-                  {(revealed[f] ?? 0) > 0 && closed.length > 0 && !filter && (
+                  {(revealed[f] ?? 0) > 0 && closed.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setRevealed((m) => ({ ...m, [f]: 0 }))}
@@ -330,9 +313,7 @@ export function SessionTree({
                     </button>
                   )}
                   {shown.length === 0 && unsaved.length === 0 && hidden === 0 && (
-                    <div className="h-6 px-2 text-xs text-ink-3 flex items-center">
-                      {filter ? "No matches" : "No sessions"}
-                    </div>
+                    <div className="h-6 px-2 text-xs text-ink-3 flex items-center">No sessions</div>
                   )}
                 </div>
               )}

@@ -1,48 +1,73 @@
 import { stat } from "node:fs/promises";
-import type { SearchHit, SearchScope } from "@shared/sessions";
+import type { SearchHit, SearchScope, SessionSummary } from "@shared/sessions";
+import { readSessionMessages } from "./session-read";
 
 /**
- * Session search over Pi session files. The in-memory index is derived from
- * SessionManager.listAll and is rebuilt whenever a session directory changes.
- * Deleting it costs nothing; the JSONL files remain the only source of truth.
+ * BM25 over Pi session files: one document per message plus one per session title.
+ * The index is a derived in-memory structure, rebuilt when the sessions directory changes.
+ * Deleting it costs nothing; the JSONL files stay the only source of truth.
  */
 const sdk = () => import("@earendil-works/pi-coding-agent");
 
 interface Doc {
-  path: string;
-  id: string;
-  cwd: string;
-  name?: string;
-  parentSessionPath?: string;
-  created: string;
-  modified: string;
-  messageCount: number;
-  firstMessage: string;
-  text: string; // lowercased haystack
-  raw: string; // original allMessagesText for snippets
+  session: SessionSummary;
+  kind: "title" | "message";
+  role?: "user" | "assistant";
+  text: string;
+  tokens: string[];
+  tf: Map<string, number>;
+  len: number;
 }
 
-let docs: Doc[] | undefined;
-let builtAt = 0;
-let building: Promise<Doc[]> | undefined;
+interface Index {
+  docs: Doc[];
+  df: Map<string, number>;
+  avgLen: number;
+  builtAt: number;
+}
+
+let index: Index | undefined;
+let building: Promise<Index> | undefined;
+
+/** Words for Latin script; character bigrams for CJK so Chinese queries match without segmentation. */
+export function tokenize(text: string): string[] {
+  const out: string[] = [];
+  const lower = text.toLowerCase();
+  for (const m of lower.matchAll(/[a-z0-9_][a-z0-9_.\-/]*|[぀-ヿ㐀-鿿]+/g)) {
+    const t = m[0];
+    if (/^[぀-ヿ㐀-鿿]/.test(t)) {
+      if (t.length === 1) out.push(t);
+      for (let i = 0; i + 1 < t.length; i++) out.push(t.slice(i, i + 2));
+    } else {
+      out.push(t);
+      // also index path/identifier parts: "src/renderer/App.tsx" → src, renderer, app.tsx
+      for (const part of t.split(/[/\-.]/)) if (part && part !== t) out.push(part);
+    }
+  }
+  return out;
+}
 
 async function sessionsDirMtime(): Promise<number> {
   try {
-    const { SessionManager } = await sdk();
-    // list() on an arbitrary cwd is cheap; we only need the sessions root, which listAll derives itself.
-    void SessionManager;
-    const home = process.env.HOME ?? "";
-    const s = await stat(`${home}/.pi/agent/sessions`);
+    const s = await stat(`${process.env.HOME ?? ""}/.pi/agent/sessions`);
     return s.mtimeMs;
   } catch {
     return 0;
   }
 }
 
-async function build(): Promise<Doc[]> {
-  const { SessionManager } = await sdk();
-  const list = await SessionManager.listAll();
-  return list.map((s) => ({
+function toSummary(s: {
+  path: string;
+  id: string;
+  cwd: string;
+  name?: string;
+  parentSessionPath?: string;
+  created: Date;
+  modified: Date;
+  messageCount: number;
+  firstMessage: string;
+}): SessionSummary {
+  return {
     path: s.path,
     id: s.id,
     cwd: s.cwd,
@@ -52,81 +77,113 @@ async function build(): Promise<Doc[]> {
     modified: s.modified.toISOString(),
     messageCount: s.messageCount,
     firstMessage: s.firstMessage,
-    text: `${s.name ?? ""}\n${s.cwd}\n${s.allMessagesText}`.toLowerCase(),
-    raw: s.allMessagesText,
-  }));
+  };
 }
 
-export async function ensureIndex(force = false): Promise<Doc[]> {
+async function build(): Promise<Index> {
+  const { SessionManager } = await sdk();
+  const list = await SessionManager.listAll();
+  const docs: Doc[] = [];
+  const add = (session: SessionSummary, kind: Doc["kind"], text: string, role?: Doc["role"]) => {
+    const tokens = tokenize(text);
+    if (tokens.length === 0) return;
+    const tf = new Map<string, number>();
+    for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
+    docs.push({ session, kind, role, text, tokens, tf, len: tokens.length });
+  };
+  for (const s of list) {
+    const session = toSummary(s);
+    add(session, "title", `${s.name ?? ""} ${s.firstMessage}`);
+    try {
+      for (const m of await readSessionMessages(s.path))
+        add(session, "message", m.text.slice(0, 4000), m.role);
+    } catch {
+      // unreadable file: title only
+    }
+  }
+  const df = new Map<string, number>();
+  for (const d of docs) for (const t of d.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+  const avgLen = docs.reduce((n, d) => n + d.len, 0) / Math.max(1, docs.length);
+  return { docs, df, avgLen, builtAt: Date.now() };
+}
+
+export async function ensureIndex(force = false): Promise<Index> {
   if (building) return building;
   const mtime = await sessionsDirMtime();
-  if (docs && !force && mtime <= builtAt) return docs;
-  building = build().then((d) => {
-    docs = d;
-    builtAt = Date.now();
+  if (index && !force && mtime <= index.builtAt) return index;
+  building = build().then((i) => {
+    index = i;
     building = undefined;
-    return d;
+    return i;
   });
   return building;
 }
 
 export function dropIndex() {
-  docs = undefined;
-  builtAt = 0;
+  index = undefined;
 }
 
-function snippet(raw: string, terms: string[]): string {
-  const lower = raw.toLowerCase();
+const K1 = 1.2;
+const B = 0.75;
+
+function bm25(idx: Index, d: Doc, terms: string[]): number {
+  const N = idx.docs.length;
+  let score = 0;
+  for (const t of terms) {
+    const f = d.tf.get(t);
+    if (!f) continue;
+    const n = idx.df.get(t) ?? 0;
+    const idf = Math.log(1 + (N - n + 0.5) / (n + 0.5));
+    score += idf * ((f * (K1 + 1)) / (f + K1 * (1 - B + (B * d.len) / idx.avgLen)));
+  }
+  return score;
+}
+
+function snippet(text: string, terms: string[]): string {
+  const lower = text.toLowerCase();
   let pos = -1;
   for (const t of terms) {
     pos = lower.indexOf(t);
     if (pos >= 0) break;
   }
-  if (pos < 0) return raw.slice(0, 160);
-  const start = Math.max(0, pos - 60);
-  const end = Math.min(raw.length, pos + 120);
-  return `${start > 0 ? "…" : ""}${raw.slice(start, end).replace(/\s+/g, " ")}${end < raw.length ? "…" : ""}`;
+  if (pos < 0) return text.slice(0, 140).replace(/\s+/g, " ");
+  const start = Math.max(0, pos - 50);
+  const end = Math.min(text.length, pos + 110);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end).replace(/\s+/g, " ")}${end < text.length ? "…" : ""}`;
 }
 
-export async function searchSessions(query: string, scope: SearchScope, limit = 50): Promise<SearchHit[]> {
-  const all = await ensureIndex();
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const pool = scope.cwd ? all.filter((d) => d.cwd === scope.cwd) : all;
-  const hits: SearchHit[] = [];
-  for (const d of pool) {
-    if (terms.length > 0 && !terms.every((t) => d.text.includes(t))) continue;
-    let score = 0;
-    for (const t of terms) {
-      if (d.name?.toLowerCase().includes(t)) score += 10;
-      if (d.firstMessage.toLowerCase().includes(t)) score += 5;
-      score += Math.min(5, countOccurrences(d.text, t));
+/** Best hit per session: title matches rank as sessions, message matches carry the matching message. */
+export async function searchSessions(query: string, scope: SearchScope, limit = 30): Promise<SearchHit[]> {
+  const idx = await ensureIndex();
+  const terms = [...new Set(tokenize(query))];
+  const bySession = new Map<string, SearchHit>();
+  const pool = scope.cwd ? idx.docs.filter((d) => d.session.cwd === scope.cwd) : idx.docs;
+  if (terms.length === 0) {
+    // empty query: most recent sessions
+    for (const d of pool) {
+      if (d.kind !== "title" || bySession.has(d.session.path)) continue;
+      bySession.set(d.session.path, { session: d.session, snippet: "", score: 0, kind: "title" });
     }
-    hits.push({
-      session: {
-        path: d.path,
-        id: d.id,
-        cwd: d.cwd,
-        name: d.name,
-        parentSessionPath: d.parentSessionPath,
-        created: d.created,
-        modified: d.modified,
-        messageCount: d.messageCount,
-        firstMessage: d.firstMessage,
-      },
-      snippet: snippet(d.raw, terms),
-      score,
-    });
+    return [...bySession.values()]
+      .sort((a, b) => b.session.modified.localeCompare(a.session.modified))
+      .slice(0, limit);
   }
-  hits.sort((a, b) => b.score - a.score || b.session.modified.localeCompare(a.session.modified));
-  return hits.slice(0, limit);
-}
-
-function countOccurrences(hay: string, needle: string): number {
-  let n = 0;
-  let i = hay.indexOf(needle);
-  while (i >= 0 && n < 50) {
-    n++;
-    i = hay.indexOf(needle, i + needle.length);
+  for (const d of pool) {
+    const score = bm25(idx, d, terms);
+    if (score <= 0) continue;
+    const boosted = d.kind === "title" ? score * 1.5 : score;
+    const cur = bySession.get(d.session.path);
+    if (!cur || boosted > cur.score) {
+      bySession.set(d.session.path, {
+        session: d.session,
+        snippet: d.kind === "message" ? snippet(d.text, terms) : "",
+        score: boosted,
+        kind: d.kind,
+        role: d.role,
+      });
+    }
   }
-  return n;
+  return [...bySession.values()]
+    .sort((a, b) => b.score - a.score || b.session.modified.localeCompare(a.session.modified))
+    .slice(0, limit);
 }
