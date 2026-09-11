@@ -79,6 +79,17 @@ export function App() {
     [loadFolder],
   );
 
+  // ---- open sessions survive a restart (PID state, derived from live processes; Pi files stay authoritative) ----
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!restored.current) return; // don't overwrite the saved list before it has been restored
+    const open = Object.values(ws.procs)
+      .filter((p) => p.piState.sessionFile && !p.exit)
+      .map((p) => ({ cwd: p.cwd, path: p.piState.sessionFile as string }));
+    const activePath = ws.activeKey ? ws.procs[ws.activeKey]?.piState.sessionFile : undefined;
+    void bridge.openSessions.save(open, activePath);
+  }, [ws]);
+
   // ---- notifications ----
   const notify = useCallback(
     (kind: "runCompleted" | "inputRequired" | "error", title: string, body?: string) => {
@@ -360,6 +371,30 @@ export function App() {
     async () => (key ? (await bridge.pi.command(key, { type: "get_available_thinking_levels" })).levels : []),
     [key],
   );
+
+  // ---- restore last open sessions (sequentially: each pi start is a few seconds) ----
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
+  useEffect(() => {
+    void (async () => {
+      const { openSessions, activeSession } = await bridge.openSessions.get();
+      if (!settings.sessions.restoreOnLaunch || openSessions.length === 0) {
+        restored.current = true;
+        return;
+      }
+      setStatus(`reopening ${openSessions.length} session${openSessions.length === 1 ? "" : "s"}…`);
+      let activeKey: string | undefined;
+      for (const o of openSessions) {
+        const k = await start(o.cwd, o.path);
+        if (k && o.path === activeSession) activeKey = k;
+      }
+      if (activeKey) dispatch({ type: "activate", key: activeKey });
+      const last = openSessions.at(-1);
+      if (last)
+        setFolder((cur) => cur ?? openSessions.find((o) => o.path === activeSession)?.cwd ?? last.cwd);
+      setStatus(undefined);
+      restored.current = true;
+    })();
+  }, []);
 
   // ---- keyboard, menu, dev hooks ----
   useEffect(() => {

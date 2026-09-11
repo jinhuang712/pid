@@ -32,6 +32,8 @@ export class PiProcess {
   private stderr = "";
   private pending = new Map<string, Pending>();
   private closed = false;
+  /** True between agent_start and agent_end: a turn is in flight. */
+  busy = false;
 
   constructor(private opts: PiProcessOptions) {
     this.cwd = opts.cwd;
@@ -87,6 +89,8 @@ export class PiProcess {
       else p.reject(new Error(msg.error));
       return;
     }
+    if (msg.type === "agent_start") this.busy = true;
+    if (msg.type === "agent_end" || msg.type === "agent_settled") this.busy = false;
     this.opts.onEvent(msg);
   }
 

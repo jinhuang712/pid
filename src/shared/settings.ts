@@ -21,6 +21,9 @@ export interface PidSettings {
     sort: "modified" | "created" | "name";
     previewLength: number;
     showForkLineage: boolean; // nest forks under their parent in the session tree
+    restoreOnLaunch: boolean; // reopen the sessions that were open when PID last quit
+    /** What to do on quit while a session is still running. Pi processes are children of PID and cannot outlive it. */
+    onQuitWhileRunning: "ask" | "finish" | "quit";
   };
   files: {
     ignorePatterns: string[]; // extra globs excluded from @ search
@@ -57,6 +60,8 @@ export const DEFAULT_SETTINGS: PidSettings = {
     sort: "modified",
     previewLength: 160,
     showForkLineage: true,
+    restoreOnLaunch: true,
+    onQuitWhileRunning: "ask",
   },
   files: {
     ignorePatterns: [],

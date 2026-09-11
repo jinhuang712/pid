@@ -23,6 +23,10 @@ const bridge: Bridge = {
     remember: (dir) => ipcRenderer.invoke("folders:remember", dir),
     forget: (dir) => ipcRenderer.invoke("folders:forget", dir),
   },
+  openSessions: {
+    get: () => ipcRenderer.invoke("state:openSessions"),
+    save: (open, active) => ipcRenderer.invoke("state:saveOpenSessions", open, active),
+  },
   files: {
     list: (cwd) => ipcRenderer.invoke("files:list", cwd),
   },

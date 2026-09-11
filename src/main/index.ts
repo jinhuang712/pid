@@ -13,7 +13,7 @@ import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions } from "./pi/search";
 import { readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
-import { forgetFolder, loadState, rememberFolder } from "./pid-state";
+import { forgetFolder, loadState, type OpenSession, rememberFolder, saveOpenSessions } from "./pid-state";
 import { applyTheme, loadSettings, saveSettings } from "./settings";
 
 const PAPER_LIGHT = "#f4f3ef";
@@ -102,6 +102,13 @@ ipcMain.handle("folder:pick", async () => {
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
 ipcMain.handle("folders:forget", (_e, dir: string) => forgetFolder(dir));
+ipcMain.handle("state:openSessions", () => {
+  const st = loadState();
+  return { openSessions: st.openSessions, activeSession: st.activeSession };
+});
+ipcMain.handle("state:saveOpenSessions", (_e, open: OpenSession[], active?: string) =>
+  saveOpenSessions(open, active),
+);
 ipcMain.handle("git:repo", (_e, cwd: string) => repoInfo(cwd));
 ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:set", (_e, s: PidSettings) => saveSettings(s));
@@ -134,7 +141,49 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("before-quit", () => pi.stopAll());
+/**
+ * Quitting kills the pi processes: they are children of PID and cannot outlive it.
+ * When a turn is still running, follow the setting: ask, let it finish first, or just quit.
+ */
+let quitting = false;
+app.on("before-quit", (e) => {
+  if (quitting) return;
+  const busy = pi.busyCount();
+  const policy = loadSettings().sessions.onQuitWhileRunning;
+  if (busy === 0 || policy === "quit") {
+    quitting = true;
+    pi.stopAll();
+    return;
+  }
+  e.preventDefault();
+  const finishThenQuit = () => {
+    mainWindow?.hide();
+    void pi.whenAllIdle().then(() => {
+      quitting = true;
+      pi.stopAll();
+      app.quit();
+    });
+  };
+  if (policy === "finish") return finishThenQuit();
+  void dialog
+    .showMessageBox({
+      type: "question",
+      message: `${busy} session${busy === 1 ? " is" : "s are"} still running.`,
+      detail:
+        "Pi runs inside PID; quitting stops it. You can let the current turns finish first — the window hides and PID quits when they are done.",
+      buttons: ["Finish turns, then quit", "Quit now", "Cancel"],
+      defaultId: 0,
+      cancelId: 2,
+    })
+    .then(({ response }) => {
+      if (response === 0) finishThenQuit();
+      else if (response === 1) {
+        quitting = true;
+        pi.stopAll();
+        app.quit();
+      }
+    });
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
