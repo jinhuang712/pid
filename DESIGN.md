@@ -200,15 +200,15 @@ uses a derived index over the Pi session files that can be deleted and rebuilt a
 
 ### Skills
 
-Lists every skill available in the current Pi environment: name, description, source, path, and whether it is currently usable. Search filters the list. A skill can be opened in its source location. This page shows Pi's skills; PID has no skills of its own.
+Lists every skill available in the current Pi environment: name, description, source, path, and whether it is currently on. Search filters the list. A skill can be opened in its source location. Each skill has a switch that writes the same setting `pi config` writes, globally or for one project; a scope bar picks which, and which project directory the project layer means. This page shows Pi's skills; PID has no skills of its own.
 
 ### MCP
 
-Lists configured MCP servers: name, connection status, tool count, tools, recent errors, and metadata. Refresh and reconnect are offered where Pi allows them. There is no marketplace, no permission engine, no workflow builder.
+Lists configured MCP servers: name, connection status, tool count, tools, recent errors, and metadata. Each server has a switch that writes pi-mcp-adapter's `disabled` flag, globally in `~/.pi/agent/mcp.json` or as a project override in `.pi/mcp.json`, the same thing `/mcp disable` does. Refresh and reconnect are offered where Pi allows them. There is no marketplace, no permission engine, no workflow builder.
 
 ### Extensions
 
-Lists Pi extensions: name, source, path, metadata, enabled state where Pi supports it, and a compatibility label:
+Lists Pi extensions: name, source, path, metadata, a switch that writes the same enable/disable pattern `pi config` writes (global or per project), and a compatibility label:
 
 ```text
 Compatible

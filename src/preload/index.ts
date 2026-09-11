@@ -43,6 +43,8 @@ const bridge: Bridge = {
     skills: (cwd) => ipcRenderer.invoke("eco:skills", cwd),
     extensions: (cwd) => ipcRenderer.invoke("eco:extensions", cwd),
     mcp: (cwd) => ipcRenderer.invoke("eco:mcp", cwd),
+    setResource: (req) => ipcRenderer.invoke("eco:setResource", req),
+    setMcp: (req) => ipcRenderer.invoke("eco:setMcp", req),
   },
   shell: {
     reveal: (path) => ipcRenderer.invoke("shell:reveal", path),

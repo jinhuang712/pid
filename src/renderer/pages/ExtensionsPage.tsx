@@ -2,7 +2,8 @@ import type { Compat, ExtensionView } from "@shared/ecosystem";
 import { useEffect, useMemo, useState } from "react";
 import { bridge } from "../bridge";
 import { fuzzyFilter } from "../fuzzy";
-import { Badge, PageShell, PathLink } from "./PageShell";
+import { Badge, OverrideBadge, PageShell, PathLink, ScopeBar, Toggle } from "./PageShell";
+import { useEcoScope } from "./scope";
 
 const COMPAT: Record<Compat, { label: string; tone: "ok" | "warn" | "danger" }> = {
   compatible: { label: "Compatible", tone: "ok" },
@@ -11,24 +12,43 @@ const COMPAT: Record<Compat, { label: string; tone: "ok" | "warn" | "danger" }> 
 };
 
 /**
- * Pi extensions from settings.json packages and the extensions directories.
- * Compatibility is a static scan for terminal-only UI APIs; PID does not adapt them.
+ * Pi extensions as Pi resolves them from settings.json packages and the extensions directories.
+ * Switches write the same +/- patterns as `pi config`. Compatibility is a static scan for
+ * terminal-only UI APIs; PID does not adapt them.
  */
 export function ExtensionsPage({ folder }: { folder?: string }) {
   const [list, setList] = useState<ExtensionView[]>([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string>();
+  const [error, setError] = useState<string>();
+  const sc = useEcoScope(folder);
 
-  const load = () => void bridge.eco.extensions(folder).then(setList);
-  useEffect(load, [folder]);
+  const load = () => void bridge.eco.extensions(sc.cwd).then(setList);
+  useEffect(load, [sc.cwd]);
+
+  const write = (e: ExtensionView, state: "load" | "unload" | "inherit") => {
+    setError(undefined);
+    bridge.eco
+      .setResource({
+        kind: "extensions",
+        paths: e.entries,
+        scope: state === "inherit" ? "project" : sc.scope,
+        cwd: sc.cwd,
+        state,
+      })
+      .then(load, (err: unknown) => setError(String(err instanceof Error ? err.message : err)));
+  };
 
   const filtered = useMemo(
     () => fuzzyFilter(list, q, (e) => `${e.name} ${e.source} ${e.description ?? ""}`),
     [list, q],
   );
   const counts = useMemo(() => {
-    const c = { compatible: 0, partial: 0, unsupported: 0 };
-    for (const e of list) c[e.compat]++;
+    const c = { compatible: 0, partial: 0, unsupported: 0, off: 0 };
+    for (const e of list) {
+      c[e.compat]++;
+      if (!e.enabled) c.off++;
+    }
     return c;
   }, [list]);
 
@@ -38,9 +58,20 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
       note={
         <>
           {list.length} extensions · {counts.compatible} compatible · {counts.partial} partial ·{" "}
-          {counts.unsupported} unsupported. Enable or disable them with{" "}
-          <span className="font-mono">pi config</span>; PID reads Pi's settings and does not manage them.
+          {counts.unsupported} unsupported{counts.off > 0 ? ` · ${counts.off} off` : ""}. Switches write the
+          same settings as <span className="font-mono">pi config</span>; new sessions pick them up, running
+          ones after <span className="font-mono">/reload</span>.
         </>
+      }
+      toolbar={
+        <ScopeBar
+          scope={sc.scope}
+          projectDir={sc.projectDir}
+          explicitProject={sc.explicitProject}
+          onScope={sc.setScope}
+          onProjectDir={sc.setProjectDir}
+          projectFile=".pi/settings.json"
+        />
       }
       search={q}
       onSearch={setQ}
@@ -54,24 +85,58 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
         </button>
       }
     >
+      {error && <div className="mb-3 text-xs text-danger">{error}</div>}
       <div className="flex flex-col gap-2">
         {filtered.map((e) => {
           const c = COMPAT[e.compat];
-          const isOpen = open === e.baseDir + e.name;
+          const key = e.baseDir + e.name;
+          const isOpen = open === key;
+          const projectOnly = e.scope === "project" && sc.scope === "global";
+          const needsDir = sc.scope === "project" && !sc.cwd;
           return (
-            <article key={e.baseDir + e.name} className="rounded-lg border border-line bg-paper-2">
-              <button
-                type="button"
-                onClick={() => setOpen(isOpen ? undefined : e.baseDir + e.name)}
-                className="w-full text-left px-3 py-2 flex items-center gap-2"
-              >
-                <span className="font-medium text-ink">{e.name}</span>
-                {e.version && <span className="text-xs text-ink-3">v{e.version}</span>}
-                <Badge tone="muted">{e.scope}</Badge>
-                <span className="flex-1" />
-                <Badge tone={c.tone}>{c.label}</Badge>
-                <span className="text-ink-3 text-xs">{isOpen ? "▾" : "▸"}</span>
-              </button>
+            <article
+              key={key}
+              className={`rounded-lg border border-line bg-paper-2 ${e.enabled ? "" : "opacity-60"}`}
+            >
+              <div className="w-full px-3 py-2 flex items-center gap-2">
+                <Toggle
+                  value={e.enabled}
+                  disabled={projectOnly || needsDir}
+                  title={
+                    projectOnly
+                      ? "A project extension: switch to Project scope to change it"
+                      : needsDir
+                        ? "Choose a project directory first"
+                        : e.enabled
+                          ? "Turn off"
+                          : "Turn on"
+                  }
+                  onChange={(v) => write(e, v ? "load" : "unload")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setOpen(isOpen ? undefined : key)}
+                  className="flex-1 min-w-0 text-left flex items-center gap-2"
+                >
+                  <span className="font-medium text-ink truncate">{e.name}</span>
+                  {e.version && <span className="text-xs text-ink-3">v{e.version}</span>}
+                  <Badge tone="muted">{e.scope}</Badge>
+                  <span className="flex-1" />
+                  {sc.scope === "project" && <OverrideBadge state={e.projectState} />}
+                  <Badge tone={c.tone}>{c.label}</Badge>
+                  <span className="text-ink-3 text-xs">{isOpen ? "▾" : "▸"}</span>
+                </button>
+                {sc.scope === "project" && e.projectState && e.projectState !== "inherit" && (
+                  <button
+                    type="button"
+                    onClick={() => write(e, "inherit")}
+                    title="Remove the project override and follow the global setting"
+                    className="h-6 px-1.5 rounded-md text-xs text-ink-3 hover:bg-paper-3 hover:text-ink"
+                  >
+                    inherit
+                  </button>
+                )}
+              </div>
               {isOpen && (
                 <div className="px-3 pb-3 text-xs flex flex-col gap-1.5 border-t border-line pt-2">
                   {e.description && <p className="text-ink-2">{e.description}</p>}
@@ -80,7 +145,9 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
                   </div>
                   {e.baseDir && <PathLink path={e.baseDir} />}
                   <div className="text-ink-3">
-                    {e.files.length} source file{e.files.length === 1 ? "" : "s"}
+                    {e.entries.length} entr{e.entries.length === 1 ? "y" : "ies"} · {e.files.length} source
+                    file
+                    {e.files.length === 1 ? "" : "s"}
                   </div>
                   {e.uiApis.length > 0 && (
                     <div className="text-ink-3">

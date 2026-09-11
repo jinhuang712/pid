@@ -1,11 +1,13 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import type { ResolvedResource } from "@earendil-works/pi-coding-agent";
 import type { Compat, ExtensionView, McpServerView, McpView, PiHome, SkillView } from "@shared/ecosystem";
+import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
 
 /**
- * Discovery of skills, extensions, and MCP servers. Read-only: mirrors what Pi loads
- * from ~/.pi/agent and <cwd>/.pi, using Pi's own skill loader where possible.
+ * Discovery of skills, extensions, and MCP servers: what Pi loads from ~/.pi/agent and <cwd>/.pi,
+ * resolved by Pi's own package manager so enabled/disabled state matches `pi config`.
  */
 
 const sdk = () => import("@earendil-works/pi-coding-agent");
@@ -23,13 +25,18 @@ export function readPiHome(): PiHome {
   } catch {
     // no settings yet
   }
-  const packages = Array.isArray(settings.packages)
-    ? (settings.packages as unknown[]).filter((p) => typeof p === "string")
-    : [];
+  const packages: string[] = [];
+  if (Array.isArray(settings.packages)) {
+    for (const p of settings.packages as unknown[]) {
+      if (typeof p === "string") packages.push(p);
+      else if (p && typeof p === "object" && typeof (p as { source?: unknown }).source === "string")
+        packages.push((p as { source: string }).source);
+    }
+  }
   return {
     agentDir: dir,
     settingsPath,
-    packages: packages as string[],
+    packages,
     defaultProvider: str(settings.defaultProvider),
     defaultModel: str(settings.defaultModel),
     defaultThinkingLevel: str(settings.defaultThinkingLevel),
@@ -76,13 +83,30 @@ function resolvePackage(source: string): ResolvedPackage | undefined {
   return { source, baseDir, extensions, skills, version: pkg.version, description: pkg.description };
 }
 
+const canonical = (p: string) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+
+async function projectSettings(cwd: string) {
+  const { SettingsManager } = await sdk();
+  return SettingsManager.create(cwd, agentDir(), { projectTrusted: true }).getProjectSettings();
+}
+
 export async function listSkills(cwd?: string): Promise<SkillView[]> {
   const { loadSkillsFromDir } = await sdk();
+  const resolved = await resolveResources(cwd);
+  const state = new Map(resolved.project.skills.map((r) => [canonical(r.path), r]));
+  const proj = cwd ? await projectSettings(cwd) : undefined;
   const out: SkillView[] = [];
   const add = (dir: string, source: string) => {
     if (!existsSync(dir)) return;
     const { skills } = loadSkillsFromDir({ dir, source });
     for (const s of skills) {
+      const r = state.get(canonical(s.filePath));
       out.push({
         name: s.name,
         description: s.description,
@@ -90,6 +114,8 @@ export async function listSkills(cwd?: string): Promise<SkillView[]> {
         baseDir: s.baseDir,
         source,
         disableModelInvocation: s.disableModelInvocation,
+        enabled: r?.enabled ?? true,
+        projectState: cwd && r && proj ? projectStateOf("skills", r, cwd, proj, agentDir()) : undefined,
       });
     }
   };
@@ -170,88 +196,139 @@ function scanCompat(files: string[]): { compat: Compat; tuiApis: string[]; uiApi
   return { compat, tuiApis: [...tui], uiApis: [...ui] };
 }
 
-export function listExtensions(cwd?: string): ExtensionView[] {
+function readManifest(baseDir: string): { version?: string; description?: string } {
+  try {
+    const pkg = JSON.parse(readFileSync(join(baseDir, "package.json"), "utf8"));
+    return { version: str(pkg.version), description: str(pkg.description) };
+  } catch {
+    return {};
+  }
+}
+
+/** Package name for display: "npm:pi-mcp-adapter@1.2" → "pi-mcp-adapter", "../../dev/pi/pi-view" → "pi-view". */
+function packageName(source: string, baseDir?: string): string {
+  if (baseDir) return basename(baseDir);
+  const spec = source.replace(/^(npm|git|github):/, "");
+  const noVersion = spec.startsWith("@") ? spec.replace(/(@[^/]+\/[^@]+)@.*/, "$1") : spec.split("@")[0];
+  return basename(noVersion.replace(/\.git$/, ""));
+}
+
+/**
+ * Extensions as Pi resolves them. Package extensions are one card per package (all entry files
+ * toggle together); loose extensions under an `extensions/` directory are one card per entry.
+ */
+export async function listExtensions(cwd?: string): Promise<ExtensionView[]> {
+  const resolved = await resolveResources(cwd);
+  const proj = cwd ? await projectSettings(cwd) : undefined;
+  const groups = new Map<string, { meta: ResolvedResource["metadata"]; items: ResolvedResource[] }>();
+  for (const r of resolved.project.extensions) {
+    const key =
+      r.metadata.origin === "package"
+        ? `package:${r.metadata.scope}:${r.metadata.source}:${r.metadata.baseDir ?? ""}`
+        : `top:${r.metadata.scope}:${r.path}`;
+    const g = groups.get(key) ?? { meta: r.metadata, items: [] };
+    g.items.push(r);
+    groups.set(key, g);
+  }
   const out: ExtensionView[] = [];
-  const looseDir = (dir: string, scope: "user" | "project") => {
-    if (!existsSync(dir)) return;
-    for (const name of readdirSync(dir)) {
-      if (name.startsWith(".") || name.startsWith("_")) continue;
-      const full = join(dir, name);
-      const files = sourceFiles(full);
-      if (files.length === 0) continue;
-      out.push({
-        name: name.replace(/\.(ts|js|mts|mjs)$/, ""),
-        source: scope,
-        scope,
-        baseDir: statSync(full).isDirectory() ? full : dirname(full),
-        files,
-        ...scanCompat(files),
-      });
-    }
-  };
-  looseDir(join(agentDir(), "extensions"), "user");
-  if (cwd) looseDir(join(cwd, ".pi", "extensions"), "project");
-  for (const source of readPiHome().packages) {
-    const pkg = resolvePackage(source);
-    if (!pkg) {
-      out.push({
-        name: source,
-        source,
-        scope: "package",
-        baseDir: "",
-        files: [],
-        compat: "unsupported",
-        tuiApis: ["(package not installed)"],
-        uiApis: [],
-      });
-      continue;
-    }
-    if (pkg.extensions.length === 0) continue; // skills-only package
-    const files = pkg.extensions.flatMap((e) => sourceFiles(e));
+  for (const { meta, items } of groups.values()) {
+    const entries = items.map((r) => r.path);
+    const isPackage = meta.origin === "package";
+    const first = items[0];
+    // Loose "foo.ts" sits directly in extensions/; "foo/index.ts" is a directory extension.
+    const looseDir =
+      !isPackage && basename(dirname(first.path)) !== "extensions" ? dirname(first.path) : undefined;
+    const baseDir = isPackage ? (meta.baseDir ?? dirname(first.path)) : (looseDir ?? dirname(first.path));
+    const files = isPackage || looseDir ? sourceFiles(baseDir) : sourceFiles(first.path);
+    const manifest = isPackage ? readManifest(baseDir) : {};
+    const scope: ExtensionView["scope"] = isPackage
+      ? "package"
+      : meta.scope === "project"
+        ? "project"
+        : "user";
+    const states =
+      cwd && proj ? items.map((r) => projectStateOf("extensions", r, cwd, proj, agentDir())) : [];
     out.push({
-      name: basename(pkg.baseDir),
-      source,
-      scope: "package",
-      baseDir: pkg.baseDir,
+      name: isPackage
+        ? packageName(meta.source, meta.baseDir)
+        : looseDir
+          ? basename(looseDir)
+          : basename(first.path).replace(/\.(ts|js|mts|mjs|cts|cjs)$/, ""),
+      source: isPackage ? meta.source : scope,
+      scope,
+      baseDir,
+      entries,
       files,
-      version: pkg.version,
-      description: pkg.description,
       ...scanCompat(files),
+      version: manifest.version,
+      description: manifest.description,
+      enabled: items.every((r) => r.enabled),
+      projectState: states.length
+        ? states.every((s) => s === states[0])
+          ? states[0]
+          : "inherit"
+        : undefined,
     });
   }
+  out.sort((a, b) => (a.scope === b.scope ? a.name.localeCompare(b.name) : a.scope === "package" ? -1 : 1));
   return out;
 }
 
-/** MCP as configured for pi-mcp-adapter (the MCP integration in this Pi install). */
+/** MCP as configured for pi-mcp-adapter: layers merged by server name, project files winning. */
 export function readMcp(cwd?: string): McpView {
   const home = readPiHome();
   const adapterInstalled = home.packages.some((p) => p.includes("pi-mcp-adapter"));
-  const candidates = [
-    join(agentDir(), "mcp.json"),
-    ...(cwd ? [join(cwd, ".pi", "mcp.json"), join(cwd, ".mcp.json")] : []),
+  const globalPath = mcpGlobalPath();
+  const layers: { path: string; scope: "global" | "shared" | "pi" }[] = [
+    { path: globalPath, scope: "global" },
   ];
-  const configPaths = candidates.filter((p) => existsSync(p));
-  const servers: McpServerView[] = [];
-  for (const configPath of configPaths) {
-    let cfg: { mcpServers?: Record<string, Record<string, unknown>> } = {};
+  if (cwd) {
+    const p = mcpProjectPaths(cwd);
+    layers.push({ path: p.shared, scope: "shared" }, { path: p.pi, scope: "pi" });
+  }
+  const configPaths: string[] = [];
+  const merged = new Map<string, McpServerView & { raw: Record<string, unknown> }>();
+  for (const layer of layers) {
+    if (!existsSync(layer.path)) continue;
+    let cfg: Record<string, unknown> = {};
     try {
-      cfg = JSON.parse(readFileSync(configPath, "utf8"));
+      cfg = JSON.parse(readFileSync(layer.path, "utf8"));
     } catch {
       continue;
     }
-    for (const [name, s] of Object.entries(cfg.mcpServers ?? {})) {
-      servers.push({
+    configPaths.push(layer.path);
+    const servers = (cfg.mcpServers ?? cfg["mcp-servers"] ?? {}) as Record<string, Record<string, unknown>>;
+    for (const [name, s] of Object.entries(servers)) {
+      if (!s || typeof s !== "object") continue;
+      const prev = merged.get(name);
+      const raw = { ...prev?.raw, ...s };
+      const view: McpServerView & { raw: Record<string, unknown> } = {
         name,
-        configPath,
-        transport: typeof s.url === "string" ? "http" : "stdio",
-        command: str(s.command),
-        args: Array.isArray(s.args) ? (s.args as string[]) : undefined,
-        url: str(s.url),
-        auth: str(s.auth),
-        directTools: typeof s.directTools === "boolean" ? s.directTools : undefined,
-      });
+        configPath: prev?.configPath ?? layer.path,
+        definedIn: [...(prev?.definedIn ?? []), layer.path],
+        transport: typeof raw.url === "string" ? "http" : "stdio",
+        command: str(raw.command),
+        args: Array.isArray(raw.args) ? (raw.args as string[]) : undefined,
+        url: str(raw.url),
+        auth: str(raw.auth),
+        directTools: typeof raw.directTools === "boolean" ? raw.directTools : undefined,
+        disabled: raw.disabled === true,
+        globalDisabled: prev?.globalDisabled,
+        projectDisabled: prev?.projectDisabled,
+        raw,
+      };
+      if (!prev && !(typeof s.command === "string" || typeof s.url === "string")) {
+        // an override with no definition underneath: nothing Pi can start
+        view.configPath = layer.path;
+      }
+      if (layer.scope === "global") view.globalDisabled = s.disabled === true;
+      if (layer.scope === "pi" && "disabled" in s) view.projectDisabled = s.disabled === true;
+      merged.set(name, view);
     }
   }
+  const servers: McpServerView[] = [...merged.values()]
+    .filter((s) => s.command || s.url)
+    .map(({ raw: _raw, ...s }) => s);
   const cachePath = join(agentDir(), "mcp-cache.json");
   if (existsSync(cachePath)) {
     try {

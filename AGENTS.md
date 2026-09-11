@@ -96,9 +96,15 @@ Pi Coding Agent SDK
   Commands and events are Pi's RPC protocol types, imported from the pinned
   `@earendil-works/pi-coding-agent` package. PID adds only a process key. This means PID runs the
   user's installed `pi`, with their extensions, MCP adapter, models, and auth, unchanged.
-- **Read-only discovery**: session lists (`SessionManager.list/listAll`), skills
-  (`loadSkillsFromDir`), and file parsing of `~/.pi/agent` for extensions and MCP config.
-  Nothing under `~/.pi/agent` is ever written by PID.
+- **Discovery**: session lists (`SessionManager.list/listAll`), skills (`loadSkillsFromDir`),
+  and skill/extension enablement resolved by Pi's `DefaultPackageManager` so it matches `pi config`.
+  MCP config is parsed from the adapter's `mcp.json` layers.
+- **On/off switches** (`src/main/pi/toggles.ts`): the only writes PID makes under `~/.pi/agent` or
+  `<cwd>/.pi`, and they are Pi's own formats through Pi's own code paths. Skills and extensions go
+  through `SettingsManager` as the same `+pattern` / `-pattern` entries `pi config` writes (global
+  or `--local`, including the project-layer inherit state). MCP servers get pi-mcp-adapter's
+  `disabled` flag: edited in place globally, or as a `{ disabled }`-only override in
+  `<cwd>/.pi/mcp.json` like `/mcp disable`. No other key in those files is touched.
 - **Renderer state**: the streaming assistant message is rebuilt from `message_update` deltas;
   `message_end` is authoritative. Everything else is a projection of Pi events.
 - **Extension UI**: the RPC `extension_ui_request` sub-protocol is answered with real dialogs;

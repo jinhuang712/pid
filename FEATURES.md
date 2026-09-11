@@ -117,6 +117,7 @@ Worktree creation, landing, and removal are Pi's (`pi-worktree`). PID adds no wo
 - tools per server `[Pi]`
 - errors `[Pi]`
 - reconnect / refresh where Pi allows `[Pi]`
+- on/off switch per server, global or per project, via the adapter's `disabled` flag `[Pi]`
 - MCP tools flow through Pi `[Pi]`
 - unified Tool Card rendering `[Presentation]`
 
@@ -129,6 +130,7 @@ Not an MCP platform.
 - metadata `[Pi]`
 - source `[Pi]`
 - usability status `[Pi]`
+- on/off switch, global or per project, written as `pi config` would `[Pi]`
 - integration with `/` `[Desktop]`
 
 ## P9 — Extensions
@@ -138,6 +140,7 @@ Not an MCP platform.
 - metadata `[Pi]`
 - source `[Pi]`
 - compatibility state `[Presentation]`
+- on/off switch, global or per project, written as `pi config` would `[Pi]`
 - best-effort support `[Pi]`
 - explicit TUI-only unsupported state `[Presentation]`
 
