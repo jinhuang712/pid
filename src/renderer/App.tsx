@@ -9,10 +9,11 @@ import { Lineage } from "./components/Lineage";
 import { ModelPicker } from "./components/ModelPicker";
 import { QueuePanel } from "./components/QueuePanel";
 import { ReferenceChips } from "./components/ReferenceChips";
+import { SearchPalette } from "./components/SearchPalette";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
-import { expandReferences, type SessionReference } from "./session-reference";
+import { expandReferences, refToken, type SessionReference } from "./session-reference";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./state/conversation";
 
 export function App() {
@@ -23,6 +24,29 @@ export function App() {
   const [status, setStatus] = useState<string>();
   const [draft, setDraft] = useState("");
   const [refs, setRefs] = useState<SessionReference[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchInitial, setSearchInitial] = useState("");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const referenceSession = useCallback((s: SessionSummary) => {
+    const token = refToken(s);
+    setDraft((d) => (d.includes(token) ? d : `${d}${d && !d.endsWith(" ") ? " " : ""}${token} `));
+    void bridge.sessions
+      .read(s.path)
+      .then((messages) =>
+        setRefs((rs) => [...rs.filter((r) => r.token !== token), { token, session: s, messages }]),
+      );
+  }, []);
   const [folders, setFolders] = useState<string[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
@@ -100,6 +124,10 @@ export function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
     void bridge.appInfo().then(async (info) => {
+      if (info.devSearch !== undefined) {
+        setSearchInitial(info.devSearch);
+        setSearchOpen(true);
+      }
       if (!info.devOpenFolder) return;
       const handle = await startIn(info.devOpenFolder, info.devOpenSession);
       if (handle && info.devDraft) setTimeout(() => setDraft(info.devDraft ?? ""), 500);
@@ -174,11 +202,28 @@ export function App() {
   );
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
+      {searchOpen && (
+        <SearchPalette
+          initialQuery={searchInitial}
+          folder={folder}
+          onClose={() => setSearchOpen(false)}
+          onOpen={(s) => void startIn(s.cwd, s.path)}
+          onReference={referenceSession}
+        />
+      )}
       <header className="drag h-11 shrink-0 pl-[84px] pr-3 flex items-center gap-3 border-b border-line text-ink-2">
         <span className="font-medium text-ink">PID</span>
         {folder && <span className="font-mono text-xs truncate">{folder}</span>}
         <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:bg-paper-3 hover:text-ink"
+          title="Search sessions (⌘K)"
+        >
+          ⌕ Search
+        </button>
         {key && piState && (
           <div className="flex items-center gap-1">
             <ForkMenu
