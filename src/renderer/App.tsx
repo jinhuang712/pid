@@ -1,19 +1,31 @@
 import type { PiHandle, RpcExtensionUIRequest, RpcSessionState } from "@shared/protocol";
+import type { SessionSummary } from "@shared/sessions";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { bridge } from "./bridge";
 import { Composer, type SendMode } from "./components/Composer";
 import { ModelPicker } from "./components/ModelPicker";
 import { QueuePanel } from "./components/QueuePanel";
+import { Sidebar } from "./components/Sidebar";
 import { ThinkingPicker } from "./components/ThinkingPicker";
 import { Timeline } from "./components/Timeline";
-import { emptyConversation, reduce } from "./state/conversation";
+import { type ConversationState, emptyConversation, fromMessages, reduce } from "./state/conversation";
 
 export function App() {
   const [folder, setFolder] = useState<string>();
   const [pi, setPi] = useState<PiHandle>();
   const [piState, setPiState] = useState<RpcSessionState>();
-  const [conv, dispatch] = useReducer(reduce, undefined, emptyConversation);
+  const [conv, dispatch] = useReducer(convReducer, undefined, emptyConversation);
   const [status, setStatus] = useState<string>();
+  const [folders, setFolders] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+
+  useEffect(() => {
+    void bridge.folders.recent().then(setFolders);
+  }, []);
+  const refreshSessions = useCallback(
+    async (dir: string) => setSessions(await bridge.sessions.list(dir)),
+    [],
+  );
 
   const key = pi?.key;
   const refreshState = useCallback(async () => {
@@ -33,6 +45,7 @@ export function App() {
       ) {
         void refreshState();
       }
+      if (event.type === "agent_end" && folder) void refreshSessions(folder);
     });
     const offExit = bridge.pi.onExit(({ key: k, code, stderr }) => {
       if (k !== key) return;
@@ -43,15 +56,23 @@ export function App() {
       offEvent();
       offExit();
     };
-  }, [key, refreshState]);
+  }, [key, refreshState, folder, refreshSessions]);
 
   const startIn = useCallback(
-    async (dir: string) => {
+    async (dir: string, sessionPath?: string) => {
       setFolder(dir);
+      setFolders(await bridge.folders.remember(dir));
+      void refreshSessions(dir);
       if (pi) await bridge.pi.stop(pi.key);
-      setStatus("starting pi…");
+      setPi(undefined);
+      dispatch({ reset: emptyConversation() });
+      setStatus(sessionPath ? "resuming session…" : "starting pi…");
       try {
-        const handle = await bridge.pi.start({ cwd: dir });
+        const handle = await bridge.pi.start({ cwd: dir, sessionPath });
+        if (sessionPath) {
+          const { messages } = await bridge.pi.command(handle.key, { type: "get_messages" });
+          dispatch({ reset: fromMessages(messages) });
+        }
         setPi(handle);
         setPiState(handle.state);
         setStatus(undefined);
@@ -60,7 +81,7 @@ export function App() {
         setStatus(String(e));
       }
     },
-    [pi],
+    [pi, refreshSessions],
   );
 
   const openFolder = useCallback(async () => {
@@ -73,7 +94,7 @@ export function App() {
   useEffect(() => {
     void bridge.appInfo().then(async (info) => {
       if (!info.devOpenFolder) return;
-      const handle = await startIn(info.devOpenFolder);
+      const handle = await startIn(info.devOpenFolder, info.devOpenSession);
       if (handle && info.devPrompt)
         await bridge.pi.command(handle.key, { type: "prompt", message: info.devPrompt });
     });
@@ -132,16 +153,16 @@ export function App() {
         )}
       </header>
       <div className="flex-1 flex min-h-0">
-        <aside className="w-[272px] shrink-0 border-r border-line bg-paper-2 p-3 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={openFolder}
-            className="h-8 rounded-md bg-paper-3 hover:bg-paper-4 text-ink text-left px-3"
-          >
-            Open folder…
-          </button>
-          {folder && <div className="text-xs text-ink-3 px-1 truncate">{folder}</div>}
-        </aside>
+        <Sidebar
+          folders={folders}
+          folder={folder}
+          sessions={sessions}
+          activeSessionPath={piState?.sessionFile}
+          onOpenFolder={(dir) => void startIn(dir)}
+          onPickFolder={() => void openFolder()}
+          onNewSession={() => folder && void startIn(folder)}
+          onOpenSession={(s) => void startIn(s.cwd, s.path)}
+        />
         <main className="flex-1 flex flex-col min-w-0">
           {pi ? (
             <>
@@ -165,6 +186,11 @@ export function App() {
       </div>
     </div>
   );
+}
+
+type ConvAction = Parameters<typeof reduce>[1] | { reset: ConversationState };
+function convReducer(state: ConversationState, action: ConvAction): ConversationState {
+  return "reset" in action ? action.reset : reduce(state, action);
 }
 
 /** Extension UI requests. Fire-and-forget methods are ignored for now; dialogs are cancelled. */

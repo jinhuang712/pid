@@ -10,6 +10,14 @@ function on<T>(channel: string, listener: (payload: T) => void) {
 const bridge: Bridge = {
   appInfo: () => ipcRenderer.invoke("app:info"),
   pickFolder: () => ipcRenderer.invoke("folder:pick"),
+  folders: {
+    recent: () => ipcRenderer.invoke("folders:recent"),
+    remember: (dir) => ipcRenderer.invoke("folders:remember", dir),
+  },
+  sessions: {
+    list: (cwd) => ipcRenderer.invoke("sessions:list", cwd),
+    listAll: () => ipcRenderer.invoke("sessions:listAll"),
+  },
   pi: {
     start: (opts) => ipcRenderer.invoke("pi:start", opts),
     command: (key, command) => ipcRenderer.invoke("pi:command", key, command),
