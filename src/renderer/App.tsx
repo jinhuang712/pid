@@ -71,7 +71,9 @@ export function App() {
   const selectFolder = useCallback(
     async (dir: string) => {
       setFolder(dir);
-      setFolders(await bridge.folders.remember(dir));
+      // Persist recency for the next launch, but keep this window's order stable: a click must not reshuffle the tree.
+      await bridge.folders.remember(dir);
+      setFolders((cur) => (cur.includes(dir) ? cur : [...cur, dir]));
       void loadFolder(dir);
     },
     [loadFolder],
