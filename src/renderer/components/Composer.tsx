@@ -1,8 +1,10 @@
-import { type KeyboardEvent, useRef, useState } from "react";
+import { type KeyboardEvent, useRef } from "react";
 
 export type SendMode = "prompt" | "steer" | "followUp";
 
 export interface ComposerProps {
+  text: string;
+  setText: (t: string) => void;
   streaming: boolean;
   onSend: (text: string, mode: SendMode) => void;
   onAbort: () => void;
@@ -12,8 +14,7 @@ export interface ComposerProps {
  * Never disabled. While Pi is running, Enter steers (interrupt and redirect) and
  * Cmd/Ctrl+Enter queues a follow-up (runs after the current work finishes).
  */
-export function Composer({ streaming, onSend, onAbort }: ComposerProps) {
-  const [text, setText] = useState("");
+export function Composer({ text, setText, streaming, onSend, onAbort }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const send = (mode: SendMode) => {

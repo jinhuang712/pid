@@ -3,6 +3,8 @@ import type { SessionSummary } from "@shared/sessions";
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { bridge } from "./bridge";
 import { Composer, type SendMode } from "./components/Composer";
+import { ForkMenu } from "./components/ForkMenu";
+import { Lineage } from "./components/Lineage";
 import { ModelPicker } from "./components/ModelPicker";
 import { QueuePanel } from "./components/QueuePanel";
 import { Sidebar } from "./components/Sidebar";
@@ -16,6 +18,7 @@ export function App() {
   const [piState, setPiState] = useState<RpcSessionState>();
   const [conv, dispatch] = useReducer(convReducer, undefined, emptyConversation);
   const [status, setStatus] = useState<string>();
+  const [draft, setDraft] = useState("");
   const [folders, setFolders] = useState<string[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
@@ -114,6 +117,22 @@ export function App() {
   const clearQueue = () => key && void run(bridge.pi.command(key, { type: "clear_queue" }));
   const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
 
+  const loadForkPoints = useCallback(
+    async () => (key ? (await bridge.pi.command(key, { type: "get_fork_messages" })).messages : []),
+    [key],
+  );
+  /** Pi forks in-process: the running session becomes the new fork. Reload state and timeline from Pi. */
+  const fork = async (entryId: string) => {
+    if (!key) return;
+    const r = await bridge.pi.command(key, { type: "fork", entryId });
+    if (r.cancelled) return;
+    setDraft(r.text); // Pi hands back the forked-from message so it can be edited and resent
+    const { messages } = await bridge.pi.command(key, { type: "get_messages" });
+    dispatch({ reset: fromMessages(messages) });
+    await refreshState();
+    if (folder) await refreshSessions(folder);
+  };
+
   const loadModels = useCallback(
     async () => (key ? (await bridge.pi.command(key, { type: "get_available_models" })).models : []),
     [key],
@@ -131,6 +150,7 @@ export function App() {
         <span className="flex-1" />
         {key && piState && (
           <div className="flex items-center gap-1">
+            <ForkMenu load={loadForkPoints} onFork={(id) => void run(fork(id))} />
             <ModelPicker
               current={piState.model ? { provider: piState.model.provider, id: piState.model.id } : undefined}
               load={loadModels}
@@ -166,6 +186,11 @@ export function App() {
         <main className="flex-1 flex flex-col min-w-0">
           {pi ? (
             <>
+              <Lineage
+                current={sessions.find((s) => s.path === piState?.sessionFile)}
+                sessions={sessions}
+                onOpen={(s) => void startIn(s.cwd, s.path)}
+              />
               <Timeline state={conv} />
               {status && <div className="px-4 py-1 text-xs text-warn">{status}</div>}
               <QueuePanel
@@ -174,7 +199,13 @@ export function App() {
                 followUp={conv.queue.followUp}
                 onClear={clearQueue}
               />
-              <Composer streaming={conv.isStreaming} onSend={send} onAbort={abort} />
+              <Composer
+                text={draft}
+                setText={setDraft}
+                streaming={conv.isStreaming}
+                onSend={send}
+                onAbort={abort}
+              />
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-ink-3 gap-2">
