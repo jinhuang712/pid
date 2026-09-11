@@ -90,14 +90,38 @@ thin PID bridge
 Pi Coding Agent SDK
 ```
 
+## How PID Talks to Pi
+
+- **Live agent**: one `pi --mode rpc` child process per open session (`src/main/pi/rpc-process.ts`).
+  Commands and events are Pi's RPC protocol types, imported from the pinned
+  `@earendil-works/pi-coding-agent` package. PID adds only a process key. This means PID runs the
+  user's installed `pi`, with their extensions, MCP adapter, models, and auth, unchanged.
+- **Read-only discovery**: session lists (`SessionManager.list/listAll`), skills
+  (`loadSkillsFromDir`), and file parsing of `~/.pi/agent` for extensions and MCP config.
+  Nothing under `~/.pi/agent` is ever written by PID.
+- **Renderer state**: the streaming assistant message is rebuilt from `message_update` deltas;
+  `message_end` is authoritative. Everything else is a projection of Pi events.
+- **Extension UI**: the RPC `extension_ui_request` sub-protocol is answered with real dialogs;
+  fire-and-forget methods become toasts and a status strip. TUI-only APIs are not adapted.
+- **Concurrency**: Pi has no session-file lock. PID owns one process per session file it opens and
+  never appends to a file another process is writing.
+
+Keep the pinned Pi dependency equal to the globally installed `pi` version.
+
 ## Repository Layout
 
 ```text
-src/main/       Electron main process: window, IPC, Pi SDK bridge
-src/preload/    typed IPC surface exposed to the renderer
-src/renderer/   React UI
-docs are at the repository root (PROPOSAL, DESIGN, FEATURES, GOALS, GITFLOW)
+src/main/           Electron main: window, menu, IPC, settings, git, ecosystem discovery
+src/main/pi/        Pi bridge: rpc-process, registry, sessions, search, session-read, ecosystem
+src/preload/        typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
+src/renderer/       React UI: components/, pages/, state/, settings, completion, sigils
+src/shared/         types shared by all three processes
+test/               vitest unit tests (real-environment tests are opt-in via env vars)
+docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README
 ```
+
+Dev hooks for headless verification: `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`,
+`PID_FOLLOWUP`, `PID_DRAFT`, `PID_SEARCH`, `PID_PAGE`, `PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`.
 
 ## Verification
 
