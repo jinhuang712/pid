@@ -126,6 +126,7 @@ export function Composer(p: ComposerProps) {
       }
     }
     if (e.key === "Escape" && token) {
+      e.preventDefault();
       setToken(undefined);
       return;
     }
