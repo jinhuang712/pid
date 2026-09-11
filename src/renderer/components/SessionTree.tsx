@@ -1,6 +1,6 @@
 import type { RepoInfo } from "@shared/git";
 import type { SessionSummary } from "@shared/sessions";
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { fuzzyScore } from "../fuzzy";
 import { useSettings } from "../settings";
 import {
@@ -80,6 +80,16 @@ export function SessionTree({
   const { settings } = useSettings();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [revealed, setRevealed] = useState<Record<string, number>>({});
+  // When a session closes (or opens) the folded set changes; fold closed sessions back so the tree
+  // shows live rows only again.
+  const liveKey = Object.values(ws.procs)
+    .map((p) => p.piState.sessionFile ?? p.key)
+    .sort()
+    .join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: liveKey is the trigger, not a value the effect reads
+  useEffect(() => {
+    setRevealed({});
+  }, [liveKey]);
   const [menu, setMenu] = useState<{ x: number; y: number; items: (MenuItem | "sep")[]; header?: string }>();
 
   const orderedFolders = folders;
