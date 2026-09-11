@@ -1,8 +1,10 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { parseAttachments, parseReferences, type SentReference, segment } from "../attachments";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
+import { AttachmentChip, Chip, Glyph } from "./Chips";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
 
@@ -13,7 +15,129 @@ const WINDOW_STEP = 80;
 function userText(m: UserMessage): string {
   return typeof m.content === "string"
     ? m.content
-    : m.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n");
+    : m.content
+        .filter((c) => c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+}
+
+/** Inline images Pi stored on the message itself (the CLI's `@image.png` path); PID never adds these. */
+function userImages(m: UserMessage): { data: string; mimeType: string }[] {
+  if (typeof m.content === "string") return [];
+  return m.content.filter((c) => c.type === "image").map((c) => ({ data: c.data, mimeType: c.mimeType }));
+}
+
+/** Body text with links, `$session` tokens and `@path` mentions drawn as the same chips the composer uses. */
+function Inline({ text }: { text: string }): ReactNode {
+  const parts = useMemo(() => segment(text), [text]);
+  return parts.map((s, i) => {
+    const key = `${i}-${s.text.length}`;
+    switch (s.type) {
+      case "url":
+        return (
+          <a
+            key={key}
+            href={s.href}
+            target="_blank"
+            rel="noreferrer"
+            title={s.href}
+            className="text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink [overflow-wrap:anywhere]"
+          >
+            {s.text}
+          </a>
+        );
+      case "session":
+        return (
+          <span
+            key={key}
+            title={s.token}
+            className="inline-flex items-baseline gap-1 px-1.5 rounded-[5px] bg-warn-soft text-[13px] leading-[1.45] align-baseline"
+          >
+            <span className="font-mono text-warn">{s.token}</span>
+            {s.label && <span className="text-ink-2">{s.label}</span>}
+          </span>
+        );
+      case "mention":
+        return (
+          <span key={key} className="px-1 rounded-[4px] bg-accent-soft text-ink font-mono text-[12.5px]">
+            {s.text}
+          </span>
+        );
+      default:
+        return <span key={key}>{s.text}</span>;
+    }
+  });
+}
+
+/** "last 2 of 40 messages, tool calls…" → "2/40 msgs" */
+function compactScope(scope: string): string {
+  const m = /last (\d+) of (\d+) messages/.exec(scope);
+  return m ? `${m[1]}/${m[2]} msgs` : scope.replace(/,.*$/, "");
+}
+
+/** One sent `$session` block: chip first, the exact appended text one click away. */
+function SentReferenceChip({ r }: { r: SentReference }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Chip
+        glyph={<Glyph kind="session" />}
+        tone="warn"
+        label={
+          <>
+            <span className="font-mono text-warn">{r.token}</span> <span>{r.title}</span>
+          </>
+        }
+        meta={compactScope(r.scope)}
+        title={`${r.folder}\n${r.scope}`}
+        onClick={() => setOpen(!open)}
+        wide
+      />
+      {open && (
+        <pre className="w-full max-h-64 overflow-y-auto rounded-lg border border-line bg-paper-2 px-3 py-2 text-left text-xs text-ink-2 whitespace-pre-wrap font-mono">
+          {r.text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function User({ m }: { m: UserMessage }) {
+  const raw = userText(m);
+  const { body, attachments, references, images } = useMemo(() => {
+    const a = parseAttachments(raw);
+    const r = parseReferences(a.body);
+    return { body: r.body, attachments: a.attachments, references: r.references, images: userImages(m) };
+  }, [raw, m]);
+  const extras = attachments.length + references.length + images.length > 0;
+  return (
+    <div className="timeline-item px-6 py-3 flex flex-col items-end gap-1.5">
+      {body.trim() && (
+        <div className="max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap text-[14px] leading-[1.6] text-ink">
+          <Inline text={body} />
+        </div>
+      )}
+      {extras && (
+        <div className="max-w-[78%] flex flex-wrap justify-end gap-1.5">
+          {images.map((im, i) => (
+            <img
+              // biome-ignore lint/suspicious/noArrayIndexKey: images have no identity beyond position
+              key={i}
+              src={`data:${im.mimeType};base64,${im.data}`}
+              alt="attached"
+              className="max-h-40 max-w-full rounded-[10px] border border-line"
+            />
+          ))}
+          {attachments.map((a) => (
+            <AttachmentChip key={a.path} a={a} onOpen={() => void window.bridge.shell.openPath(a.path)} />
+          ))}
+          {references.map((r) => (
+            <SentReferenceChip key={r.token} r={r} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Thinking({ text, live }: { text: string; live: boolean }) {
@@ -87,15 +211,7 @@ const Assistant = memo(function Assistant({
 });
 
 const Item = memo(function Item({ m, toolRuns }: { m: AgentMessage; toolRuns: Record<string, ToolRun> }) {
-  if (m.role === "user") {
-    return (
-      <div className="timeline-item px-6 py-3 flex justify-end">
-        <div className="max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap text-[14px] leading-[1.6] text-ink">
-          {userText(m)}
-        </div>
-      </div>
-    );
-  }
+  if (m.role === "user") return <User m={m} />;
   if (m.role === "assistant") return <Assistant m={m} live={false} toolRuns={toolRuns} />;
   if (m.role === "toolResult") return null; // shown inside the tool line
   return (

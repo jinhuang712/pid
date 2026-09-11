@@ -30,6 +30,10 @@ const bridge: Bridge = {
   },
   files: {
     list: (cwd) => ipcRenderer.invoke("files:list", cwd),
+    stat: (paths) => ipcRenderer.invoke("files:stat", paths),
+    thumbnail: (path) => ipcRenderer.invoke("files:thumbnail", path),
+    pick: (kind) => ipcRenderer.invoke("files:pick", kind),
+    saveClipboardImage: (bytes, mime) => ipcRenderer.invoke("files:saveClipboardImage", bytes, mime),
   },
   git: {
     repo: (cwd) => ipcRenderer.invoke("git:repo", cwd),
