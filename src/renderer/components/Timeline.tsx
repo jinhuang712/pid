@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import { useEffect, useRef, useState } from "react";
 import { useSettings } from "../settings";
-import type { ConversationState } from "../state/conversation";
+import type { ConversationState, Marker } from "../state/conversation";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
 
@@ -85,7 +85,19 @@ function Item({ m, state }: { m: AgentMessage; state: ConversationState }) {
   );
 }
 
-function MarkerRow({ kind, text, live }: { kind: "compaction" | "retry"; text: string; live?: boolean }) {
+function MarkerRow({ kind, text, detail, live }: Omit<Marker, "afterIndex"> & { live?: boolean }) {
+  if (kind === "turn") {
+    return (
+      <div className="px-6 pt-0.5 pb-3 flex justify-end">
+        <span
+          className="font-mono tabular-nums text-[11px] text-ink-3/70 hover:text-ink-3 transition-colors select-none"
+          title={detail}
+        >
+          {text}
+        </span>
+      </div>
+    );
+  }
   const tone = kind === "retry" ? "text-warn" : "text-ink-3";
   return <div className={`px-6 py-2 text-[12.5px] ${tone} ${live ? "animate-pulse" : ""}`}>{text}</div>;
 }
@@ -114,7 +126,12 @@ export function Timeline({ state }: { state: ConversationState }) {
         {state.markers
           .filter((k) => k.afterIndex < 0)
           .map((k) => (
-            <MarkerRow key={`${k.kind}-${k.text}`} kind={k.kind} text={k.text} />
+            <MarkerRow
+              key={`${k.kind}-${k.afterIndex}-${k.text}`}
+              kind={k.kind}
+              text={k.text}
+              detail={k.detail}
+            />
           ))}
         {state.messages.map((m, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: messages are append-only
@@ -123,7 +140,12 @@ export function Timeline({ state }: { state: ConversationState }) {
             {state.markers
               .filter((k) => k.afterIndex === i)
               .map((k) => (
-                <MarkerRow key={`${k.kind}-${k.text}`} kind={k.kind} text={k.text} />
+                <MarkerRow
+                  key={`${k.kind}-${k.afterIndex}-${k.text}`}
+                  kind={k.kind}
+                  text={k.text}
+                  detail={k.detail}
+                />
               ))}
           </div>
         ))}
