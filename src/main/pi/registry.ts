@@ -55,6 +55,18 @@ export class PiRegistry {
     this.procs.delete(key);
   }
 
+  busyCount(): number {
+    return [...this.procs.values()].filter((p) => p.busy).length;
+  }
+
+  /** Resolves once no process has a turn in flight (or all exited). Polls; turns end via events we already receive. */
+  whenAllIdle(): Promise<void> {
+    return new Promise((resolve) => {
+      const tick = () => (this.busyCount() === 0 ? resolve() : setTimeout(tick, 500));
+      tick();
+    });
+  }
+
   stopAll() {
     for (const p of this.procs.values()) p.kill();
     this.procs.clear();

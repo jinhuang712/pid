@@ -156,6 +156,26 @@ export function SettingsPage() {
                   onChange={(previewLength) => update("sessions", { previewLength })}
                 />
               </Row>
+              <Row
+                label="Reopen sessions on launch"
+                hint="Restores the sessions that were open when PID last quit."
+              >
+                <Toggle
+                  value={settings.sessions.restoreOnLaunch}
+                  onChange={(restoreOnLaunch) => update("sessions", { restoreOnLaunch })}
+                />
+              </Row>
+              <Row
+                label="Quitting while a session runs"
+                hint="Pi runs inside PID and stops with it. Finish: hide the window and quit when the current turns end."
+              >
+                <Segmented
+                  value={settings.sessions.onQuitWhileRunning}
+                  options={["ask", "finish", "quit"]}
+                  labels={{ ask: "Ask", finish: "Finish first", quit: "Quit now" }}
+                  onChange={(onQuitWhileRunning) => update("sessions", { onQuitWhileRunning })}
+                />
+              </Row>
               <Row label="Nest forks under their parent" hint="Off: every session is a flat row.">
                 <Toggle
                   value={settings.sessions.showForkLineage}

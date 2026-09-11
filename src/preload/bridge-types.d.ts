@@ -36,6 +36,10 @@ export interface Bridge {
     remember(dir: string): Promise<string[]>;
     forget(dir: string): Promise<string[]>;
   };
+  openSessions: {
+    get(): Promise<{ openSessions: { cwd: string; path: string }[]; activeSession?: string }>;
+    save(open: { cwd: string; path: string }[], active?: string): Promise<void>;
+  };
   files: {
     list(cwd: string): Promise<string[]>;
   };
