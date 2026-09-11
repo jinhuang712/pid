@@ -30,7 +30,7 @@ let index: Index | undefined;
 let building: Promise<Index> | undefined;
 
 /** Words for Latin script; character bigrams for CJK so Chinese queries match without segmentation. */
-export function tokenize(text: string): string[] {
+export function tokenize(text: string, opts: { parts?: boolean } = { parts: true }): string[] {
   const out: string[] = [];
   const lower = text.toLowerCase();
   for (const m of lower.matchAll(/[a-z0-9_][a-z0-9_.\-/]*|[぀-ヿ㐀-鿿]+/g)) {
@@ -41,7 +41,7 @@ export function tokenize(text: string): string[] {
     } else {
       out.push(t);
       // also index path/identifier parts: "src/renderer/App.tsx" → src, renderer, app.tsx
-      for (const part of t.split(/[/\-.]/)) if (part && part !== t) out.push(part);
+      if (opts.parts) for (const part of t.split(/[/\-.]/)) if (part && part !== t) out.push(part);
     }
   }
   return out;
@@ -155,7 +155,8 @@ function snippet(text: string, terms: string[]): string {
 /** Best hit per session: title matches rank as sessions, message matches carry the matching message. */
 export async function searchSessions(query: string, scope: SearchScope, limit = 30): Promise<SearchHit[]> {
   const idx = await ensureIndex();
-  const terms = [...new Set(tokenize(query))];
+  // Query terms stay whole (no part-splitting): "no-such-term" must not match every doc containing "no".
+  const terms = [...new Set(tokenize(query, { parts: false }))];
   const bySession = new Map<string, SearchHit>();
   const pool = scope.cwd ? idx.docs.filter((d) => d.session.cwd === scope.cwd) : idx.docs;
   if (terms.length === 0) {
@@ -169,8 +170,10 @@ export async function searchSessions(query: string, scope: SearchScope, limit = 
       .slice(0, limit);
   }
   for (const d of pool) {
-    const score = bm25(idx, d, terms);
-    if (score <= 0) continue;
+    const covered = terms.filter((t) => d.tf.has(t)).length;
+    if (covered === 0) continue;
+    // docs matching more of the query outrank docs matching one term many times
+    const score = bm25(idx, d, terms) * (1 + covered / terms.length);
     const boosted = d.kind === "title" ? score * 1.5 : score;
     const cur = bySession.get(d.session.path);
     if (!cur || boosted > cur.score) {
