@@ -1,11 +1,16 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from "electron";
+import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
+import { PiRegistry } from "./pi/registry";
 
 const PAPER_LIGHT = "#f7f7f6";
 const PAPER_DARK = "#131314";
 const paperColor = () => (nativeTheme.shouldUseDarkColors ? PAPER_DARK : PAPER_LIGHT);
+
+let mainWindow: BrowserWindow | undefined;
+const pi = new PiRegistry(() => mainWindow);
 
 function createWindow(): BrowserWindow {
   const state = windowStateKeeper({ defaultWidth: 1440, defaultHeight: 900 });
@@ -68,15 +73,31 @@ ipcMain.handle("app:info", () => ({
   version: app.getVersion(),
   electron: process.versions.electron,
   platform: process.platform,
+  // Dev hooks for headless smoke tests: open a folder and send one prompt on launch.
+  devOpenFolder: process.env.PID_OPEN_FOLDER,
+  devPrompt: process.env.PID_PROMPT,
 }));
 
+ipcMain.handle("folder:pick", async () => {
+  const r = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+  return r.canceled ? undefined : r.filePaths[0];
+});
+
+ipcMain.handle("pi:start", (_e, opts: StartPiOptions) => pi.start(opts));
+ipcMain.handle("pi:command", (_e, key: string, command: PiCommand) => pi.command(key, command));
+ipcMain.handle("pi:uiResponse", (_e, key: string, response: RpcExtensionUIResponse) =>
+  pi.respondUI(key, response),
+);
+ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
+
 app.whenReady().then(() => {
-  createWindow();
+  mainWindow = createWindow();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
   });
 });
 
+app.on("before-quit", () => pi.stopAll());
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
