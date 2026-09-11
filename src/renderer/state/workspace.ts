@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { PiEvent, PiHandle, RpcSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./conversation";
@@ -17,6 +18,11 @@ export interface Proc {
   dialogs: DialogRequest[];
   /** Set when the process exited; the entry stays until dismissed so the user sees why. */
   exit?: string;
+  /**
+   * True while pi is still starting for this session: the conversation is a read-only snapshot
+   * of the file, and the key is a placeholder no command can be sent to yet.
+   */
+  pending?: boolean;
 }
 
 export interface Workspace {
@@ -27,7 +33,10 @@ export interface Workspace {
 export type SessionStatus = "running" | "needs-you" | "idle" | "error" | "closed" | "exited";
 
 export type WorkspaceAction =
-  | { type: "add"; handle: PiHandle }
+  /** `replaces` names the pending placeholder this live process takes over from. */
+  | { type: "add"; handle: PiHandle; replaces?: string }
+  /** A session being resumed: shows the file's snapshot at once, ahead of its process. */
+  | { type: "pending"; key: string; cwd: string; sessionPath: string; messages?: AgentMessage[] }
   | { type: "remove"; key: string }
   | { type: "activate"; key?: string }
   | { type: "event"; key: string; event: PiEvent }
@@ -41,19 +50,42 @@ export const emptyWorkspace = (): Workspace => ({ procs: {} });
 export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
   switch (a.type) {
     case "add": {
+      const placeholder = a.replaces ? ws.procs[a.replaces] : undefined;
       const proc: Proc = {
         key: a.handle.key,
         cwd: a.handle.cwd,
         piState: a.handle.state,
-        conv: emptyConversation(),
+        // keep the snapshot on screen until get_messages replaces it
+        conv: placeholder?.conv ?? emptyConversation(),
         statuses: {},
         widgets: {},
         dialogs: [],
       };
-      let next: Workspace = { ...ws, procs: { ...ws.procs, [proc.key]: proc }, activeKey: proc.key };
+      const { [a.replaces ?? ""]: _placeholder, ...rest } = ws.procs;
+      // the placeholder was active when the user clicked; the real process inherits that, but a
+      // later click elsewhere wins
+      const wasActive = !a.replaces || ws.activeKey === a.replaces;
+      let next: Workspace = {
+        ...ws,
+        procs: { ...rest, [proc.key]: proc },
+        activeKey: wasActive ? proc.key : ws.activeKey,
+      };
       for (const ev of a.handle.earlyEvents)
         next = workspaceReducer(next, { type: "event", key: proc.key, event: ev });
       return next;
+    }
+    case "pending": {
+      const proc: Proc = {
+        key: a.key,
+        cwd: a.cwd,
+        piState: { sessionFile: a.sessionPath } as RpcSessionState,
+        conv: a.messages ? fromMessages(a.messages) : emptyConversation(),
+        statuses: {},
+        widgets: {},
+        dialogs: [],
+        pending: true,
+      };
+      return { ...ws, procs: { ...ws.procs, [proc.key]: proc }, activeKey: proc.key };
     }
     case "remove": {
       const { [a.key]: _gone, ...procs } = ws.procs;
@@ -104,10 +136,15 @@ function patch(ws: Workspace, key: string, f: (p: Proc) => Proc): Workspace {
 
 export function procStatus(p: Proc): SessionStatus {
   if (p.exit) return "exited";
+  if (p.pending) return "running";
   if (p.dialogs.length > 0) return "needs-you";
   if (p.conv.isStreaming || p.conv.compacting) return "running";
-  const last = [...p.conv.messages].reverse().find((m) => m.role === "assistant");
-  if (last && last.role === "assistant" && last.stopReason === "error") return "error";
+  // walk from the end without copying: the tree calls this for every row on every event
+  for (let i = p.conv.messages.length - 1; i >= 0; i--) {
+    const m = p.conv.messages[i];
+    if (m.role !== "assistant") continue;
+    return m.stopReason === "error" ? "error" : "idle";
+  }
   return "idle";
 }
 

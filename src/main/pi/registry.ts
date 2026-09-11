@@ -9,6 +9,7 @@ import type {
 } from "@shared/protocol";
 import type { BrowserWindow } from "electron";
 import { loadSettings } from "../settings";
+import { warmShellEnv } from "../shell-env";
 import { PiProcess } from "./rpc-process";
 
 /** Live pi processes owned by this window. Nothing here is persisted. */
@@ -21,6 +22,7 @@ export class PiRegistry {
     const key = randomUUID();
     let early: PiEvent[] | undefined = [];
     const adv = loadSettings().advanced;
+    await warmShellEnv(); // never probe the login shell synchronously on the IPC thread
     const proc = new PiProcess({
       cwd: opts.cwd,
       sessionPath: opts.sessionPath,

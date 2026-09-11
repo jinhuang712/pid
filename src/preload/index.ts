@@ -54,6 +54,7 @@ const bridge: Bridge = {
     list: (cwd) => ipcRenderer.invoke("sessions:list", cwd),
     listAll: () => ipcRenderer.invoke("sessions:listAll"),
     read: (path) => ipcRenderer.invoke("sessions:read", path),
+    readBranch: (path) => ipcRenderer.invoke("sessions:readBranch", path),
     search: (query, scope) => ipcRenderer.invoke("sessions:search", query, scope),
     dropIndex: () => ipcRenderer.invoke("sessions:dropIndex"),
   },

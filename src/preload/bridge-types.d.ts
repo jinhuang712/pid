@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionView, McpToggle, McpView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
 import type { RepoInfo } from "@shared/git";
 import type {
@@ -75,6 +76,8 @@ export interface Bridge {
     list(cwd: string): Promise<SessionSummary[]>;
     listAll(): Promise<SessionSummary[]>;
     read(path: string): Promise<SessionMessage[]>;
+    /** Full messages of the active branch, straight from the file; shown while pi is still starting. */
+    readBranch(path: string): Promise<AgentMessage[]>;
     search(query: string, scope: SearchScope): Promise<SearchHit[]>;
     dropIndex(): Promise<void>;
   };
