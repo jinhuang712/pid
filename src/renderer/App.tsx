@@ -7,6 +7,7 @@ import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
 import { type DialogRequest, ExtensionDialog, type Toast, Toasts } from "./components/ExtensionUI";
 import { ForkDialog } from "./components/ForkDialog";
+import { Home } from "./components/Home";
 import type { Page } from "./components/NavRail";
 import { QueuePanel } from "./components/QueuePanel";
 import { ReferenceChips } from "./components/ReferenceChips";
@@ -69,6 +70,7 @@ export function App() {
   useEffect(() => {
     void bridge.folders.recent().then((fs) => {
       setFolders(fs);
+      setFolder((cur) => cur ?? fs[0]); // the entry view defaults to the most recent folder
       for (const f of fs) void loadFolder(f);
     });
   }, [loadFolder]);
@@ -256,6 +258,25 @@ export function App() {
   };
   const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
 
+  /** From the entry view: start a session in the chosen folder (asking for one if needed), then send. */
+  const homeSend = (raw: string) => {
+    void run(
+      (async () => {
+        let dir = folder;
+        if (!dir) {
+          dir = await bridge.pickFolder();
+          if (!dir) return;
+          await selectFolder(dir);
+        }
+        const k = await start(dir);
+        if (!k) return;
+        const { text, used } = expandReferences(raw, refs);
+        if (used.length > 0) setRefs((rs) => rs.filter((r) => !used.includes(r)));
+        await bridge.pi.command(k, { type: "prompt", message: text });
+      })(),
+    );
+  };
+
   /** Rebuild Pi's queue without one entry, optionally re-adding it in another role. */
   const requeue = async (edit: (q: { steering: string[]; followUp: string[] }) => Promise<void> | void) => {
     if (!key) return;
@@ -321,6 +342,10 @@ export function App() {
     fork: () => key && setForkKey(key),
   };
   const allSessions = useMemo(() => Object.values(sessionsByFolder).flat(), [sessionsByFolder]);
+  const recentSessions = useMemo(
+    () => [...allSessions].sort((x, y) => y.modified.localeCompare(x.modified)).slice(0, 6),
+    [allSessions],
+  );
   const { complete, pick } = useCompletion({
     key,
     folder,
@@ -350,6 +375,17 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector("dialog[open]")) return; // dialogs handle their own Escape
+      if (page !== "sessions") return setPage("sessions");
+      if (ws.activeKey) dispatch({ type: "activate", key: undefined });
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [page, ws.activeKey]);
 
   useEffect(() => {
     return bridge.onMenuCommand((cmd) => {
@@ -528,65 +564,97 @@ export function App() {
               )}
             </div>
             {active ? (
-              <Timeline state={conv} />
+              <>
+                <Timeline state={conv} />
+                {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}
+                <QueuePanel
+                  streaming={conv.isStreaming}
+                  steering={conv.queue.steering}
+                  followUp={conv.queue.followUp}
+                  onSteerAfterTool={steerAfterTool}
+                  onSteerNow={steerNow}
+                  onRemove={removeQueued}
+                />
+                <ReferenceChips
+                  refs={refs}
+                  onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
+                />
+                <Composer
+                  disabled={false}
+                  folder={active?.cwd ?? folder}
+                  complete={complete}
+                  pick={pick}
+                  text={draft}
+                  setText={setDraft}
+                  streaming={conv.isStreaming}
+                  onSend={active ? send : homeSend}
+                  onAbort={abort}
+                  model={
+                    active?.piState.model
+                      ? {
+                          provider: active.piState.model.provider,
+                          id: active.piState.model.id,
+                          contextWindow: active.piState.model.contextWindow,
+                        }
+                      : undefined
+                  }
+                  thinkingLevel={active?.piState.thinkingLevel}
+                  usage={conv.lastUsage}
+                  compacting={conv.compacting}
+                  loadModels={loadModels}
+                  loadLevels={loadLevels}
+                  onModel={(m) =>
+                    key &&
+                    void run(
+                      bridge.pi
+                        .command(key, { type: "set_model", provider: m.provider, modelId: m.id })
+                        .then(() => refreshState(key)),
+                    )
+                  }
+                  onLevel={(level) =>
+                    key &&
+                    void run(
+                      bridge.pi
+                        .command(key, { type: "set_thinking_level", level })
+                        .then(() => refreshState(key)),
+                    )
+                  }
+                />
+              </>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-ink-3 gap-2 text-sm">
-                <div>
-                  {folder
-                    ? `Pick a session under ${base(folder)} or start a new one.`
-                    : "Open a folder to start."}
-                </div>
-              </div>
+              <Home
+                folder={folder}
+                folders={folders}
+                recent={recentSessions}
+                onPickFolder={() => sessionActions.openFolder("")}
+                onChooseFolder={(dir) => void selectFolder(dir)}
+                onOpenSession={(s) => void run(openSession(s))}
+                composer={
+                  <>
+                    {status && <div className="px-6 py-1 text-xs text-warn text-center">{status}</div>}
+                    <ReferenceChips
+                      refs={refs}
+                      onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
+                    />
+                    <Composer
+                      disabled={false}
+                      folder={folder}
+                      complete={complete}
+                      pick={pick}
+                      text={draft}
+                      setText={setDraft}
+                      streaming={false}
+                      onSend={homeSend}
+                      onAbort={() => {}}
+                      loadModels={loadModels}
+                      loadLevels={loadLevels}
+                      onModel={() => {}}
+                      onLevel={() => {}}
+                    />
+                  </>
+                }
+              />
             )}
-            {status && <div className="px-4 py-1 text-xs text-warn">{status}</div>}
-            <QueuePanel
-              streaming={conv.isStreaming}
-              steering={conv.queue.steering}
-              followUp={conv.queue.followUp}
-              onSteerAfterTool={steerAfterTool}
-              onSteerNow={steerNow}
-              onRemove={removeQueued}
-            />
-            <ReferenceChips refs={refs} onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))} />
-            <Composer
-              disabled={!active}
-              folder={active?.cwd ?? folder}
-              complete={complete}
-              pick={pick}
-              text={draft}
-              setText={setDraft}
-              streaming={conv.isStreaming}
-              onSend={send}
-              onAbort={abort}
-              model={
-                active?.piState.model
-                  ? {
-                      provider: active.piState.model.provider,
-                      id: active.piState.model.id,
-                      contextWindow: active.piState.model.contextWindow,
-                    }
-                  : undefined
-              }
-              thinkingLevel={active?.piState.thinkingLevel}
-              usage={conv.lastUsage}
-              compacting={conv.compacting}
-              loadModels={loadModels}
-              loadLevels={loadLevels}
-              onModel={(m) =>
-                key &&
-                void run(
-                  bridge.pi
-                    .command(key, { type: "set_model", provider: m.provider, modelId: m.id })
-                    .then(() => refreshState(key)),
-                )
-              }
-              onLevel={(level) =>
-                key &&
-                void run(
-                  bridge.pi.command(key, { type: "set_thinking_level", level }).then(() => refreshState(key)),
-                )
-              }
-            />
           </main>
         </div>
       </div>
