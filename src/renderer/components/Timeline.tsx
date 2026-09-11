@@ -17,18 +17,29 @@ function Thinking({ text, live }: { text: string; live: boolean }) {
   const [open, setOpen] = useState(!settings.appearance.thinkingCollapsed);
   if (!text) return null;
   return (
-    <div className="my-1.5">
+    <div>
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="text-xs text-ink-3 hover:text-ink-2 flex items-center gap-1"
+        className="h-6 text-[12.5px] text-ink-3 hover:text-ink-2 flex items-center gap-1.5"
       >
-        <span>{open ? "▾" : "▸"}</span>
-        <span className={live ? "animate-pulse" : ""}>thinking</span>
-        <span className="tabular-nums">· {text.length.toLocaleString()} chars</span>
+        <span className={live ? "animate-pulse" : ""}>{live ? "Thinking" : "Thought"}</span>
+        <span className="tabular-nums">· {(text.length / 4).toFixed(0)} tokens</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <title>{open ? "collapse" : "expand"}</title>
+          <path d="m5 6 3 3 3-3" />
+        </svg>
       </button>
       {open && (
-        <pre className="mt-1 pl-3 border-l-2 border-line text-xs text-ink-2 whitespace-pre-wrap font-sans">
+        <pre className="mt-1 mb-2 pl-3.5 border-l-2 border-line-2 text-[12.5px] leading-relaxed text-ink-2 whitespace-pre-wrap font-sans">
           {text}
         </pre>
       )}
@@ -38,7 +49,7 @@ function Thinking({ text, live }: { text: string; live: boolean }) {
 
 function Assistant({ m, live, state }: { m: AssistantMessage; live: boolean; state: ConversationState }) {
   return (
-    <div className="px-4 py-2">
+    <div className="timeline-item px-6 py-2 flex flex-col gap-2">
       {m.content.map((c, i) => {
         const key = `${m.timestamp}-${i}`;
         if (c.type === "thinking") return <Thinking key={key} text={c.thinking} live={live} />;
@@ -47,11 +58,11 @@ function Assistant({ m, live, state }: { m: AssistantMessage; live: boolean; sta
         return null;
       })}
       {m.stopReason === "error" && m.errorMessage && (
-        <div className="mt-2 rounded-md border border-danger/40 bg-danger-soft text-danger text-xs px-3 py-2 whitespace-pre-wrap">
+        <div className="mt-1 pl-3.5 border-l-2 border-danger/40 text-danger text-[12.5px] whitespace-pre-wrap">
           {m.errorMessage}
         </div>
       )}
-      {m.stopReason === "aborted" && <div className="mt-1 text-xs text-ink-3">aborted</div>}
+      {m.stopReason === "aborted" && <div className="text-[12.5px] text-ink-3">Stopped.</div>}
     </div>
   );
 }
@@ -59,27 +70,23 @@ function Assistant({ m, live, state }: { m: AssistantMessage; live: boolean; sta
 function Item({ m, state }: { m: AgentMessage; state: ConversationState }) {
   if (m.role === "user") {
     return (
-      <div className="px-4 py-2 flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-paper-3 px-4 py-2 whitespace-pre-wrap text-ink">
+      <div className="timeline-item px-6 py-3 flex justify-end">
+        <div className="max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap text-ink leading-[1.55]">
           {userText(m)}
         </div>
       </div>
     );
   }
   if (m.role === "assistant") return <Assistant m={m} live={false} state={state} />;
-  if (m.role === "toolResult") return null; // shown inside the ToolCard
-  return <div className="px-4 py-1 text-xs text-ink-3">{String((m as { role: string }).role)} message</div>;
+  if (m.role === "toolResult") return null; // shown inside the tool line
+  return (
+    <div className="px-6 py-1 text-[12.5px] text-ink-3">{String((m as { role: string }).role)} message</div>
+  );
 }
 
 function MarkerRow({ kind, text, live }: { kind: "compaction" | "retry"; text: string; live?: boolean }) {
-  const tone = kind === "retry" ? "text-warn border-warn/40" : "text-ink-3 border-line";
-  return (
-    <div className="px-4 py-2 flex items-center gap-3 text-xs">
-      <div className={`flex-1 border-t ${tone}`} />
-      <span className={`${tone} ${live ? "animate-pulse" : ""}`}>{text}</span>
-      <div className={`flex-1 border-t ${tone}`} />
-    </div>
-  );
+  const tone = kind === "retry" ? "text-warn" : "text-ink-3";
+  return <div className={`px-6 py-2 text-[12.5px] ${tone} ${live ? "animate-pulse" : ""}`}>{text}</div>;
 }
 
 export function Timeline({ state }: { state: ConversationState }) {
@@ -101,7 +108,7 @@ export function Timeline({ state }: { state: ConversationState }) {
   };
 
   return (
-    <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto py-3">
+    <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto pb-6">
       <div className="max-w-3xl mx-auto">
         {state.markers
           .filter((k) => k.afterIndex < 0)
@@ -119,10 +126,13 @@ export function Timeline({ state }: { state: ConversationState }) {
               ))}
           </div>
         ))}
-        {state.compacting && <MarkerRow kind="compaction" text="compacting context…" live />}
+        {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
         {state.streaming && <Assistant m={state.streaming} live state={state} />}
         {state.isStreaming && !state.streaming && (
-          <div className="px-4 py-2 text-xs text-accent animate-pulse">working…</div>
+          <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+            Working…
+          </div>
         )}
         <div ref={bottom} />
       </div>

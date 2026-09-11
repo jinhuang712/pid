@@ -123,7 +123,7 @@ export function ExtensionDialog({
 }
 
 /** TUI-oriented extensions emit ANSI colour codes; strip them for the GUI. */
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, "g");
 export const stripAnsi = (s: string) => s.replace(ANSI, "");
 
 export interface Toast {
@@ -151,21 +151,6 @@ export function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id:
         >
           {t.message}
         </button>
-      ))}
-    </div>
-  );
-}
-
-/** Extension status entries (setStatus) shown in a thin strip, ANSI stripped. */
-export function StatusStrip({ statuses }: { statuses: Record<string, string> }) {
-  const entries = Object.entries(statuses).filter(([, v]) => v);
-  if (entries.length === 0) return null;
-  return (
-    <div className="shrink-0 h-6 px-4 flex items-center gap-4 border-t border-line text-xs text-ink-3 overflow-x-auto whitespace-nowrap">
-      {entries.map(([k, v]) => (
-        <span key={k} title={k}>
-          {stripAnsi(v)}
-        </span>
       ))}
     </div>
   );

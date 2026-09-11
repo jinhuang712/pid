@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 840" width="1320" height="840">
+<title>PID</title>
+<g transform="translate(0,720) scale(1,-1)">
+<path transform="translate(-60,0)" d="M180 120H420V480H180ZM540 0H180V-120H60V600H540Z" fill="#cfcfc9"/>
+<rect x="600" y="0" width="120" height="600" fill="#cfcfc9"/>
+<path transform="translate(780,0)" d="M420 480H180V120H420ZM540 0H60V600H420V720H540Z" fill="#c2a46a"/>
+</g></svg>

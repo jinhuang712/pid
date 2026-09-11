@@ -11,6 +11,8 @@ import {
   type Workspace,
 } from "../state/workspace";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { Logo } from "./Logo";
+import type { Page } from "./NavRail";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 const ago = (iso: string) => {
@@ -51,7 +53,11 @@ export function SessionTree({
   filterRef,
   onFilter,
   actions,
+  page,
+  onPage,
 }: {
+  page: Page;
+  onPage: (p: Page) => void;
   folders: string[];
   sessionsByFolder: Record<string, SessionSummary[]>;
   repos: Record<string, RepoInfo | null>;
@@ -142,10 +148,21 @@ export function SessionTree({
   return (
     <aside
       style={{ width: settings.appearance.sidebarWidth }}
-      className="shrink-0 border-r border-line bg-paper-2 flex flex-col min-h-0"
+      className="shrink-0 bg-paper-2 flex flex-col min-h-0"
     >
-      <div className="px-2 pt-2.5 pb-1.5">
-        <div className="h-7 px-2 rounded-md bg-paper-3 border border-line flex items-center gap-2 focus-within:border-accent">
+      {/* title row: traffic lights sit at x=16, the mark starts after them */}
+      <div className="drag h-[52px] shrink-0 flex items-center pl-[76px] pr-3">
+        <button
+          type="button"
+          onClick={() => onPage("sessions")}
+          className="no-drag flex items-center"
+          title="Sessions"
+        >
+          <Logo height={14} />
+        </button>
+      </div>
+      <div className="px-3 pb-2.5">
+        <div className="h-[30px] px-2.5 rounded-lg bg-paper-3 flex items-center gap-2 focus-within:ring-1 focus-within:ring-line-2">
           <svg
             width="14"
             height="14"
@@ -164,13 +181,14 @@ export function SessionTree({
             value={filter}
             onChange={(e) => onFilter(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && onFilter("")}
-            placeholder="Filter sessions…  ⌘K"
-            className="flex-1 bg-transparent outline-none text-xs text-ink placeholder:text-ink-3"
+            placeholder="Search sessions"
+            className="flex-1 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink-3"
           />
+          <span className="font-mono text-[11px] text-ink-3">⌘K</span>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-px">
+      <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-px">
         {orderedFolders.map((f) => {
           const repo = repos[f];
           const wt = repo?.worktrees.find((w) => w.path === f);
@@ -198,7 +216,7 @@ export function SessionTree({
             <div key={f}>
               <section
                 aria-label={`Folder ${base(f)}`}
-                className={`group h-7 rounded-md flex items-center gap-2 px-2 ${
+                className={`group h-[30px] rounded-lg flex items-center gap-2 px-2 ${
                   isActive ? "text-ink" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
                 }`}
                 onContextMenu={(e) => openMenu(e, folderMenu(f), f)}
@@ -259,7 +277,7 @@ export function SessionTree({
               </section>
 
               {open && (
-                <div className="pl-3.5 flex flex-col gap-px">
+                <div className="pl-3.5 flex flex-col gap-px mb-1">
                   {unsaved.map((p) => (
                     <SessionRow
                       key={p.key}
@@ -341,14 +359,34 @@ export function SessionTree({
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={() => actions.openFolder("")}
-        className="h-8 px-4 shrink-0 border-t border-line flex items-center text-xs text-ink-3 hover:text-ink"
-      >
-        <span className="flex-1 text-left">Open folder…</span>
-        <span>⌘O</span>
-      </button>
+      <div className="shrink-0 mx-3 mt-2 pt-2 pb-2 border-t border-line flex flex-col gap-px text-[12.5px]">
+        <button
+          type="button"
+          onClick={() => actions.openFolder("")}
+          className="h-7 px-2 rounded-lg flex items-center text-ink-3 hover:text-ink hover:bg-paper-3"
+        >
+          <span className="flex-1 text-left">Open folder…</span>
+          <span className="font-mono text-[11px]">⌘O</span>
+        </button>
+        {(
+          [
+            ["skills", "Skills", "⌘2"],
+            ["mcp", "MCP", "⌘3"],
+            ["extensions", "Extensions", "⌘4"],
+            ["settings", "Settings", "⌘,"],
+          ] as [Page, string, string][]
+        ).map(([id, label, hint]) => (
+          <button
+            type="button"
+            key={id}
+            onClick={() => onPage(id)}
+            className={`h-7 px-2 rounded-lg flex items-center hover:bg-paper-3 ${page === id ? "text-ink bg-paper-3" : "text-ink-3 hover:text-ink"}`}
+          >
+            <span className="flex-1 text-left">{label}</span>
+            <span className="font-mono text-[11px] text-ink-3">{hint}</span>
+          </button>
+        ))}
+      </div>
 
       {menu && (
         <ContextMenu
@@ -415,7 +453,7 @@ function SessionRow({
   return (
     <section
       aria-label={title}
-      className={`group h-7 rounded-md flex items-center gap-2 pr-1 ${nested ? "pl-5" : "pl-2"} ${
+      className={`group h-[30px] rounded-lg flex items-center gap-2 pr-1 ${nested ? "pl-5" : "pl-2"} ${
         active ? "bg-paper-3 text-ink" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
       }`}
       onContextMenu={onMenu}

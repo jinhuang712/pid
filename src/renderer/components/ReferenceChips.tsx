@@ -14,7 +14,7 @@ export function ReferenceChips({
   const open = refs.find((r) => r.token === openToken);
   const rendered = open ? renderReference(open) : undefined;
   return (
-    <div className="shrink-0 px-4">
+    <div className="shrink-0 px-6">
       <div className="max-w-3xl mx-auto flex flex-wrap gap-2 pb-2">
         {refs.map((r) => {
           const rr = renderReference(r);
@@ -22,9 +22,9 @@ export function ReferenceChips({
           return (
             <div
               key={r.token}
-              className="flex items-center gap-1 h-6 pl-2 pr-1 rounded-md bg-accent-soft text-xs text-ink"
+              className="flex items-center gap-1 h-6 pl-2 pr-1 rounded-full bg-paper-3 text-xs text-ink"
             >
-              <span className="font-mono text-accent">{r.token}</span>
+              <span className="font-mono text-warn">{r.token}</span>
               <span className="truncate max-w-48">{label}</span>
               <span className="text-ink-3">
                 · {rr.included}/{rr.total} msgs · ~{estimateTokens(rr.chars).toLocaleString()} tok

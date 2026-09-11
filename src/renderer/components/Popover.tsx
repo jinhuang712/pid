@@ -32,7 +32,7 @@ export function Popover({
   return (
     <div
       ref={ref}
-      className={`no-drag absolute z-30 rounded-lg border border-line bg-paper-2 shadow-xl text-sm ${className}`}
+      className={`no-drag absolute z-30 rounded-xl border border-line-2 bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.3)] text-sm ${className}`}
     >
       {children}
     </div>

@@ -41,7 +41,7 @@ export function ContextMenu({
     <div
       ref={ref}
       style={{ left, top }}
-      className="fixed z-50 w-56 py-1 rounded-lg border border-line bg-paper-2 shadow-xl text-sm"
+      className="fixed z-50 w-56 py-1 rounded-xl border border-line-2 bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.3)] text-sm"
     >
       {header && <div className="px-3 py-1 text-xs text-ink-3 truncate">{header}</div>}
       {items.map((it, i) =>

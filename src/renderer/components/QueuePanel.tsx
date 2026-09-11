@@ -19,23 +19,14 @@ export function QueuePanel({
   onRemove: (kind: "steer" | "followUp", index: number) => void;
 }) {
   if (steering.length === 0 && followUp.length === 0) return null;
-  const btn = "h-5.5 px-2 rounded-md border border-line text-xs disabled:opacity-40";
+  const btn =
+    "h-6 px-1.5 rounded-md text-[12.5px] text-ink-3 hover:text-ink hover:bg-paper-3 disabled:opacity-40";
   return (
-    <div className="shrink-0 px-4">
-      <div className="max-w-3xl mx-auto rounded-lg border border-line bg-paper-2 text-xs">
-        <div className="flex items-center gap-2 px-3 h-7 text-ink-3 border-b border-line">
-          <span>{streaming ? "Active response" : "Idle"}</span>
-          <span>→</span>
-          <span>{steering.length} steer</span>
-          <span>→</span>
-          <span>{followUp.length} follow-up</span>
-        </div>
+    <div className="shrink-0 px-6">
+      <div className="max-w-3xl mx-auto text-[12.5px] flex flex-col">
         {steering.map((t, i) => (
-          <div
-            key={`s-${t}`}
-            className="flex items-center gap-2 px-3 py-1.5 border-b border-line last:border-b-0"
-          >
-            <span className="shrink-0 rounded px-1.5 bg-warn-soft text-warn">steer</span>
+          <div key={`s-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
+            <span className="shrink-0 text-warn">Steer</span>
             <span className="flex-1 text-ink truncate" title={t}>
               {t}
             </span>
@@ -43,7 +34,7 @@ export function QueuePanel({
             <button
               type="button"
               onClick={() => onRemove("steer", i)}
-              className="px-1 text-ink-3 hover:text-danger"
+              className="px-1.5 text-ink-3 hover:text-danger"
               title="Drop"
             >
               ×
@@ -51,11 +42,8 @@ export function QueuePanel({
           </div>
         ))}
         {followUp.map((t, i) => (
-          <div
-            key={`f-${t}`}
-            className="flex items-center gap-2 px-3 py-1.5 border-b border-line last:border-b-0"
-          >
-            <span className="shrink-0 rounded px-1.5 bg-paper-3 text-ink-2">follow-up</span>
+          <div key={`f-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
+            <span className="shrink-0 text-ink-3">Queued</span>
             <span className="flex-1 text-ink truncate" title={t}>
               {t}
             </span>
@@ -64,7 +52,7 @@ export function QueuePanel({
               onClick={() => onSteerNow(i)}
               disabled={!streaming}
               title="Abort the current turn and send this now"
-              className={`${btn} text-warn`}
+              className={btn}
             >
               Steer now
             </button>
@@ -73,14 +61,14 @@ export function QueuePanel({
               onClick={() => onSteerAfterTool(i)}
               disabled={!streaming}
               title="Deliver after the current tool call, before the next model call"
-              className={`${btn} text-ink-2`}
+              className={btn}
             >
               Steer after tool
             </button>
             <button
               type="button"
               onClick={() => onRemove("followUp", i)}
-              className="px-1 text-ink-3 hover:text-danger"
+              className="px-1.5 text-ink-3 hover:text-danger"
               title="Drop"
             >
               ×

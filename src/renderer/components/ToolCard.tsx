@@ -3,6 +3,16 @@ import { useState } from "react";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
 
+const VERB: Record<string, string> = {
+  read: "Read",
+  write: "Write",
+  edit: "Edit",
+  bash: "Run",
+  grep: "Search",
+  find: "Find",
+  ls: "List",
+};
+
 function summarize(call: ToolCall): string {
   const a = call.arguments ?? {};
   switch (call.name) {
@@ -28,61 +38,87 @@ function resultText(run?: ToolRun): string {
   return run.result.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n");
 }
 
+function diffStats(patch?: string): string | undefined {
+  if (!patch) return undefined;
+  let add = 0;
+  let del = 0;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) add++;
+    else if (line.startsWith("-") && !line.startsWith("---")) del++;
+  }
+  return `+${add} −${del}`;
+}
+
+/**
+ * A tool call as one quiet line: chevron · verb · argument. Expanding shows the input and the
+ * output (or the diff) behind a single left rule. Pi, extension, and MCP tools all look like this.
+ */
 export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
   const { settings } = useSettings();
   const [open, setOpen] = useState(!settings.appearance.toolCardsCollapsed);
   const status = run?.status ?? "running";
   const isError = run?.isError === true;
-  const dot = isError ? "bg-danger" : status === "running" ? "bg-accent animate-pulse" : "bg-ok";
   const diff: string | undefined = call.name === "edit" ? run?.result?.details?.diff : undefined;
+  const stats = call.name === "edit" ? diffStats(run?.result?.details?.patch) : undefined;
   const out = resultText(run);
+  const verb = VERB[call.name] ?? call.name;
 
   return (
-    <div className="my-1.5 rounded-lg border border-line bg-paper-2 text-xs">
+    <div className="text-[12.5px]">
       <button
         type="button"
-        className="w-full flex items-center gap-2 px-3 h-8 text-left hover:bg-paper-3 rounded-lg"
         onClick={() => setOpen(!open)}
+        className={`group flex items-center gap-2 h-6 text-left w-full ${isError ? "text-danger" : "text-ink-2 hover:text-ink"}`}
       >
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-        <span className="font-medium text-ink shrink-0">{call.name}</span>
-        <span className="font-mono text-ink-2 truncate">{summarize(call)}</span>
-        <span className="flex-1" />
-        <span className="text-ink-3">{open ? "▾" : "▸"}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          className={`shrink-0 text-ink-3 transition-transform ${open ? "rotate-90" : ""}`}
+        >
+          <title>{open ? "collapse" : "expand"}</title>
+          <path d="m6 4 4 4-4 4" />
+        </svg>
+        <span className={status === "running" ? "animate-pulse" : ""}>{verb}</span>
+        <span className="font-mono text-ink-3 truncate">{summarize(call)}</span>
+        {stats && <span className="text-ink-3 shrink-0">{stats}</span>}
+        {isError && <span className="shrink-0">failed</span>}
       </button>
       {open && (
-        <div className="border-t border-line px-3 py-2 space-y-2">
-          <div>
-            <div className="text-ink-3 mb-1">input</div>
-            <pre className="font-mono whitespace-pre-wrap break-all text-ink-2 max-h-60 overflow-auto">
-              {JSON.stringify(call.arguments, null, 2)}
+        <div className="ml-[5px] pl-3.5 border-l-2 border-line-2 my-1 flex flex-col gap-2">
+          {call.name !== "read" && (
+            <pre className="font-mono whitespace-pre-wrap break-all text-ink-3 max-h-40 overflow-auto text-xs leading-relaxed">
+              {call.name === "bash"
+                ? String(call.arguments?.command ?? "")
+                : JSON.stringify(call.arguments, null, 2)}
             </pre>
-          </div>
+          )}
           {diff ? (
-            <div>
-              <div className="text-ink-3 mb-1">diff</div>
-              <pre className="font-mono whitespace-pre max-h-96 overflow-auto">
-                {diff.split("\n").map((line, i) => {
-                  const kind =
-                    line[0] === "+" ? "bg-add text-ink" : line[0] === "-" ? "bg-del text-ink" : "text-ink-2";
-                  return (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: static diff lines
-                    <div key={i} className={`px-1 ${kind}`}>
-                      {line}
-                    </div>
-                  );
-                })}
-              </pre>
-            </div>
+            <pre className="font-mono whitespace-pre max-h-96 overflow-auto text-xs leading-relaxed">
+              {diff.split("\n").map((line, i) => {
+                const kind =
+                  line[0] === "+" ? "bg-add text-ink" : line[0] === "-" ? "bg-del text-ink" : "text-ink-3";
+                return (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: static diff lines
+                  <div key={i} className={`px-1 -mx-1 rounded-sm ${kind}`}>
+                    {line}
+                  </div>
+                );
+              })}
+            </pre>
           ) : out ? (
-            <div>
-              <div className="text-ink-3 mb-1">output</div>
-              <pre
-                className={`font-mono whitespace-pre-wrap break-all max-h-96 overflow-auto ${isError ? "text-danger" : "text-ink-2"}`}
-              >
-                {out}
-              </pre>
-            </div>
+            <pre
+              className={`font-mono whitespace-pre-wrap break-all max-h-96 overflow-auto text-xs leading-relaxed ${
+                isError ? "text-danger" : "text-ink-2"
+              }`}
+            >
+              {out}
+            </pre>
+          ) : status === "running" ? (
+            <div className="text-ink-3 text-xs animate-pulse">Running…</div>
           ) : null}
         </div>
       )}

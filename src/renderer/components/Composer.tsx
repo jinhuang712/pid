@@ -161,7 +161,7 @@ export function Composer(p: ComposerProps) {
         : "Message Pi…  ⌘Enter to send";
 
   return (
-    <div className="shrink-0 border-t border-line bg-paper px-4 py-3">
+    <div className="shrink-0 px-6 pb-5 pt-2">
       <section
         aria-label="Message composer"
         onDragOver={(e) => {
@@ -170,7 +170,7 @@ export function Composer(p: ComposerProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`relative max-w-3xl mx-auto rounded-xl border bg-paper-2 focus-within:border-accent ${
+        className={`relative max-w-3xl mx-auto rounded-[18px] border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
           dragging ? "border-accent bg-accent-soft" : "border-line-2"
         }`}
       >
@@ -198,9 +198,9 @@ export function Composer(p: ComposerProps) {
           onClick={refreshToken}
           rows={Math.min(8, Math.max(2, text.split("\n").length))}
           placeholder={placeholder}
-          className="w-full resize-none bg-transparent px-3 pt-3 pb-1 outline-none text-ink placeholder:text-ink-3 disabled:opacity-60"
+          className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 outline-none text-[14px] leading-relaxed text-ink placeholder:text-ink-3 disabled:opacity-60"
         />
-        <div className="flex items-center gap-1 px-2 pb-2">
+        <div className="flex items-center gap-0.5 pl-2.5 pr-2.5 pb-2.5 pt-1">
           {p.model && (
             <>
               <ModelPicker current={p.model} load={p.loadModels} onSelect={p.onModel} placement="up" />
@@ -217,33 +217,44 @@ export function Composer(p: ComposerProps) {
           )}
           <span className="flex-1" />
           {streaming ? (
-            <span className="flex items-center gap-1.5 text-xs text-accent pr-1">
+            <span className="flex items-center gap-2 text-[12.5px] text-ink-3 pr-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-              <span>running</span>
+              <span>Running</span>
               <button
                 type="button"
                 onClick={p.onAbort}
-                title="Abort the current run (⌘.)"
-                className="ml-1 w-4 h-4 rounded flex items-center justify-center text-ink-3 hover:text-danger"
+                title="Stop the current run (⌘.)"
+                className="w-4 h-4 rounded flex items-center justify-center text-ink-3 hover:text-danger"
               >
                 <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                  <title>abort</title>
-                  <rect x="3" y="3" width="10" height="10" rx="2" />
+                  <title>stop</title>
+                  <rect x="3" y="3" width="10" height="10" rx="2.5" />
                 </svg>
               </button>
             </span>
           ) : (
-            <span className="text-xs text-ink-3 pr-1">
-              {enterSends ? "Enter to send · ⇧Enter newline" : "⌘Enter to send"}
+            <span className="text-[12.5px] text-ink-3 pr-2">
+              {enterSends ? "↵ send · ⇧↵ newline" : "⌘↵ send"}
             </span>
           )}
           <button
             type="button"
             onClick={send}
             disabled={!text.trim() || p.disabled}
-            className="h-7 px-3 rounded-md bg-accent text-white text-xs font-medium disabled:opacity-40"
+            title={streaming ? "Queue as follow-up" : "Send"}
+            className="w-[30px] h-[30px] rounded-full bg-accent text-paper flex items-center justify-center disabled:opacity-30 transition-opacity"
           >
-            Send
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <title>send</title>
+              <path d="M8 13V3M4 7l4-4 4 4" />
+            </svg>
           </button>
         </div>
       </section>
@@ -267,21 +278,31 @@ function ContextChip({
   if (!contextWindow) return null;
   const used = usage ? usage.input + usage.cacheRead + usage.cacheWrite + usage.output : 0;
   const pct = Math.min(100, Math.round((used / contextWindow) * 100));
-  const tone = pct > 85 ? "bg-danger" : pct > 65 ? "bg-warn" : "bg-accent";
+  const r = 6;
+  const c = 2 * Math.PI * r;
+  const tone = pct > 85 ? "text-danger" : pct > 65 ? "text-warn" : "text-ink-2";
   return (
     <div
-      className="h-6.5 px-2 flex items-center gap-1.5 text-xs text-ink-3"
-      title={`context: ${used.toLocaleString()} of ${contextWindow.toLocaleString()} tokens${compacting ? " · compacting" : ""}`}
+      className="h-[26px] px-2 flex items-center gap-2 text-[12.5px] text-ink-3"
+      title={`context: ${used.toLocaleString()} of ${contextWindow.toLocaleString()} tokens · ${pct}%${compacting ? " · compacting" : ""}`}
     >
-      <div className="w-12 h-1.5 rounded-full bg-paper-3 overflow-hidden">
-        <div
-          className={`h-full ${compacting ? "bg-warn animate-pulse" : tone}`}
-          style={{ width: `${pct}%` }}
+      <svg width="14" height="14" viewBox="0 0 16 16" className={compacting ? "animate-pulse" : ""}>
+        <title>context usage</title>
+        <circle cx="8" cy="8" r={r} fill="none" className="stroke-paper-4" strokeWidth="2" />
+        <circle
+          cx="8"
+          cy="8"
+          r={r}
+          fill="none"
+          className={`${tone} stroke-current`}
+          strokeWidth="2"
+          strokeDasharray={`${(c * pct) / 100} ${c}`}
+          transform="rotate(-90 8 8)"
         />
-      </div>
-      <span className="font-mono text-ink-2 tabular-nums">{fmt(used)}</span>
-      <span>/ {fmt(contextWindow)}</span>
-      <span className="tabular-nums">· {pct}%</span>
+      </svg>
+      <span>
+        <span className="font-mono text-ink-2 tabular-nums">{fmt(used)}</span> / {fmt(contextWindow)}
+      </span>
     </div>
   );
 }

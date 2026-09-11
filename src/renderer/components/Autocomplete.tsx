@@ -23,7 +23,7 @@ export function Autocomplete({
   onPick: (item: AutocompleteItem) => void;
 }) {
   return (
-    <div className="absolute left-0 right-0 bottom-full mb-2 rounded-lg border border-line bg-paper-2 shadow-xl text-xs max-h-72 overflow-y-auto">
+    <div className="absolute left-0 right-0 bottom-full mb-2 rounded-xl border border-line-2 bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.3)] text-xs max-h-72 overflow-y-auto">
       <div className="px-3 py-1.5 text-ink-3 border-b border-line sticky top-0 bg-paper-2">{title}</div>
       {items.length === 0 && <div className="px-3 py-2 text-ink-3">No matches</div>}
       {items.map((it, i) => (

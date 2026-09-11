@@ -5,15 +5,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
-import {
-  type DialogRequest,
-  ExtensionDialog,
-  StatusStrip,
-  type Toast,
-  Toasts,
-} from "./components/ExtensionUI";
+import { type DialogRequest, ExtensionDialog, type Toast, Toasts } from "./components/ExtensionUI";
 import { ForkDialog } from "./components/ForkDialog";
-import { NavRail, type Page } from "./components/NavRail";
+import type { Page } from "./components/NavRail";
 import { QueuePanel } from "./components/QueuePanel";
 import { ReferenceChips } from "./components/ReferenceChips";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
@@ -401,7 +395,6 @@ export function App() {
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
-  const leftWidth = 40 + settings.appearance.sidebarWidth;
 
   const respondDialog = (r: RpcExtensionUIResponse) => {
     if (!key) return;
@@ -495,23 +488,20 @@ export function App() {
       )}
       <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
 
-      <header className="drag h-11 shrink-0 flex items-center border-b border-line text-ink-2">
-        <div style={{ width: leftWidth }} className="shrink-0 pl-[84px] flex items-center">
-          <span className="font-medium text-ink">PID</span>
-        </div>
-        {active && (
-          <div className="flex-1 min-w-0 flex items-center gap-2.5 px-4">
-            <span className="text-ink truncate">{title}</span>
-            <span className="text-line-2">·</span>
-            <span className="font-mono text-xs truncate">{active.cwd.replace(/^\/Users\/[^/]+/, "~")}</span>
-            {branch && <span className="font-mono text-xs text-ink-3">{branch}</span>}
-            {active.exit && <span className="text-xs text-danger truncate">{active.exit}</span>}
-          </div>
-        )}
-      </header>
-
       <div className="flex-1 flex min-h-0">
-        <NavRail page={page} onSelect={setPage} />
+        <SessionTree
+          folders={folders}
+          sessionsByFolder={sessionsByFolder}
+          repos={repos}
+          ws={ws}
+          activeFolder={folder}
+          filter={filter}
+          filterRef={filterRef}
+          onFilter={setFilter}
+          actions={sessionActions}
+          page={page}
+          onPage={setPage}
+        />
         {page === "skills" && (
           <SkillsPage
             folder={folder}
@@ -525,18 +515,18 @@ export function App() {
         {page === "extensions" && <ExtensionsPage folder={folder} />}
         {page === "settings" && <SettingsPage />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
-          <SessionTree
-            folders={folders}
-            sessionsByFolder={sessionsByFolder}
-            repos={repos}
-            ws={ws}
-            activeFolder={folder}
-            filter={filter}
-            filterRef={filterRef}
-            onFilter={setFilter}
-            actions={sessionActions}
-          />
           <main className="flex-1 flex flex-col min-w-0">
+            <div className="drag h-[52px] shrink-0 flex items-center gap-2.5 px-7 text-[12.5px] text-ink-3">
+              {active && (
+                <>
+                  <span className="text-ink truncate">{title}</span>
+                  <span>·</span>
+                  <span className="font-mono truncate">{active.cwd.replace(/^\/Users\/[^/]+/, "~")}</span>
+                  {branch && <span className="font-mono">{branch}</span>}
+                  {active.exit && <span className="text-danger truncate">{active.exit}</span>}
+                </>
+              )}
+            </div>
             {active ? (
               <Timeline state={conv} />
             ) : (
@@ -558,7 +548,6 @@ export function App() {
               onRemove={removeQueued}
             />
             <ReferenceChips refs={refs} onRemove={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))} />
-            {active && <StatusStrip statuses={active.statuses} />}
             <Composer
               disabled={!active}
               folder={active?.cwd ?? folder}
