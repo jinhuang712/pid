@@ -20,7 +20,6 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
   const [open, setOpen] = useState<string>();
 
   const load = () => void bridge.eco.extensions(folder).then(setList);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload when the folder changes
   useEffect(load, [folder]);
 
   const filtered = useMemo(

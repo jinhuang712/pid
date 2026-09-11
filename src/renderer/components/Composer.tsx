@@ -15,6 +15,8 @@ export interface ComposerProps {
   complete: (sigil: Sigil, query: string) => Promise<AutocompleteItem[]>;
   /** Text to put in place of the token, or undefined when the pick performed an action instead. */
   pick: (sigil: Sigil, item: AutocompleteItem) => string | undefined;
+  /** Current folder, used to turn dropped absolute paths into @relative mentions. */
+  folder?: string;
 }
 
 const TITLES: Record<Sigil, string> = {
@@ -28,7 +30,31 @@ const TITLES: Record<Sigil, string> = {
  * Never disabled. While Pi is running, Enter steers (interrupt and redirect) and
  * Cmd/Ctrl+Enter queues a follow-up (runs after the current work finishes).
  */
-export function Composer({ text, setText, streaming, onSend, onAbort, complete, pick }: ComposerProps) {
+export function Composer({
+  text,
+  setText,
+  streaming,
+  onSend,
+  onAbort,
+  complete,
+  pick,
+  folder,
+}: ComposerProps) {
+  const [dragging, setDragging] = useState(false);
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const paths = Array.from(e.dataTransfer.files)
+      .map((f) => window.bridge.pathOf(f))
+      .filter((p): p is string => !!p);
+    if (paths.length === 0) return;
+    const mentions = paths
+      .map((p) => (folder && p.startsWith(`${folder}/`) ? p.slice(folder.length + 1) : p))
+      .map((p) => `@${p}`)
+      .join(" ");
+    setText(`${text}${text && !text.endsWith(" ") ? " " : ""}${mentions} `);
+    requestAnimationFrame(() => ref.current?.focus());
+  };
   const { settings } = useSettings();
   const { enterSends, streamingSendMode } = settings.conversation;
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -130,7 +156,18 @@ export function Composer({ text, setText, streaming, onSend, onAbort, complete, 
   const btn = "h-7 px-3 rounded-md text-xs disabled:opacity-40";
   return (
     <div className="shrink-0 border-t border-line bg-paper px-4 py-3">
-      <div className="relative max-w-3xl mx-auto rounded-xl border border-line-2 bg-paper-2 focus-within:border-accent">
+      <section
+        aria-label="Message composer"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={`relative max-w-3xl mx-auto rounded-xl border bg-paper-2 focus-within:border-accent ${
+          dragging ? "border-accent bg-accent-soft" : "border-line-2"
+        }`}
+      >
         {token && (
           <Autocomplete
             title={TITLES[token.sigil]}
@@ -200,7 +237,7 @@ export function Composer({ text, setText, streaming, onSend, onAbort, complete, 
             </button>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

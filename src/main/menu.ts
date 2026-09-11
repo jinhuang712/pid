@@ -1,0 +1,92 @@
+import { app, type BrowserWindow, Menu, type MenuItemConstructorOptions, shell } from "electron";
+
+export type MenuCommand =
+  | "new-session"
+  | "open-folder"
+  | "search"
+  | "fork"
+  | "compact"
+  | "abort"
+  | "page:sessions"
+  | "page:skills"
+  | "page:mcp"
+  | "page:extensions"
+  | "page:settings";
+
+/** Native application menu. Every entry maps to a renderer command; nothing here talks to Pi directly. */
+export function installMenu(win: () => BrowserWindow | undefined) {
+  const send = (cmd: MenuCommand) => () => win()?.webContents.send("menu:command", cmd);
+  const isMac = process.platform === "darwin";
+
+  const template: MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" as const },
+              { type: "separator" as const },
+              { label: "Settings…", accelerator: "Cmd+,", click: send("page:settings") },
+              { type: "separator" as const },
+              { role: "services" as const },
+              { type: "separator" as const },
+              { role: "hide" as const },
+              { role: "hideOthers" as const },
+              { role: "unhide" as const },
+              { type: "separator" as const },
+              { role: "quit" as const },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: "File",
+      submenu: [
+        { label: "New Session", accelerator: "CmdOrCtrl+N", click: send("new-session") },
+        { label: "Open Folder…", accelerator: "CmdOrCtrl+O", click: send("open-folder") },
+        { type: "separator" },
+        { label: "Search Sessions…", accelerator: "CmdOrCtrl+K", click: send("search") },
+        ...(isMac ? [] : [{ type: "separator" as const }, { role: "quit" as const }]),
+      ],
+    },
+    { role: "editMenu" },
+    {
+      label: "Session",
+      submenu: [
+        { label: "Fork…", accelerator: "CmdOrCtrl+Shift+F", click: send("fork") },
+        { label: "Compact Context", accelerator: "CmdOrCtrl+Shift+C", click: send("compact") },
+        { label: "Abort Run", accelerator: "CmdOrCtrl+.", click: send("abort") },
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { label: "Sessions", accelerator: "CmdOrCtrl+1", click: send("page:sessions") },
+        { label: "Skills", accelerator: "CmdOrCtrl+2", click: send("page:skills") },
+        { label: "MCP", accelerator: "CmdOrCtrl+3", click: send("page:mcp") },
+        { label: "Extensions", accelerator: "CmdOrCtrl+4", click: send("page:extensions") },
+        { label: "Settings", accelerator: "CmdOrCtrl+5", click: send("page:settings") },
+        { type: "separator" },
+        { role: "reload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    { role: "windowMenu" },
+    {
+      role: "help",
+      submenu: [
+        {
+          label: "Pi Documentation",
+          click: () => void shell.openExternal("https://github.com/earendil-works/pi"),
+        },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}

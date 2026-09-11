@@ -146,5 +146,9 @@ export function useCompletion(opts: {
 
 function dedupe(list: SessionSummary[]): SessionSummary[] {
   const seen = new Set<string>();
-  return list.filter((s) => (seen.has(s.path) ? false : (seen.add(s.path), true)));
+  return list.filter((s) => {
+    if (seen.has(s.path)) return false;
+    seen.add(s.path);
+    return true;
+  });
 }

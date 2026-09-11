@@ -12,7 +12,6 @@ export function McpPage({ folder }: { folder?: string }) {
   const [open, setOpen] = useState<string>();
 
   const load = () => void bridge.eco.mcp(folder).then(setView);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload when the folder changes
   useEffect(load, [folder]);
 
   const toolCount = view?.servers.reduce((n, s) => n + (s.cachedTools?.length ?? 0), 0) ?? 0;

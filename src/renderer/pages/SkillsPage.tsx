@@ -17,7 +17,6 @@ export function SkillsPage({ folder, onUse }: { folder?: string; onUse: (name: s
       setLoading(false);
     });
   };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload when the folder changes
   useEffect(load, [folder]);
 
   const filtered = useMemo(
