@@ -71,9 +71,10 @@ export function App() {
   const selectFolder = useCallback(
     async (dir: string) => {
       setFolder(dir);
-      // Persist recency for the next launch, but keep this window's order stable: a click must not reshuffle the tree.
-      await bridge.folders.remember(dir);
       setFolders((cur) => (cur.includes(dir) ? cur : [...cur, dir]));
+      // Persist recency for the next launch, but keep this window's order stable: a click must not reshuffle the tree.
+      // Nothing waits on the write: opening a session must not queue behind it.
+      void bridge.folders.remember(dir);
       void loadFolder(dir);
     },
     [loadFolder],
@@ -81,14 +82,25 @@ export function App() {
 
   // ---- open sessions survive a restart (PID state, derived from live processes; Pi files stay authoritative) ----
   const restored = useRef(false);
+  // One string per distinct set of open sessions: streaming deltas change `ws` on every token but not this.
+  const openSessionsKey = useMemo(() => {
+    const open = Object.values(ws.procs)
+      .filter((p) => p.piState.sessionFile && !p.exit && !p.pending)
+      .map((p) => `${p.cwd}\u0000${p.piState.sessionFile}`);
+    const activePath = ws.activeKey ? ws.procs[ws.activeKey]?.piState.sessionFile : undefined;
+    return JSON.stringify({ open, activePath });
+  }, [ws]);
   useEffect(() => {
     if (!restored.current) return; // don't overwrite the saved list before it has been restored
-    const open = Object.values(ws.procs)
-      .filter((p) => p.piState.sessionFile && !p.exit)
-      .map((p) => ({ cwd: p.cwd, path: p.piState.sessionFile as string }));
-    const activePath = ws.activeKey ? ws.procs[ws.activeKey]?.piState.sessionFile : undefined;
-    void bridge.openSessions.save(open, activePath);
-  }, [ws]);
+    const { open, activePath } = JSON.parse(openSessionsKey) as { open: string[]; activePath?: string };
+    void bridge.openSessions.save(
+      open.map((s) => {
+        const [cwd, path] = s.split("\u0000");
+        return { cwd, path };
+      }),
+      activePath,
+    );
+  }, [openSessionsKey]);
 
   // ---- notifications ----
   const notify = useCallback(
@@ -112,12 +124,31 @@ export function App() {
   }, []);
 
   // ---- pi processes ----
+  /** Placeholders the user closed before their process came up; the process is stopped on arrival. */
+  const cancelledPending = useRef(new Set<string>());
   const start = useCallback(
     async (cwd: string, sessionPath?: string) => {
       setStatus(sessionPath ? "resuming session…" : "starting pi…");
+      // Resuming: show the file's messages now, while pi spawns and loads its extensions.
+      // Reading the file and starting the process run side by side; the snapshot wins the race by seconds.
+      let pendingKey: string | undefined;
+      if (sessionPath) {
+        pendingKey = `pending:${crypto.randomUUID()}`;
+        dispatch({ type: "pending", key: pendingKey, cwd, sessionPath });
+        const k = pendingKey;
+        void bridge.sessions
+          .readBranch(sessionPath)
+          .then((messages) => dispatch({ type: "messages", key: k, conv: fromMessages(messages) }))
+          .catch(() => {}); // pi's get_messages fills the timeline in a moment anyway
+      }
       try {
         const handle = await bridge.pi.start({ cwd, sessionPath });
-        dispatch({ type: "add", handle });
+        if (pendingKey && cancelledPending.current.delete(pendingKey)) {
+          void bridge.pi.stop(handle.key);
+          setStatus(undefined);
+          return undefined;
+        }
+        dispatch({ type: "add", handle, replaces: pendingKey });
         for (const ev of handle.earlyEvents)
           if (ev.type === "extension_ui_request" && ev.method === "notify") toast(ev.message, ev.notifyType);
         if (sessionPath) {
@@ -127,6 +158,7 @@ export function App() {
         setStatus(undefined);
         return handle.key;
       } catch (e) {
+        if (pendingKey) dispatch({ type: "remove", key: pendingKey });
         setStatus(String(e));
       }
     },
@@ -137,12 +169,11 @@ export function App() {
     dispatch({ type: "state", key: k, piState: await bridge.pi.command(k, { type: "get_state" }) });
   }, []);
 
+  // Subscribe once; the handler reads the latest closure through a ref instead of
+  // re-registering IPC listeners on every render (there is one render per streamed token).
+  const onPiEvent = useRef<(k: string, event: PiEvent) => void>(() => {});
   useEffect(() => {
-    const offEvent = bridge.pi.onEvent(({ key: k, event }) => {
-      const proc = ws.procs[k];
-      if (!proc) return;
-      handleEvent(k, proc.cwd, event);
-    });
+    const offEvent = bridge.pi.onEvent(({ key: k, event }) => onPiEvent.current(k, event));
     const offExit = bridge.pi.onExit(({ key: k, code, stderr }) => {
       dispatch({
         type: "exit",
@@ -154,7 +185,12 @@ export function App() {
       offEvent();
       offExit();
     };
-  });
+  }, []);
+  onPiEvent.current = (k, event) => {
+    const proc = ws.procs[k];
+    if (!proc) return;
+    handleEvent(k, proc.cwd, event);
+  };
 
   const handleEvent = (k: string, cwd: string, event: PiEvent) => {
     if (event.type === "extension_ui_request") {
@@ -188,7 +224,8 @@ export function App() {
       if (s.path.startsWith("proc:")) return dispatch({ type: "activate", key: s.path.slice(5) });
       const live = procForSession(ws, s.path);
       if (live) return dispatch({ type: "activate", key: live.key });
-      if (s.cwd !== folder) await selectFolder(s.cwd);
+      // folder bookkeeping (recency, git, session list) runs alongside the start, not ahead of it
+      if (s.cwd !== folder) void selectFolder(s.cwd);
       await start(s.cwd, s.path);
     },
     [ws, folder, selectFolder, start],
@@ -197,6 +234,7 @@ export function App() {
   const ensureLive = useCallback(
     async (s: SessionSummary): Promise<string | undefined> => {
       const live = procForSession(ws, s.path);
+      if (live?.pending) return undefined; // still starting; nothing can be sent yet
       if (live) return live.key;
       return start(s.cwd, s.path);
     },
@@ -224,7 +262,8 @@ export function App() {
       void selectFolder(dir);
     },
     newSession: (dir) => {
-      void selectFolder(dir).then(() => start(dir));
+      void selectFolder(dir);
+      void run(start(dir));
     },
     openSession: (s) => void run(openSession(s)),
     fork: (s) =>
@@ -242,7 +281,8 @@ export function App() {
     closeProcess: (s) => {
       const live = procForSession(ws, s.path);
       if (!live) return;
-      void bridge.pi.stop(live.key);
+      if (live.pending) cancelledPending.current.add(live.key);
+      else void bridge.pi.stop(live.key);
       dispatch({ type: "remove", key: live.key });
     },
     reveal: (path) => void bridge.shell.reveal(path),
@@ -435,13 +475,19 @@ export function App() {
       if (cmd === "compact") return actions.compact();
       if (cmd === "abort") return abort();
       if (cmd === "close-session") {
-        if (!key) return;
-        void bridge.pi.stop(key);
-        dispatch({ type: "remove", key });
+        closeActive();
         setDraft("");
       }
     });
   });
+
+  /** Close the active session's process (or cancel it if it is still starting). */
+  const closeActive = () => {
+    if (!active) return;
+    if (active.pending) cancelledPending.current.add(active.key);
+    else void bridge.pi.stop(active.key);
+    dispatch({ type: "remove", key: active.key });
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
@@ -522,11 +568,7 @@ export function App() {
       id: "close",
       label: "Close session",
       hint: ["⌘", "W"],
-      run: () => {
-        if (!key) return;
-        void bridge.pi.stop(key);
-        dispatch({ type: "remove", key });
-      },
+      run: closeActive,
     },
     { id: "fork", label: "Fork from…", hint: ["⌘", "⇧", "F"], run: () => key && setForkKey(key) },
     { id: "compact", label: "Compact context", run: () => actions.compact() },
@@ -621,7 +663,9 @@ export function App() {
             </div>
             {active ? (
               <>
-                <Timeline state={conv} />
+                {/* keyed per session file (stable across the pending → live handover): scroll position
+                    and the rendered window start fresh for each session */}
+                <Timeline key={active.piState.sessionFile ?? key} state={conv} />
                 {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}
                 <QueuePanel
                   streaming={conv.isStreaming}
