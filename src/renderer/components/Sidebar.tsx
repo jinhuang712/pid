@@ -1,5 +1,6 @@
 import type { SessionSummary } from "@shared/sessions";
 import { useSettings } from "../settings";
+import { WorktreePanel } from "./WorktreePanel";
 
 function base(p: string) {
   return p.split("/").filter(Boolean).pop() ?? p;
@@ -22,7 +23,9 @@ export function Sidebar({
   onPickFolder,
   onNewSession,
   onOpenSession,
+  onStatus,
 }: {
+  onStatus: (msg: string) => void;
   folders: string[];
   folder?: string;
   sessions: SessionSummary[];
@@ -69,6 +72,7 @@ export function Sidebar({
         })}
         {folders.length === 0 && <div className="px-3 py-2 text-xs text-ink-3">No recent folders</div>}
       </div>
+      {folder && <WorktreePanel folder={folder} onOpen={onOpenFolder} onStatus={onStatus} />}
       {folder && (
         <>
           <div className="px-2 pt-3 pb-1 flex items-center justify-between border-t border-line mt-2">

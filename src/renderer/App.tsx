@@ -368,6 +368,7 @@ export function App() {
             onPickFolder={() => void openFolder()}
             onNewSession={() => folder && void startIn(folder)}
             onOpenSession={(s) => void startIn(s.cwd, s.path)}
+            onStatus={setStatus}
           />
           <main className="flex-1 flex flex-col min-w-0">
             {pi ? (

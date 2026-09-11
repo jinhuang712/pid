@@ -1,11 +1,13 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { AddWorktreeOptions, RemoveWorktreeOptions } from "@shared/git";
 import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { listFiles } from "./files";
+import { addWorktree, removeWorktree, repoInfo, worktreeSafety } from "./git";
 import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions } from "./pi/search";
@@ -99,6 +101,10 @@ ipcMain.handle("folder:pick", async () => {
 
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
+ipcMain.handle("git:repo", (_e, cwd: string) => repoInfo(cwd));
+ipcMain.handle("git:worktreeAdd", (_e, o: AddWorktreeOptions) => addWorktree(o));
+ipcMain.handle("git:worktreeSafety", (_e, cwd: string, path: string) => worktreeSafety(cwd, path));
+ipcMain.handle("git:worktreeRemove", (_e, o: RemoveWorktreeOptions) => removeWorktree(o));
 ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:set", (_e, s: PidSettings) => saveSettings(s));
 ipcMain.handle("pi:home", () => readPiHome());
