@@ -14,9 +14,13 @@ const bridge: Bridge = {
     recent: () => ipcRenderer.invoke("folders:recent"),
     remember: (dir) => ipcRenderer.invoke("folders:remember", dir),
   },
+  files: {
+    list: (cwd) => ipcRenderer.invoke("files:list", cwd),
+  },
   sessions: {
     list: (cwd) => ipcRenderer.invoke("sessions:list", cwd),
     listAll: () => ipcRenderer.invoke("sessions:listAll"),
+    read: (path) => ipcRenderer.invoke("sessions:read", path),
   },
   pi: {
     start: (opts) => ipcRenderer.invoke("pi:start", opts),

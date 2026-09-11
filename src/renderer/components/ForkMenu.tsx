@@ -8,13 +8,16 @@ export interface ForkPoint {
 
 /** Pi's native fork: pick a user message, Pi creates a new session lineage from that point. */
 export function ForkMenu({
+  open,
+  setOpen,
   load,
   onFork,
 }: {
+  open: boolean;
+  setOpen: (o: boolean) => void;
   load: () => Promise<ForkPoint[]>;
   onFork: (entryId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [points, setPoints] = useState<ForkPoint[]>([]);
   useEffect(() => {
     if (open) void load().then(setPoints);

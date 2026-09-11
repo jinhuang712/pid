@@ -3,7 +3,9 @@ import { join } from "node:path";
 import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
+import { listFiles } from "./files";
 import { PiRegistry } from "./pi/registry";
+import { readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
 import { loadState, rememberFolder } from "./pid-state";
 
@@ -80,6 +82,7 @@ ipcMain.handle("app:info", () => ({
   devPrompt: process.env.PID_PROMPT,
   devFollowUp: process.env.PID_FOLLOWUP,
   devOpenSession: process.env.PID_OPEN_SESSION,
+  devDraft: process.env.PID_DRAFT,
 }));
 
 ipcMain.handle("folder:pick", async () => {
@@ -89,8 +92,10 @@ ipcMain.handle("folder:pick", async () => {
 
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
+ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
 ipcMain.handle("sessions:list", (_e, cwd: string) => listSessions(cwd));
 ipcMain.handle("sessions:listAll", () => listAllSessions());
+ipcMain.handle("sessions:read", (_e, path: string) => readSessionMessages(path));
 
 ipcMain.handle("pi:start", (_e, opts: StartPiOptions) => pi.start(opts));
 ipcMain.handle("pi:command", (_e, key: string, command: PiCommand) => pi.command(key, command));
