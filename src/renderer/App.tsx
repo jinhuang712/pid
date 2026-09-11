@@ -510,33 +510,36 @@ export function App() {
         {page === "settings" && <SettingsPage />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <main className="flex-1 flex flex-col min-w-0">
-            <div className="drag h-[52px] shrink-0 flex items-center gap-2.5 px-7 whitespace-nowrap">
+            {/* two tiers: the title owns line one; folder and branch share line two */}
+            <div className="drag h-[52px] shrink-0 flex flex-col justify-center gap-0.5 px-7 whitespace-nowrap">
               {active && (
                 <>
-                  <span className={`truncate min-w-0 ${title ? "text-ink" : "text-ink-2"}`}>
+                  <div className={`truncate leading-tight ${title ? "text-ink" : "text-ink-2"}`}>
                     {title ?? "New session"}
-                  </span>
-                  <span className="text-line-2 shrink-0">·</span>
-                  <Pill title={active.cwd}>
-                    <FolderGlyph />
-                    {base(active.cwd)}
-                  </Pill>
-                  {worktreeLine ? (
-                    <Pill title="pi-worktree binding for this session" tone="warn">
-                      <BranchGlyph />
-                      <span className="font-mono">{worktreeLine}</span>
-                    </Pill>
-                  ) : (
-                    branch && (
-                      <Pill title={branch}>
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] text-ink-3 leading-tight min-w-0">
+                    <span className="inline-flex items-center gap-1 shrink-0" title={active.cwd}>
+                      <FolderGlyph />
+                      {base(active.cwd)}
+                    </span>
+                    {worktreeLine ? (
+                      <span
+                        className="inline-flex items-center gap-1 min-w-0 truncate text-warn"
+                        title="pi-worktree binding for this session"
+                      >
                         <BranchGlyph />
-                        <span className="font-mono">
-                          {branch.length > 24 ? `${branch.slice(0, 23)}…` : branch}
+                        <span className="font-mono truncate">{worktreeLine}</span>
+                      </span>
+                    ) : (
+                      branch && (
+                        <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
+                          <BranchGlyph />
+                          <span className="font-mono truncate">{branch}</span>
                         </span>
-                      </Pill>
-                    )
-                  )}
-                  {active.exit && <span className="text-danger truncate text-[12.5px]">{active.exit}</span>}
+                      )
+                    )}
+                    {active.exit && <span className="text-danger truncate">{active.exit}</span>}
+                  </div>
                 </>
               )}
             </div>
@@ -650,20 +653,6 @@ function firstUserText(messages: ReturnType<typeof emptyConversation>["messages"
 }
 
 export type { RpcExtensionUIRequest };
-
-/** Title-bar pill: never wraps, never truncates; the full value lives in the tooltip. */
-function Pill({ children, title, tone }: { children: React.ReactNode; title?: string; tone?: "warn" }) {
-  return (
-    <span
-      title={title}
-      className={`no-drag shrink-0 inline-flex items-center gap-1.5 h-[22px] px-2 rounded-full bg-paper-2 text-[12px] ${
-        tone === "warn" ? "text-warn" : "text-ink-2"
-      }`}
-    >
-      {children}
-    </span>
-  );
-}
 
 function FolderGlyph() {
   return (
