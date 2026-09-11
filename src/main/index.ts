@@ -5,6 +5,7 @@ import type { SearchScope } from "@shared/sessions";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { listFiles } from "./files";
+import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions } from "./pi/search";
 import { readSessionMessages } from "./pi/session-read";
@@ -86,6 +87,7 @@ ipcMain.handle("app:info", () => ({
   devOpenSession: process.env.PID_OPEN_SESSION,
   devDraft: process.env.PID_DRAFT,
   devSearch: process.env.PID_SEARCH,
+  devPage: process.env.PID_PAGE,
 }));
 
 ipcMain.handle("folder:pick", async () => {
@@ -95,6 +97,12 @@ ipcMain.handle("folder:pick", async () => {
 
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
+ipcMain.handle("pi:home", () => readPiHome());
+ipcMain.handle("eco:skills", (_e, cwd?: string) => listSkills(cwd));
+ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
+ipcMain.handle("eco:mcp", (_e, cwd?: string) => readMcp(cwd));
+ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(path));
+ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(path));
 ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
 ipcMain.handle("sessions:list", (_e, cwd: string) => listSessions(cwd));
 ipcMain.handle("sessions:listAll", () => listAllSessions());
