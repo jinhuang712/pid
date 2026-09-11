@@ -1,11 +1,13 @@
-import { stat } from "node:fs/promises";
 import type { SearchHit, SearchScope, SessionSummary } from "@shared/sessions";
 import { readSessionMessages } from "./session-read";
 
 /**
  * BM25 over Pi session files: one document per message plus one per session title.
- * The index is a derived in-memory structure, rebuilt when the sessions directory changes.
- * Deleting it costs nothing; the JSONL files stay the only source of truth.
+ * The index is a derived in-memory structure, kept per file and refreshed when a file's
+ * mtime or size changes. Deleting it costs nothing; the JSONL files stay the only source of truth.
+ *
+ * This module is pure Node: it runs inside the search utility process (see search-worker.ts)
+ * so building the index never blocks the main process, and in-process as a fallback and in tests.
  */
 const sdk = () => import("@earendil-works/pi-coding-agent");
 
@@ -14,9 +16,14 @@ interface Doc {
   kind: "title" | "message";
   role?: "user" | "assistant";
   text: string;
-  tokens: string[];
   tf: Map<string, number>;
   len: number;
+}
+
+interface FileDocs {
+  modified: number;
+  size: number;
+  docs: Doc[];
 }
 
 interface Index {
@@ -28,6 +35,10 @@ interface Index {
 
 let index: Index | undefined;
 let building: Promise<Index> | undefined;
+/** Per-file documents, keyed by session path; only changed files are re-read. */
+const files = new Map<string, FileDocs>();
+/** A refresh checks every session file's mtime; do that at most this often. */
+const RECHECK_MS = 2000;
 
 /** Words for Latin script; character bigrams for CJK so Chinese queries match without segmentation. */
 export function tokenize(text: string, opts: { parts?: boolean } = { parts: true }): string[] {
@@ -47,16 +58,7 @@ export function tokenize(text: string, opts: { parts?: boolean } = { parts: true
   return out;
 }
 
-async function sessionsDirMtime(): Promise<number> {
-  try {
-    const s = await stat(`${process.env.HOME ?? ""}/.pi/agent/sessions`);
-    return s.mtimeMs;
-  } catch {
-    return 0;
-  }
-}
-
-function toSummary(s: {
+type Info = {
   path: string;
   id: string;
   cwd: string;
@@ -66,7 +68,9 @@ function toSummary(s: {
   modified: Date;
   messageCount: number;
   firstMessage: string;
-}): SessionSummary {
+};
+
+function toSummary(s: Info): SessionSummary {
   return {
     path: s.path,
     id: s.id,
@@ -80,27 +84,59 @@ function toSummary(s: {
   };
 }
 
+function makeDoc(
+  session: SessionSummary,
+  kind: Doc["kind"],
+  text: string,
+  role?: Doc["role"],
+): Doc | undefined {
+  const tokens = tokenize(text);
+  if (tokens.length === 0) return undefined;
+  const tf = new Map<string, number>();
+  for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
+  return { session, kind, role, text, tf, len: tokens.length };
+}
+
+async function docsFor(s: Info): Promise<Doc[]> {
+  const session = toSummary(s);
+  const docs: Doc[] = [];
+  const title = makeDoc(session, "title", `${s.name ?? ""} ${s.firstMessage}`);
+  if (title) docs.push(title);
+  try {
+    for (const m of await readSessionMessages(s.path)) {
+      const d = makeDoc(session, "message", m.text.slice(0, 4000), m.role);
+      if (d) docs.push(d);
+    }
+  } catch {
+    // unreadable file: title only
+  }
+  return docs;
+}
+
 async function build(): Promise<Index> {
   const { SessionManager } = await sdk();
-  const list = await SessionManager.listAll();
-  const docs: Doc[] = [];
-  const add = (session: SessionSummary, kind: Doc["kind"], text: string, role?: Doc["role"]) => {
-    const tokens = tokenize(text);
-    if (tokens.length === 0) return;
-    const tf = new Map<string, number>();
-    for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
-    docs.push({ session, kind, role, text, tokens, tf, len: tokens.length });
-  };
+  const { stat } = await import("node:fs/promises");
+  const list = (await SessionManager.listAll()) as Info[];
+  const seen = new Set<string>();
   for (const s of list) {
-    const session = toSummary(s);
-    add(session, "title", `${s.name ?? ""} ${s.firstMessage}`);
+    seen.add(s.path);
+    // listAll reports the header's modified time; the file's own stat catches appended turns.
+    let modified = s.modified.getTime();
+    let size = -1;
     try {
-      for (const m of await readSessionMessages(s.path))
-        add(session, "message", m.text.slice(0, 4000), m.role);
+      const st = await stat(s.path);
+      modified = Math.max(modified, st.mtimeMs);
+      size = st.size;
     } catch {
-      // unreadable file: title only
+      // vanished between list and stat; keep whatever we had
     }
+    const cur = files.get(s.path);
+    if (cur && cur.modified === modified && cur.size === size) continue;
+    files.set(s.path, { modified, size, docs: await docsFor(s) });
   }
+  for (const p of files.keys()) if (!seen.has(p)) files.delete(p);
+  const docs: Doc[] = [];
+  for (const f of files.values()) docs.push(...f.docs);
   const df = new Map<string, number>();
   for (const d of docs) for (const t of d.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
   const avgLen = docs.reduce((n, d) => n + d.len, 0) / Math.max(1, docs.length);
@@ -109,18 +145,24 @@ async function build(): Promise<Index> {
 
 export async function ensureIndex(force = false): Promise<Index> {
   if (building) return building;
-  const mtime = await sessionsDirMtime();
-  if (index && !force && mtime <= index.builtAt) return index;
-  building = build().then((i) => {
-    index = i;
-    building = undefined;
-    return i;
-  });
+  if (index && !force && Date.now() - index.builtAt < RECHECK_MS) return index;
+  building = build().then(
+    (i) => {
+      index = i;
+      building = undefined;
+      return i;
+    },
+    (e) => {
+      building = undefined;
+      throw e;
+    },
+  );
   return building;
 }
 
 export function dropIndex() {
   index = undefined;
+  files.clear();
 }
 
 const K1 = 1.2;
