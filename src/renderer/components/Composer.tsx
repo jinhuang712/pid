@@ -51,6 +51,30 @@ export function Composer(p: ComposerProps) {
   const [cursor, setCursor] = useState(0);
   const [dragging, setDragging] = useState(false);
   const seq = useRef(0);
+  // Long-text mode. Turns itself on when the draft overflows the compact box;
+  // the user can toggle it, and a manual collapse holds until the draft is sent.
+  const [expanded, setExpanded] = useState(false);
+  const pinnedCompact = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || el.value !== text) return;
+    el.style.height = "auto";
+    const cap = expanded ? Math.round(window.innerHeight * 0.6) : compactCap(el);
+    const h = el.scrollHeight;
+    if (!expanded && !pinnedCompact.current && h > cap) {
+      setExpanded(true);
+      return;
+    }
+    el.style.height = `${Math.min(h, cap)}px`;
+    el.style.overflowY = h > cap ? "auto" : "hidden";
+  }, [text, expanded]);
+
+  const toggleExpanded = () => {
+    pinnedCompact.current = expanded;
+    setExpanded(!expanded);
+    requestAnimationFrame(() => ref.current?.focus());
+  };
 
   const refreshToken = useCallback(() => {
     const el = ref.current;
@@ -105,6 +129,8 @@ export function Composer(p: ComposerProps) {
     onSend(t);
     setText("");
     setToken(undefined);
+    setExpanded(false);
+    pinnedCompact.current = false;
     requestAnimationFrame(() => ref.current?.focus());
   };
 
@@ -197,7 +223,7 @@ export function Composer(p: ComposerProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`relative max-w-3xl mx-auto rounded-[18px] border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
+        className={`relative mx-auto rounded-[18px] ${expanded ? "max-w-5xl" : "max-w-3xl"} border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
           dragging ? "border-accent bg-accent-soft" : "border-line-2"
         }`}
       >
@@ -223,7 +249,7 @@ export function Composer(p: ComposerProps) {
             if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") refreshToken();
           }}
           onClick={refreshToken}
-          rows={Math.min(8, Math.max(2, text.split("\n").length))}
+          rows={2}
           placeholder={placeholder}
           className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 outline-none text-[14px] leading-relaxed text-ink placeholder:text-ink-3 disabled:opacity-60"
         />
@@ -273,6 +299,15 @@ export function Composer(p: ComposerProps) {
               )}
             </span>
           )}
+          <button
+            type="button"
+            onClick={toggleExpanded}
+            title={expanded ? "Collapse editor" : "Expand editor"}
+            aria-pressed={expanded}
+            className="w-[30px] h-[30px] mr-1 rounded-full flex items-center justify-center text-ink-3 hover:text-ink transition-colors"
+          >
+            <ExpandIcon expanded={expanded} />
+          </button>
           <button
             type="button"
             onClick={send}
@@ -340,5 +375,27 @@ function ContextChip({
         <span className="font-mono text-ink-2 tabular-nums">{fmt(used)}</span> / {fmt(contextWindow)}
       </span>
     </div>
+  );
+}
+
+/** Height of the compact box: eight lines of text plus the textarea's own padding. */
+function compactCap(el: HTMLTextAreaElement): number {
+  const cs = getComputedStyle(el);
+  const line = Number.parseFloat(cs.lineHeight) || 22;
+  const pad = Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom);
+  return Math.round(line * 8 + pad);
+}
+
+/** Diagonal arrows: pointing out to expand, pointing in to collapse. */
+function ExpandIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <title>{expanded ? "collapse" : "expand"}</title>
+      {expanded ? (
+        <path d="M14 2L9.5 6.5M9.5 6.5V3M9.5 6.5H13M2 14l4.5-4.5M6.5 9.5V13M6.5 9.5H3" />
+      ) : (
+        <path d="M9.5 6.5L14 2M14 2h-3.5M14 2v3.5M6.5 9.5L2 14M2 14h3.5M2 14v-3.5" />
+      )}
+    </svg>
   );
 }
