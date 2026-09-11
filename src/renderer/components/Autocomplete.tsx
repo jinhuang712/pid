@@ -38,10 +38,16 @@ export function Autocomplete({
           }}
           className={`w-full flex items-center gap-2 px-3 h-7 text-left ${i === cursor ? "bg-paper-3" : ""}`}
         >
-          {it.icon && <span className="text-ink-3 w-4 shrink-0 text-center">{it.icon}</span>}
-          <span className="text-ink truncate">{it.label}</span>
-          {it.detail && <span className="text-ink-3 truncate">{it.detail}</span>}
-          <span className="flex-1" />
+          {/* the name never gives way to the description; the description truncates */}
+          <span className="text-ink shrink-0 max-w-[55%] truncate" title={it.label}>
+            {it.label}
+          </span>
+          {it.detail && (
+            <span className="text-ink-3 flex-1 min-w-0 truncate" title={it.detail}>
+              {it.detail}
+            </span>
+          )}
+          {!it.detail && <span className="flex-1" />}
           {it.hint && <span className="text-ink-3 shrink-0">{it.hint}</span>}
         </button>
       ))}

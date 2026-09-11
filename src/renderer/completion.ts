@@ -6,6 +6,9 @@ import { fuzzyFilter } from "./fuzzy";
 import { refToken, type SessionReference } from "./session-reference";
 import type { Sigil } from "./sigils";
 
+const RANK: Record<string, number> = { skill: 0, prompt: 1, extension: 2 };
+const firstLine = (t?: string) => (t ?? "").split(/\r?\n/)[0].trim();
+
 export interface PiActions {
   compact: () => void;
   newSession: () => void;
@@ -41,7 +44,7 @@ export function useCompletion(opts: {
           if (files.current?.folder !== folder)
             files.current = { folder, list: await bridge.files.list(folder) };
           const list = fuzzyFilter(files.current.list, query, (f) => f).slice(0, 50);
-          return list.map((f) => ({ id: f, label: f.split("/").pop() ?? f, detail: f, icon: "@" }));
+          return list.map((f) => ({ id: f, label: f.split("/").pop() ?? f, detail: f }));
         }
         case "/": {
           if (!key) return [];
@@ -49,16 +52,22 @@ export function useCompletion(opts: {
             const { commands: cs } = await bridge.pi.command(key, { type: "get_commands" });
             commands.current = {
               key,
-              list: cs.map((c) => ({
-                id: c.name,
-                label: `/${c.name}`,
-                detail: c.description,
-                hint: c.source,
-                icon: "/",
-              })),
+              // "/" means Skill: skills first, then prompt templates, then extension commands.
+              list: [...cs]
+                .sort((x, y) => RANK[x.source] - RANK[y.source] || x.name.localeCompare(y.name))
+                .map((c) => ({
+                  id: c.name,
+                  // Pi names skill commands "skill:<name>"; show the skill's own name.
+                  label: c.source === "skill" ? c.name.replace(/^skill:/, "") : c.name,
+                  detail: firstLine(c.description),
+                  hint: c.source === "skill" ? undefined : c.source,
+                })),
             };
           }
-          return fuzzyFilter(commands.current.list, query, (c) => `${c.id} ${c.detail ?? ""}`);
+          // match on the command name only; descriptions make every query match everything
+          const matched = fuzzyFilter(commands.current.list, query, (c) => c.label);
+          // skills stay ahead of extension commands whatever the fuzzy score says
+          return matched.sort((x, y) => RANK[x.hint ?? "skill"] - RANK[y.hint ?? "skill"]);
         }
         case "#": {
           if (!key) return [];
@@ -67,22 +76,20 @@ export function useCompletion(opts: {
             levels.current = { key, list: ls };
           }
           const items: AutocompleteItem[] = [
-            { id: "compact", label: "#compact", detail: "Compact context now (Pi compaction)", icon: "#" },
-            { id: "fork", label: "#fork", detail: "Fork from a user message", icon: "#" },
-            { id: "new", label: "#new", detail: "New session in this folder", icon: "#" },
-            { id: "abort", label: "#abort", detail: "Abort the current run", icon: "#" },
+            { id: "compact", label: "compact", detail: "Compact context now (Pi compaction)" },
+            { id: "fork", label: "fork", detail: "Fork from a user message" },
+            { id: "new", label: "new", detail: "New session in this folder" },
+            { id: "abort", label: "abort", detail: "Abort the current run" },
             {
               id: "clear-queue",
-              label: "#clear-queue",
+              label: "clear-queue",
               detail: "Drop queued steers and follow-ups",
-              icon: "#",
             },
-            { id: "export", label: "#export", detail: "Export session to HTML", icon: "#" },
+            { id: "export", label: "export", detail: "Export session to HTML" },
             ...levels.current.list.map((l) => ({
               id: `thinking:${l}`,
-              label: `#thinking:${l}`,
+              label: `thinking:${l}`,
               detail: "Set thinking level",
-              icon: "#",
             })),
           ];
           return fuzzyFilter(items, query, (i) => i.label);
@@ -99,7 +106,6 @@ export function useCompletion(opts: {
             label: s.name || s.firstMessage || "(empty)",
             detail: s.cwd.replace(/^\/Users\/[^/]+/, "~"),
             hint: `${s.messageCount} msgs`,
-            icon: "$",
           }));
         }
         default:
