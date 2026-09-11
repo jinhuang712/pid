@@ -1,13 +1,7 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import type {
-  AddWorktreeOptions,
-  RemoveWorktreeOptions,
-  RepoInfo,
-  WorktreeInfo,
-  WorktreeSafety,
-} from "@shared/git";
+import type { RepoInfo, WorktreeInfo } from "@shared/git";
 
 const run = promisify(execFile);
 
@@ -70,32 +64,4 @@ function parseWorktrees(porcelain: string, currentRoot: string): WorktreeInfo[] 
   }
   flush();
   return out;
-}
-
-export async function addWorktree(o: AddWorktreeOptions): Promise<string> {
-  const args = ["worktree", "add"];
-  if (o.createBranch) args.push("-b", o.branch, o.path, o.from ?? "HEAD");
-  else args.push(o.path, o.branch);
-  await git(o.cwd, args);
-  return resolve(o.cwd, o.path);
-}
-
-export async function worktreeSafety(cwd: string, path: string): Promise<WorktreeSafety> {
-  const info = await repoInfo(cwd);
-  const isMain = info?.worktrees.find((w) => w.path === path)?.isMain ?? false;
-  let changes: string[] = [];
-  try {
-    changes = (await git(path, ["status", "--porcelain"])).split("\n").filter(Boolean).slice(0, 50);
-  } catch {
-    // unreadable worktree: report as unclean so the UI asks before forcing
-    changes = ["(could not read status)"];
-  }
-  return { clean: changes.length === 0, changes, isMain };
-}
-
-export async function removeWorktree(o: RemoveWorktreeOptions): Promise<void> {
-  const args = ["worktree", "remove"];
-  if (o.force) args.push("--force");
-  args.push(o.path);
-  await git(o.cwd, args);
 }

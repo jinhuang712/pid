@@ -103,15 +103,11 @@ Viewer-first. Not an IDE.
 
 ## P6 — Worktree
 
-- detect worktrees `[Desktop]` (via Git)
-- list worktrees `[Desktop]`
-- branch association `[Desktop]`
-- open worktree as Folder `[Desktop]`
-- create worktree `[Desktop]`
-- create branch + worktree `[Desktop]`
-- sessions under worktree `[Pi]`
-- safe removal `[Desktop]`
-- sibling navigation `[Desktop]`
+- show the session's pi-worktree binding on the title bar `[Pi]` `[Presentation]`
+- folder branch on folder rows and the title bar `[Presentation]` (via Git)
+- sessions under a worktree-bound session stay under their origin folder `[Pi]`
+
+Worktree creation, landing, and removal are Pi's (`pi-worktree`). PID adds no worktree UI of its own.
 
 ## P7 — MCP
 

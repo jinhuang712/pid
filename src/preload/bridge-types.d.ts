@@ -1,5 +1,5 @@
 import type { ExtensionView, McpView, PiHome, SkillView } from "@shared/ecosystem";
-import type { AddWorktreeOptions, RemoveWorktreeOptions, RepoInfo, WorktreeSafety } from "@shared/git";
+import type { RepoInfo } from "@shared/git";
 import type {
   PiCommand,
   PiEventEnvelope,
@@ -41,9 +41,6 @@ export interface Bridge {
   };
   git: {
     repo(cwd: string): Promise<RepoInfo | undefined>;
-    addWorktree(o: AddWorktreeOptions): Promise<string>;
-    worktreeSafety(cwd: string, path: string): Promise<WorktreeSafety>;
-    removeWorktree(o: RemoveWorktreeOptions): Promise<void>;
   };
   settings: {
     get(): Promise<PidSettings>;

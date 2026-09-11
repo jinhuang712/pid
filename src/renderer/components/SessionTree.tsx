@@ -1,6 +1,6 @@
 import type { RepoInfo } from "@shared/git";
 import type { SessionSummary } from "@shared/sessions";
-import { type MouseEvent, useMemo, useState } from "react";
+import { type MouseEvent, useState } from "react";
 import { fuzzyScore } from "../fuzzy";
 import { useSettings } from "../settings";
 import {
@@ -11,6 +11,7 @@ import {
   type Workspace,
 } from "../state/workspace";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { Keys } from "./Key";
 import { Logo } from "./Logo";
 import type { Page } from "./NavRail";
 
@@ -34,8 +35,6 @@ export interface SessionActions {
   exportHtml: (s: SessionSummary) => void;
   closeProcess: (s: SessionSummary) => void;
   reveal: (path: string) => void;
-  newWorktree: (dir: string) => void;
-  removeWorktree: (dir: string, path: string) => void;
   forgetFolder: (dir: string) => void;
 }
 
@@ -73,25 +72,7 @@ export function SessionTree({
   const [more, setMore] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; items: (MenuItem | "sep")[]; header?: string }>();
 
-  // Worktrees of known repositories appear as folders too, right after their repository.
-  const orderedFolders = useMemo(() => {
-    const out: string[] = [];
-    const seen = new Set<string>();
-    for (const f of folders) {
-      if (seen.has(f)) continue;
-      out.push(f);
-      seen.add(f);
-      const repo = repos[f];
-      if (!repo) continue;
-      for (const w of repo.worktrees) {
-        if (!seen.has(w.path)) {
-          out.push(w.path);
-          seen.add(w.path);
-        }
-      }
-    }
-    return out;
-  }, [folders, repos]);
+  const orderedFolders = folders;
 
   const activeProc = ws.activeKey ? ws.procs[ws.activeKey] : undefined;
   const activePath = activeProc?.piState.sessionFile;
@@ -127,19 +108,9 @@ export function SessionTree({
   ];
 
   const folderMenu = (f: string): (MenuItem | "sep")[] => {
-    const repo = repos[f];
-    const wt = repo?.worktrees.find((w) => w.path === f);
     return [
       { label: "New session", hint: "⌘N", onClick: () => actions.newSession(f) },
       { label: "Reveal in Finder", onClick: () => actions.reveal(f) },
-      "sep",
-      { label: "New worktree…", disabled: !repo, onClick: () => actions.newWorktree(f) },
-      {
-        label: "Remove this worktree",
-        danger: true,
-        disabled: !wt || wt.isMain,
-        onClick: () => actions.removeWorktree(f, f),
-      },
       "sep",
       { label: "Forget folder", onClick: () => actions.forgetFolder(f) },
     ];
@@ -184,7 +155,7 @@ export function SessionTree({
             placeholder="Search sessions"
             className="flex-1 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-ink-3"
           />
-          <span className="font-mono text-[11px] text-ink-3">⌘K</span>
+          <Keys keys={["⌘", "K"]} />
         </div>
       </div>
 
@@ -389,7 +360,7 @@ export function SessionTree({
             className="h-7 px-2 rounded-lg flex items-center text-ink-3 hover:text-ink hover:bg-paper-3"
           >
             <span className="flex-1 text-left">Open folder…</span>
-            <span className="font-mono text-[11px]">⌘O</span>
+            <Keys keys={["⌘", "O"]} />
           </button>
           <button
             type="button"
@@ -399,7 +370,7 @@ export function SessionTree({
             }`}
           >
             <span className="flex-1 text-left">Settings</span>
-            <span className="font-mono text-[11px] text-ink-3">⌘,</span>
+            <Keys keys={["⌘", ","]} />
           </button>
         </div>
       </div>

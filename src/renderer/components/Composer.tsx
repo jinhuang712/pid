@@ -4,6 +4,7 @@ import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, use
 import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
+import { Keys, SigilChip } from "./Key";
 import { ModelPicker } from "./ModelPicker";
 import { ThinkingPicker } from "./ThinkingPicker";
 
@@ -154,12 +155,37 @@ export function Composer(p: ComposerProps) {
   };
 
   const placeholder = p.disabled
-    ? "Open a folder or pick a session to talk to Pi."
+    ? "Choose a folder first."
     : streaming
-      ? "Pi is working…  Enter queues a follow-up"
-      : enterSends
-        ? "Message Pi…  / skill · @ file · # action · $ session"
-        : "Message Pi…  ⌘Enter to send";
+      ? "Pi is working. Anything you send now waits its turn."
+      : "Ask Pi about this folder";
+
+  const insertSigil = (sig: string) => {
+    const el = ref.current;
+    const at = el ? el.selectionStart : text.length;
+    const before = text.slice(0, at);
+    const after = text.slice(at);
+    const pad = before && !/\s$/.test(before) ? " " : "";
+    const next = `${before}${pad}${sig}${after}`;
+    setText(next);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const caret = before.length + pad.length + sig.length;
+      el.setSelectionRange(caret, caret);
+      refreshToken();
+    });
+  };
+  // With model chips present the footer is tight: sigils shrink to bare key caps.
+  const compact = !!p.model;
+  const sigils = (
+    <span className="flex items-center gap-0.5">
+      <SigilChip sigil="/" label="skill" compact={compact} onClick={() => insertSigil("/")} />
+      <SigilChip sigil="@" label="file" compact={compact} onClick={() => insertSigil("@")} />
+      <SigilChip sigil="#" label="action" compact={compact} onClick={() => insertSigil("#")} />
+      <SigilChip sigil="$" label="session" compact={compact} onClick={() => insertSigil("$")} />
+    </span>
+  );
 
   return (
     <div className="shrink-0 px-6 pb-5 pt-2">
@@ -216,11 +242,13 @@ export function Composer(p: ComposerProps) {
               <ContextChip usage={p.usage} contextWindow={p.model.contextWindow} compacting={p.compacting} />
             </>
           )}
+          <span className={p.model ? "ml-1" : ""}>{sigils}</span>
           <span className="flex-1" />
           {streaming ? (
             <span className="flex items-center gap-2 text-[12.5px] text-ink-3 pr-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
               <span>Running</span>
+              <Keys keys={["⏎"]} label="queue" className="ml-1" />
               <button
                 type="button"
                 onClick={p.onAbort}
@@ -234,8 +262,15 @@ export function Composer(p: ComposerProps) {
               </button>
             </span>
           ) : (
-            <span className="text-[12.5px] text-ink-3 pr-2">
-              {enterSends ? "↵ send · ⇧↵ newline" : "⌘↵ send"}
+            <span className="flex items-center gap-3 pr-2">
+              {enterSends ? (
+                <>
+                  <Keys keys={["⏎"]} label="send" />
+                  <Keys keys={["⇧", "⏎"]} label="newline" />
+                </>
+              ) : (
+                <Keys keys={["⌘", "⏎"]} label="send" />
+              )}
             </span>
           )}
           <button
@@ -284,7 +319,7 @@ function ContextChip({
   const tone = pct > 85 ? "text-danger" : pct > 65 ? "text-warn" : "text-ink-2";
   return (
     <div
-      className="h-[26px] px-2 flex items-center gap-2 text-[12.5px] text-ink-3"
+      className="h-[26px] px-2 flex items-center gap-2 text-[12.5px] text-ink-3 whitespace-nowrap"
       title={`context: ${used.toLocaleString()} of ${contextWindow.toLocaleString()} tokens · ${pct}%${compacting ? " · compacting" : ""}`}
     >
       <svg width="14" height="14" viewBox="0 0 16 16" className={compacting ? "animate-pulse" : ""}>
