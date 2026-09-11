@@ -1,3 +1,4 @@
+import type { ProjectState, ToggleScope } from "@shared/ecosystem";
 import type { ReactNode } from "react";
 
 /** Common frame for the ecosystem pages: title, one-line note, search box, content. */
@@ -7,6 +8,7 @@ export function PageShell({
   search,
   onSearch,
   actions,
+  toolbar,
   children,
 }: {
   title: string;
@@ -14,6 +16,8 @@ export function PageShell({
   search?: string;
   onSearch?: (q: string) => void;
   actions?: ReactNode;
+  /** A row under the note, for scope selection and similar controls. */
+  toolbar?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -25,6 +29,7 @@ export function PageShell({
           {actions}
         </div>
         {note && <div className="mt-1 text-xs text-ink-3">{note}</div>}
+        {toolbar && <div className="mt-3">{toolbar}</div>}
         {onSearch && (
           <input
             value={search ?? ""}
@@ -64,7 +69,117 @@ export function PathLink({ path, label }: { path: string; label?: string }) {
       title={`Reveal ${path}`}
       className="font-mono text-xs text-ink-3 hover:text-accent truncate max-w-full text-left"
     >
-      {label ?? path.replace(/^\/Users\/[^/]+/, "~")}
+      {label ?? tilde(path)}
     </button>
   );
+}
+
+export const tilde = (path: string) => path.replace(/^\/Users\/[^/]+/, "~");
+
+export function Toggle({
+  value,
+  onChange,
+  disabled,
+  title,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={value}
+      disabled={disabled}
+      title={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange(!value);
+      }}
+      className={`relative shrink-0 w-9 h-5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${value ? "bg-accent" : "bg-paper-4"}`}
+    >
+      <span
+        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? "left-4.5" : "left-0.5"}`}
+      />
+    </button>
+  );
+}
+
+/**
+ * Global / Project switch for the ecosystem pages, with the project directory shown and
+ * changeable. Global writes Pi's ~/.pi/agent settings; Project writes <dir>/.pi overrides.
+ */
+export function ScopeBar({
+  scope,
+  projectDir,
+  explicitProject,
+  onScope,
+  onProjectDir,
+  globalFile = "~/.pi/agent/settings.json",
+  projectFile = ".pi/",
+}: {
+  scope: ToggleScope;
+  projectDir?: string;
+  explicitProject: boolean;
+  /** What the global switch writes, shown as a hint. */
+  globalFile?: string;
+  /** What the project switch writes, relative to the project directory. */
+  projectFile?: string;
+  onScope: (s: ToggleScope) => void;
+  onProjectDir: (dir?: string) => void;
+}) {
+  const pick = () => void window.bridge.pickFolder().then((d) => d && onProjectDir(d));
+  return (
+    <div className="flex items-center gap-3 text-xs min-w-0">
+      <div className="inline-flex rounded-md border border-line bg-paper-2 p-0.5">
+        {(["global", "project"] as const).map((o) => (
+          <button
+            type="button"
+            key={o}
+            onClick={() => onScope(o)}
+            className={`h-6 px-2.5 rounded ${o === scope ? "bg-paper-4 text-ink" : "text-ink-2 hover:text-ink"}`}
+          >
+            {o === "global" ? "Global" : "Project"}
+          </button>
+        ))}
+      </div>
+      <span className="text-ink-3 shrink-0">
+        {scope === "global" ? `writes ${globalFile}` : `writes ${projectFile} in`}
+      </span>
+      {scope === "project" && (
+        <>
+          {projectDir ? (
+            <PathLink path={projectDir} />
+          ) : (
+            <span className="text-warn">no project directory — choose one</span>
+          )}
+          <button
+            type="button"
+            onClick={pick}
+            className="h-6 px-2 rounded-md text-ink-2 hover:bg-paper-3 hover:text-ink shrink-0"
+          >
+            Choose…
+          </button>
+          {explicitProject && (
+            <button
+              type="button"
+              onClick={() => onProjectDir(undefined)}
+              title="Follow the active folder again"
+              className="h-6 px-2 rounded-md text-ink-3 hover:bg-paper-3 hover:text-ink shrink-0"
+            >
+              Use active folder
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Badge explaining a project-layer override state; nothing for "inherit". */
+export function OverrideBadge({ state }: { state?: ProjectState }) {
+  if (!state || state === "inherit") return null;
+  return <Badge tone={state === "load" ? "ok" : "warn"}>project {state}</Badge>;
 }

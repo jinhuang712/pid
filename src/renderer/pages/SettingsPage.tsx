@@ -2,7 +2,7 @@ import type { PidSettings } from "@shared/settings";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useSettings } from "../settings";
-import { PageShell } from "./PageShell";
+import { PageShell, Toggle } from "./PageShell";
 
 type SectionId = keyof PidSettings;
 
@@ -274,22 +274,6 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </div>
       <div className="shrink-0 w-64 flex justify-end">{children}</div>
     </div>
-  );
-}
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={value}
-      onClick={() => onChange(!value)}
-      className={`relative w-9 h-5 rounded-full transition-colors ${value ? "bg-accent" : "bg-paper-4"}`}
-    >
-      <span
-        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? "left-4.5" : "left-0.5"}`}
-      />
-    </button>
   );
 }
 

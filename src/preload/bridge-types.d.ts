@@ -1,4 +1,4 @@
-import type { ExtensionView, McpView, PiHome, SkillView } from "@shared/ecosystem";
+import type { ExtensionView, McpToggle, McpView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
 import type { RepoInfo } from "@shared/git";
 import type {
   PiCommand,
@@ -62,6 +62,10 @@ export interface Bridge {
     skills(cwd?: string): Promise<SkillView[]>;
     extensions(cwd?: string): Promise<ExtensionView[]>;
     mcp(cwd?: string): Promise<McpView>;
+    /** Write a skill/extension on-off state into Pi's settings, as `pi config` would. */
+    setResource(req: ResourceToggle): Promise<void>;
+    /** Write an MCP server's `disabled` flag into mcp.json, as `/mcp` would. */
+    setMcp(req: McpToggle): Promise<void>;
   };
   shell: {
     reveal(path: string): Promise<void>;

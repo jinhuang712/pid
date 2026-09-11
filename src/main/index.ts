@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { McpToggle, ResourceToggle } from "@shared/ecosystem";
 import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
@@ -14,6 +15,7 @@ import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions } from "./pi/search";
 import { readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
+import { setMcpDisabled, setResourceState } from "./pi/toggles";
 import { forgetFolder, loadState, type OpenSession, rememberFolder, saveOpenSessions } from "./pid-state";
 import { applyTheme, loadSettings, saveSettings } from "./settings";
 
@@ -118,6 +120,8 @@ ipcMain.handle("pi:home", () => readPiHome());
 ipcMain.handle("eco:skills", (_e, cwd?: string) => listSkills(cwd));
 ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
 ipcMain.handle("eco:mcp", (_e, cwd?: string) => readMcp(cwd));
+ipcMain.handle("eco:setResource", (_e, req: ResourceToggle) => setResourceState(req));
+ipcMain.handle("eco:setMcp", (_e, req: McpToggle) => setMcpDisabled(req));
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(path));
 ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(path));
 ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
