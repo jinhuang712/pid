@@ -26,4 +26,14 @@ export interface SearchHit {
   session: SessionSummary;
   snippet: string;
   score: number;
+  /** Whether the best match was the session's title or one of its messages. */
+  kind: "title" | "message";
+  role?: "user" | "assistant";
+}
+
+/** A directory the palette can open: recent, a sibling/child of a recent one, or a path you typed. */
+export interface FolderSuggestion {
+  path: string;
+  source: "recent" | "nearby" | "typed";
+  isRepo: boolean;
 }

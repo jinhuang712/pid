@@ -6,6 +6,7 @@ import type { PidSettings } from "@shared/settings";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { listFiles } from "./files";
+import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
@@ -102,6 +103,7 @@ ipcMain.handle("folder:pick", async () => {
 ipcMain.handle("folders:recent", () => loadState().recentFolders);
 ipcMain.handle("folders:remember", (_e, dir: string) => rememberFolder(dir));
 ipcMain.handle("folders:forget", (_e, dir: string) => forgetFolder(dir));
+ipcMain.handle("folders:suggest", (_e, query: string) => suggestFolders(query, loadState().recentFolders));
 ipcMain.handle("state:openSessions", () => {
   const st = loadState();
   return { openSessions: st.openSessions, activeSession: st.activeSession };

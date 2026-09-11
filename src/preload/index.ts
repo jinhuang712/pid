@@ -22,6 +22,7 @@ const bridge: Bridge = {
     recent: () => ipcRenderer.invoke("folders:recent"),
     remember: (dir) => ipcRenderer.invoke("folders:remember", dir),
     forget: (dir) => ipcRenderer.invoke("folders:forget", dir),
+    suggest: (query) => ipcRenderer.invoke("folders:suggest", query),
   },
   openSessions: {
     get: () => ipcRenderer.invoke("state:openSessions"),

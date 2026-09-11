@@ -9,6 +9,7 @@ import { type DialogRequest, ExtensionDialog, stripAnsi, type Toast, Toasts } fr
 import { ForkDialog } from "./components/ForkDialog";
 import { Home } from "./components/Home";
 import type { Page } from "./components/NavRail";
+import { Palette, type PaletteAction } from "./components/Palette";
 import { QueuePanel } from "./components/QueuePanel";
 import { ReferenceChips } from "./components/ReferenceChips";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
@@ -36,8 +37,7 @@ export function App() {
   const [refs, setRefs] = useState<SessionReference[]>([]);
   const [status, setStatus] = useState<string>();
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [filter, setFilter] = useState("");
-  const filterRef = useRef<HTMLInputElement>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [forkKey, setForkKey] = useState<string>();
   const [renameKey, setRenameKey] = useState<string>();
 
@@ -263,6 +263,12 @@ export function App() {
   };
   const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
 
+  /** From the palette: a fresh session in the current folder, prompted with the typed text. */
+  const askInFolder = (text: string) => {
+    if (!folder) return;
+    void run(start(folder).then((k) => k && bridge.pi.command(k, { type: "prompt", message: text })));
+  };
+
   /** From the entry view: start a session in the chosen folder (asking for one if needed), then send. */
   const homeSend = (raw: string) => {
     void run(
@@ -401,9 +407,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setPage("sessions");
-        filterRef.current?.focus();
-        filterRef.current?.select();
+        setPaletteOpen((o) => !o);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -424,7 +428,7 @@ export function App() {
   useEffect(() => {
     return bridge.onMenuCommand((cmd) => {
       if (cmd.startsWith("page:")) return setPage(cmd.slice(5) as Page);
-      if (cmd === "search") return setPage("sessions"), filterRef.current?.focus();
+      if (cmd === "search") return setPaletteOpen(true);
       if (cmd === "open-folder") return sessionActions.openFolder("");
       if (cmd === "new-session") return folder && sessionActions.newSession(folder);
       if (cmd === "fork") return key && setForkKey(key);
@@ -443,7 +447,7 @@ export function App() {
   useEffect(() => {
     void bridge.appInfo().then(async (info) => {
       if (info.devPage) setPage(info.devPage as Page);
-      if (info.devSearch !== undefined) setFilter(info.devSearch);
+      if (info.devSearch !== undefined) setPaletteOpen(true);
       if (!info.devOpenFolder) return;
       await selectFolder(info.devOpenFolder);
       const k = await start(info.devOpenFolder, info.devOpenSession);
@@ -506,9 +510,46 @@ export function App() {
     : undefined;
   const dialog = renameReq ?? active?.dialogs[0];
 
+  const paletteActions: PaletteAction[] = [
+    {
+      id: "new",
+      label: "New session",
+      hint: ["⌘", "N"],
+      run: () => folder && sessionActions.newSession(folder),
+    },
+    { id: "open", label: "Open folder…", hint: ["⌘", "O"], run: () => sessionActions.openFolder("") },
+    {
+      id: "close",
+      label: "Close session",
+      hint: ["⌘", "W"],
+      run: () => {
+        if (!key) return;
+        void bridge.pi.stop(key);
+        dispatch({ type: "remove", key });
+      },
+    },
+    { id: "fork", label: "Fork from…", hint: ["⌘", "⇧", "F"], run: () => key && setForkKey(key) },
+    { id: "compact", label: "Compact context", run: () => actions.compact() },
+    { id: "skills", label: "Skills", run: () => setPage("skills") },
+    { id: "mcp", label: "MCP", run: () => setPage("mcp") },
+    { id: "extensions", label: "Extensions", run: () => setPage("extensions") },
+    { id: "settings", label: "Settings", hint: ["⌘", ","], run: () => setPage("settings") },
+  ];
+
   return (
     <div className="h-full flex flex-col relative">
       {key && dialog && <ExtensionDialog key={dialog.id} req={dialog} onRespond={respondDialog} />}
+      {paletteOpen && (
+        <Palette
+          folder={folder}
+          actions={paletteActions}
+          onClose={() => setPaletteOpen(false)}
+          onOpenFolder={(dir) => void selectFolder(dir)}
+          onOpenSession={(s) => void run(openSession(s))}
+          onReference={referenceSession}
+          onAsk={askInFolder}
+        />
+      )}
       {forkKey && (
         <ForkDialog
           title={title ?? ""}
@@ -526,9 +567,7 @@ export function App() {
           repos={repos}
           ws={ws}
           activeFolder={folder}
-          filter={filter}
-          filterRef={filterRef}
-          onFilter={setFilter}
+          onSearch={() => setPaletteOpen(true)}
           actions={sessionActions}
           page={page}
           onPage={setPage}

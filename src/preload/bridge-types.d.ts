@@ -9,7 +9,13 @@ import type {
   RpcExtensionUIResponse,
   StartPiOptions,
 } from "@shared/protocol";
-import type { SearchHit, SearchScope, SessionMessage, SessionSummary } from "@shared/sessions";
+import type {
+  FolderSuggestion,
+  SearchHit,
+  SearchScope,
+  SessionMessage,
+  SessionSummary,
+} from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
 
 export interface AppInfo {
@@ -35,6 +41,7 @@ export interface Bridge {
     recent(): Promise<string[]>;
     remember(dir: string): Promise<string[]>;
     forget(dir: string): Promise<string[]>;
+    suggest(query: string): Promise<FolderSuggestion[]>;
   };
   openSessions: {
     get(): Promise<{ openSessions: { cwd: string; path: string }[]; activeSession?: string }>;
