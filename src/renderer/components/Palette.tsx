@@ -161,14 +161,14 @@ export function Palette({
           />
           {busy && <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
         </div>
-        <div className="overflow-y-auto pb-2 border-t border-line">
+        <div className="overflow-y-auto pb-1 border-t border-line">
           {items.length === 0 && <div className="px-4 py-3 text-[12.5px] text-ink-3">Nothing matches.</div>}
           {groups.map(({ title, kind }) => {
             const rows = items.map((it, i) => [it, i] as const).filter(([it]) => it.kind === kind);
             if (rows.length === 0) return null;
             return (
-              <div key={kind} className="pt-2">
-                {title && <div className="px-4 pb-1 text-[11.5px] text-ink-3">{title}</div>}
+              <div key={kind} className="pt-1">
+                {title && <div className="px-4 pt-1 pb-0.5 text-[11.5px] text-ink-3">{title}</div>}
                 {rows.map(([it, i]) => (
                   <Row
                     key={i}
@@ -209,7 +209,7 @@ function Row({
       type="button"
       onMouseEnter={onHover}
       onClick={(e) => onClick(e.metaKey || e.ctrlKey)}
-      className={`w-full text-left px-4 h-9 flex items-center gap-3 ${active ? "bg-paper-3" : ""}`}
+      className={`w-full text-left px-4 h-8 flex items-center gap-3 ${active ? "bg-paper-3" : ""}`}
     >
       {children}
     </button>
