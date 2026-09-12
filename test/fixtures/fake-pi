@@ -1,0 +1,3 @@
+#!/bin/sh
+# Executable stand-in for the `pi` binary. Ignores pi's flags and runs fake-pi.mjs.
+exec node "$(dirname "$0")/fake-pi.mjs"

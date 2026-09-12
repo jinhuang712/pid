@@ -51,15 +51,22 @@ export class PiProcess {
     this.child.stderr.on("data", (chunk: string) => {
       this.stderr = (this.stderr + chunk).slice(-8000);
     });
-    this.child.on("exit", (code, signal) => {
-      this.closed = true;
-      for (const p of this.pending.values()) p.reject(new Error(`pi exited (${code ?? signal})`));
-      this.pending.clear();
-      opts.onExit(code, signal, this.stderr);
-    });
+    this.child.on("exit", (code, signal) => this.finish(code, signal, `pi exited (${code ?? signal})`));
+    // A spawn failure (ENOENT, EACCES) fires "error" and may never fire "exit": treat it as an exit.
     this.child.on("error", (err) => {
-      this.stderr += `\n${err.message}`;
+      this.stderr = `${this.stderr}\n${err.message}`.slice(-8000);
+      this.finish(null, null, `pi failed to start: ${err.message}`);
     });
+  }
+
+  /** Idempotent terminal transition: reject every pending request and notify the owner once. */
+  private finish(code: number | null, signal: NodeJS.Signals | null, reason: string) {
+    if (this.closed) return;
+    this.closed = true;
+    this.busy = false;
+    for (const p of this.pending.values()) p.reject(new Error(reason));
+    this.pending.clear();
+    this.opts.onExit(code, signal, this.stderr);
   }
 
   private onStdout(chunk: string) {
@@ -94,18 +101,48 @@ export class PiProcess {
     this.opts.onEvent(msg);
   }
 
-  request<C extends PiCommand>(command: C): Promise<ResponseDataOf<C["type"]>> {
+  /**
+   * Send a command and wait for its response. `timeoutMs` is only for handshakes such as
+   * get_state: a prompt that Pi did receive must never be timed out and retried, that would
+   * duplicate the turn.
+   */
+  request<C extends PiCommand>(command: C, timeoutMs?: number): Promise<ResponseDataOf<C["type"]>> {
     if (this.closed) return Promise.reject(new Error("pi process is not running"));
     const id = randomUUID();
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      this.child.stdin.write(`${JSON.stringify({ id, ...command })}\n`);
+      let timer: NodeJS.Timeout | undefined;
+      const settle = (fn: (v: never) => void) => (v: never) => {
+        if (timer) clearTimeout(timer);
+        this.pending.delete(id);
+        fn(v);
+      };
+      this.pending.set(id, {
+        resolve: settle(resolve as (v: never) => void) as (v: unknown) => void,
+        reject: settle(reject as (v: never) => void) as (e: Error) => void,
+      });
+      if (timeoutMs) {
+        timer = setTimeout(() => {
+          const p = this.pending.get(id);
+          if (p) p.reject(new Error(`pi did not answer ${command.type} within ${timeoutMs}ms`));
+        }, timeoutMs);
+      }
+      this.child.stdin.write(`${JSON.stringify({ id, ...command })}\n`, (err) => {
+        if (err) this.pending.get(id)?.reject(err);
+      });
     });
   }
 
   respondUI(response: RpcExtensionUIResponse) {
     if (this.closed) return;
     this.child.stdin.write(`${JSON.stringify(response)}\n`);
+  }
+
+  get stderrTail(): string {
+    return this.stderr;
+  }
+
+  get exited(): boolean {
+    return this.closed;
   }
 
   kill() {
