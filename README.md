@@ -7,7 +7,9 @@ sessions, models, providers, skills, extensions, and tools, and adds the things 
 cannot give a long coding session: hierarchy, navigation, search, and explicit cross-session
 reference.
 
-Close PID and Pi keeps working. Open a PID session in the Pi terminal and it resumes.
+PID leaves Pi's session files exactly as Pi writes them. Quit PID and open the same session in
+the Pi terminal; it resumes where you left it. (PID's own `pi` child processes stop when PID
+quits; if a turn is still running you are asked whether to wait for it.)
 
 ## What it does
 
@@ -17,7 +19,8 @@ Close PID and Pi keeps working. Open a PID session in the Pi terminal and it res
 - Fork with Pi's native fork; lineage from Pi's own session files.
 - Composer sigils: `/` skill · `@` file · `#` Pi action · `$` session reference.
 - `$reference` attaches a chosen session's content as visible prompt text, with size shown up front.
-- Search every session by title, content, folder. Index is derived and rebuildable.
+- Search every session by title, content, folder. Indexes user and assistant text on the active
+  branch (not thinking, tool calls, or tool output). Index is derived and rebuildable.
 - Git worktrees as Folders: list, open, create, remove safely.
 - First-class Skills, MCP, and Extensions pages. Extensions are labelled by compatibility.
 - Settings that belong to a GUI, and nothing else. Provider and model config stays in Pi.
@@ -60,7 +63,10 @@ PID_OPEN_FOLDER=/path/to/repo PID_PROMPT="say hi" PID_SCREENSHOT=/tmp/pid.png pn
 
 One `pi --mode rpc` child process per open session, JSON lines over stdio. The renderer rebuilds
 the streaming assistant message from Pi's deltas. Read-only discovery (session lists, skills)
-uses the Pi SDK from the same pinned version. PID never writes Pi's settings, auth, or model files.
+uses the Pi SDK from the same pinned version. PID keeps no provider, model, auth, or session
+configuration of its own. The only writes to Pi's configuration are the ones you make explicitly
+in the Skills, Extensions, and MCP pages; those toggles edit the same `settings.json` and
+`mcp.json` entries that `/skill`, `/reload`, and `/mcp` would.
 
 ## Documents
 
