@@ -14,8 +14,12 @@ export type MenuCommand =
   | "page:extensions"
   | "page:settings";
 
-/** Native application menu. Every entry maps to a renderer command; nothing here talks to Pi directly. */
-export function installMenu(win: () => BrowserWindow | undefined) {
+/**
+ * Native application menu. Every entry maps to a renderer command; nothing here talks to Pi directly.
+ * Zoom is the exception: it is a stored appearance setting, so it goes through `onScale` rather
+ * than Electron's `zoomIn`/`zoomOut` roles, which would drift away from the Settings pane.
+ */
+export function installMenu(win: () => BrowserWindow | undefined, onScale: (steps: number) => void) {
   const send = (cmd: MenuCommand) => () => win()?.webContents.send("menu:command", cmd);
   const isMac = process.platform === "darwin";
 
@@ -73,9 +77,11 @@ export function installMenu(win: () => BrowserWindow | undefined) {
         { role: "reload" },
         { role: "toggleDevTools" },
         { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        { label: "Bigger Interface", accelerator: "CmdOrCtrl+Plus", click: () => onScale(1) },
+        // ⌘+ needs Shift on most layouts; ⌘= is the one people actually press.
+        { label: "Bigger Interface", accelerator: "CmdOrCtrl+=", visible: false, click: () => onScale(1) },
+        { label: "Smaller Interface", accelerator: "CmdOrCtrl+-", click: () => onScale(-1) },
+        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => onScale(0) },
         { type: "separator" },
         { role: "togglefullscreen" },
       ],

@@ -23,7 +23,7 @@ export function QueuePanel({
     "h-6 px-1.5 rounded-md text-[12.5px] text-ink-3 hover:text-ink hover:bg-paper-3 disabled:opacity-40";
   return (
     <div className="shrink-0 px-6">
-      <div className="max-w-3xl mx-auto text-[12.5px] flex flex-col">
+      <div className="max-w-[var(--pid-measure)] mx-auto text-xs flex flex-col">
         {steering.map((t, i) => (
           <div key={`s-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
             <span className="shrink-0 text-warn">Steer</span>

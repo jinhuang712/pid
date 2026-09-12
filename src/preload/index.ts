@@ -41,6 +41,7 @@ const bridge: Bridge = {
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (s) => ipcRenderer.invoke("settings:set", s),
+    onChange: (l) => on("settings:changed", l),
   },
   eco: {
     home: () => ipcRenderer.invoke("pi:home"),

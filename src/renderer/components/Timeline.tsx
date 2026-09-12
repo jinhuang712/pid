@@ -113,7 +113,7 @@ function User({ m }: { m: UserMessage }) {
   return (
     <div className="timeline-item px-6 py-3 flex flex-col items-end gap-1.5">
       {body.trim() && (
-        <div className="max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap text-[14px] leading-[1.6] text-ink">
+        <div className="msg-text max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap leading-[1.6] text-ink">
           <Inline text={body} />
         </div>
       )}
@@ -271,7 +271,7 @@ export function Timeline({ state }: { state: ConversationState }) {
 
   return (
     <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto pb-6">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-[var(--pid-measure)] mx-auto">
         {hidden > 0 ? (
           <button
             type="button"

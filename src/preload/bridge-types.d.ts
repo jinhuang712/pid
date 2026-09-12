@@ -67,6 +67,8 @@ export interface Bridge {
   settings: {
     get(): Promise<PidSettings>;
     set(s: PidSettings): Promise<PidSettings>;
+    /** Settings changed outside the renderer — the View menu's interface-scale items. */
+    onChange(listener: (s: PidSettings) => void): () => void;
   };
   eco: {
     home(): Promise<PiHome>;

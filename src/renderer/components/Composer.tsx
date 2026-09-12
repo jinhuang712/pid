@@ -279,7 +279,7 @@ export function Composer(p: ComposerProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`relative mx-auto rounded-[18px] ${expanded ? "max-w-5xl" : "max-w-3xl"} border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
+        className={`relative mx-auto rounded-[18px] ${expanded ? "max-w-[calc(var(--pid-measure)+12rem)]" : "max-w-[var(--pid-measure)]"} border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
           dragging ? "border-accent bg-accent-soft" : "border-line-2"
         }`}
       >
