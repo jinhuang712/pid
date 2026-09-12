@@ -6,9 +6,10 @@ import { Badge, OverrideBadge, PageShell, PathLink, ScopeBar, Toggle } from "./P
 import { useEcoScope } from "./scope";
 
 const COMPAT: Record<Compat, { label: string; tone: "ok" | "warn" | "danger" }> = {
-  compatible: { label: "Compatible", tone: "ok" },
-  partial: { label: "Partially compatible", tone: "warn" },
-  unsupported: { label: "TUI-only / Unsupported", tone: "danger" },
+  // Labels hedge on purpose: this is a source-code scan for TUI-only APIs, not a runtime check.
+  compatible: { label: "Likely compatible", tone: "ok" },
+  partial: { label: "Partial", tone: "warn" },
+  unsupported: { label: "Likely TUI-only", tone: "danger" },
 };
 
 /**
@@ -57,10 +58,11 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
       title="Extensions"
       note={
         <>
-          {list.length} extensions · {counts.compatible} compatible · {counts.partial} partial ·{" "}
-          {counts.unsupported} unsupported{counts.off > 0 ? ` · ${counts.off} off` : ""}. Switches write the
-          same settings as <span className="font-mono">pi config</span>; new sessions pick them up, running
-          ones after <span className="font-mono">/reload</span>.
+          {list.length} extensions · {counts.compatible} likely compatible · {counts.partial} partial ·{" "}
+          {counts.unsupported} likely TUI-only{counts.off > 0 ? ` · ${counts.off} off` : ""}. Labels come from
+          scanning each extension's source for TUI-only APIs, not from running it. Switches write the same
+          settings as <span className="font-mono">pi config</span>; new sessions pick them up, running ones
+          after <span className="font-mono">/reload</span>.
         </>
       }
       toolbar={

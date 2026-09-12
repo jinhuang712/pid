@@ -361,12 +361,32 @@ export function App() {
   };
 
   /** Rebuild Pi's queue without one entry, optionally re-adding it in another role. */
+  /**
+   * Best effort: Pi's RPC has no atomic queue edit, so this is clear + re-add, several round trips
+   * while the agent may keep running. If re-adding fails part-way, whatever did not make it back
+   * lands in the composer draft rather than vanishing.
+   */
   const requeue = async (edit: (q: { steering: string[]; followUp: string[] }) => Promise<void> | void) => {
     if (!key) return;
+    const c = composer;
     const q = await bridge.pi.command(key, { type: "clear_queue" });
     await edit(q);
-    for (const m of q.steering) await bridge.pi.command(key, { type: "steer", message: m });
-    for (const m of q.followUp) await bridge.pi.command(key, { type: "follow_up", message: m });
+    const pending: string[] = [...q.steering, ...q.followUp];
+    try {
+      for (const m of q.steering) {
+        await bridge.pi.command(key, { type: "steer", message: m });
+        pending.shift();
+      }
+      for (const m of q.followUp) {
+        await bridge.pi.command(key, { type: "follow_up", message: m });
+        pending.shift();
+      }
+    } catch (e) {
+      if (pending.length > 0) c.restoreDraft(pending.join("\n\n"));
+      throw new Error(
+        `queue edit interrupted; ${pending.length} message(s) moved to the composer. ${String(e)}`,
+      );
+    }
   };
   const steerAfterTool = (i: number) =>
     void run(
