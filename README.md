@@ -68,6 +68,17 @@ configuration of its own. The only writes to Pi's configuration are the ones you
 in the Skills, Extensions, and MCP pages; those toggles edit the same `settings.json` and
 `mcp.json` entries that `/skill`, `/reload`, and `/mcp` would.
 
+Two small extensions ride along in every `pi --mode rpc` PID starts, passed with `-e` so nothing
+is added to your Pi packages:
+
+- `resources/pid-bridge`: relays [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter)'s
+  status and OAuth events into the RPC stream so the MCP page can show what is connected right now.
+- `pi-mcp-adapter`, pinned in `package.json`, but only when your Pi does not already have it. A
+  user-installed adapter always wins, so the terminal and PID agree on MCP behaviour.
+
+Settings › Advanced › Diagnostics shows which `pi` binary and version PID drives, the SDK version
+it bundles, and where the MCP adapter comes from.
+
 ## Documents
 
 - `PROPOSAL.md` — why PID exists and what it believes
