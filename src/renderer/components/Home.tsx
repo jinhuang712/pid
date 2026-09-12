@@ -47,7 +47,7 @@ export function Home({
       <div className="flex-1" />
       <div className="flex flex-col items-center gap-7 px-6">
         <Logo height={36} className="opacity-90" />
-        <div className="w-full max-w-3xl flex flex-col gap-2.5">
+        <div className="w-full max-w-[var(--pid-measure)] flex flex-col gap-2.5">
           <div className="px-1 text-[12px] text-ink-3">Folder</div>
           {folder ? (
             <div className="h-10 px-3.5 rounded-xl bg-paper-2 border border-line flex items-center gap-2.5 text-ink whitespace-nowrap">
@@ -103,7 +103,7 @@ export function Home({
       <div className={`shrink-0 ${folder ? "" : "opacity-55 pointer-events-none"}`}>{composer}</div>
       {folder && recent.length > 0 && (
         <div className="shrink-0 px-6 pb-4">
-          <div className="max-w-3xl mx-auto flex flex-col gap-px">
+          <div className="max-w-[var(--pid-measure)] mx-auto flex flex-col gap-px">
             <div className="px-3 pb-1 text-[12px] text-ink-3">Recent in {base(folder)}</div>
             {recent.map((s) => (
               <button

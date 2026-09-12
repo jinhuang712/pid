@@ -24,7 +24,14 @@ import {
   rememberFolder,
   saveOpenSessions,
 } from "./pid-state";
-import { applyTheme, loadSettings, saveSettings } from "./settings";
+import {
+  applyAppearance,
+  applyTheme,
+  flushSettings,
+  loadSettings,
+  nudgeScale,
+  saveSettings,
+} from "./settings";
 import { warmShellEnv } from "./shell-env";
 
 const PAPER_LIGHT = "#f4f3ef";
@@ -57,6 +64,8 @@ function createWindow(): BrowserWindow {
   });
   state.manage(win);
   nativeTheme.on("updated", () => win.setBackgroundColor(paperColor()));
+  // Zoom resets on every load, so the stored interface scale is re-applied with the first frame.
+  win.webContents.on("did-finish-load", () => applyAppearance(win));
   win.once("ready-to-show", () => win.show());
 
   // Headless verification hook: PID_SCREENSHOT=/path.png captures the window and quits.
@@ -124,7 +133,11 @@ ipcMain.handle("state:saveOpenSessions", (_e, open: OpenSession[], active?: stri
 );
 ipcMain.handle("git:repo", (_e, cwd: string) => repoInfo(cwd));
 ipcMain.handle("settings:get", () => loadSettings());
-ipcMain.handle("settings:set", (_e, s: PidSettings) => saveSettings(s));
+ipcMain.handle("settings:set", (_e, s: PidSettings) => {
+  const saved = saveSettings(s);
+  applyAppearance(mainWindow, saved);
+  return saved;
+});
 ipcMain.handle("pi:home", () => readPiHome());
 ipcMain.handle("eco:skills", (_e, cwd?: string) => listSkills(cwd));
 ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
@@ -161,7 +174,14 @@ ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
 
 app.whenReady().then(() => {
   applyTheme(); // decide the theme before the first frame
-  installMenu(() => mainWindow);
+  installMenu(
+    () => mainWindow,
+    (steps) => {
+      const saved = nudgeScale(steps);
+      applyAppearance(mainWindow, saved);
+      mainWindow?.webContents.send("settings:changed", saved);
+    },
+  );
   mainWindow = createWindow();
   // Pay the slow start-up costs now, off the click path: the login-shell PATH probe and the search index.
   void warmShellEnv();
@@ -216,6 +236,7 @@ app.on("before-quit", (e) => {
 });
 app.on("will-quit", () => {
   flushState(); // debounced writes must land before the process ends
+  flushSettings();
   stopSearchWorker();
 });
 app.on("window-all-closed", () => {
