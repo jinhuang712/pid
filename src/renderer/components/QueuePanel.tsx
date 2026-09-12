@@ -22,7 +22,10 @@ export function QueuePanel({
   const btn =
     "h-6 px-1.5 rounded-md text-[12.5px] text-ink-3 hover:text-ink hover:bg-paper-3 disabled:opacity-40";
   return (
-    <div className="shrink-0 px-6">
+    <div
+      className="shrink-0 px-6"
+      title="Queue edits are best effort: Pi has no atomic queue API, so PID clears and re-adds. Anything that fails to go back lands in the composer."
+    >
       <div className="max-w-[var(--pid-measure)] mx-auto text-xs flex flex-col">
         {steering.map((t, i) => (
           <div key={`s-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
