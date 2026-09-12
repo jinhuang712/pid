@@ -4,6 +4,7 @@ import type {
   PiEvent,
   PiEventEnvelope,
   PiExitEnvelope,
+  ResponseDataOf,
   RpcExtensionUIResponse,
   StartPiOptions,
 } from "@shared/protocol";
@@ -11,6 +12,9 @@ import type { BrowserWindow } from "electron";
 import { loadSettings } from "../settings";
 import { warmShellEnv } from "../shell-env";
 import { PiProcess } from "./rpc-process";
+
+/** How long a fresh `pi --mode rpc` gets to answer get_state before we call the start failed. */
+export const STARTUP_TIMEOUT_MS = 15_000;
 
 /** Live pi processes owned by this window. Nothing here is persisted. */
 export class PiRegistry {
@@ -38,7 +42,16 @@ export class PiRegistry {
       },
     });
     this.procs.set(key, proc);
-    const state = await proc.request({ type: "get_state" });
+    let state: ResponseDataOf<"get_state">;
+    try {
+      state = await proc.request({ type: "get_state" }, STARTUP_TIMEOUT_MS);
+    } catch (err) {
+      // Spawn error, early crash, or a hung binary: make sure nothing lingers and surface why.
+      this.procs.delete(key);
+      proc.kill();
+      const detail = proc.stderrTail.trim();
+      throw new Error(detail ? `${(err as Error).message}\n${detail}` : (err as Error).message);
+    }
     const earlyEvents = early;
     early = undefined;
     return { key, cwd: opts.cwd, state, earlyEvents };
