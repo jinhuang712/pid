@@ -655,7 +655,14 @@ export function App() {
           />
         )}
         {page === "mcp" && (
-          <McpPage folder={folder} live={active?.mcp} liveSession={active ? title : undefined} />
+          <McpPage
+            folder={folder}
+            sources={Object.values(ws.procs).flatMap((p) =>
+              p.mcp && !p.pending && !p.exit
+                ? [{ key: p.key, cwd: p.cwd, active: p.key === key, mcp: p.mcp }]
+                : [],
+            )}
+          />
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
         {page === "settings" && <SettingsPage />}
