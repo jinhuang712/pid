@@ -33,7 +33,7 @@ describe("withDefaults", () => {
     });
     expect(s.appearance.theme).toBe("system");
     expect(s.appearance.density).toBe("spacious");
-    expect(s.appearance.accent).toBe("grey");
+    expect(s.appearance.accent).toBe("amber");
     expect(s.appearance.contentWidth).toBe("wide");
     expect(s.files.ignorePatterns).toEqual([]);
   });

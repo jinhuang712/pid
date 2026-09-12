@@ -15,9 +15,9 @@
   --color-ink-3: light-dark(#9a9a92, #5f5f5a);
   --color-line: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.045));
   --color-line-2: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.09));
-  /* the only emphasis: a warm grey. running, Send, the active dot */
-  --color-accent: light-dark(#5a584f, #b9b7ae);
-  --color-accent-soft: light-dark(rgba(90, 88, 79, 0.1), rgba(185, 183, 174, 0.1));
+  /* the only emphasis: a muted amber, the default accent. running, Send, the active dot */
+  --color-accent: light-dark(#8f6a1c, #c2a46a);
+  --color-accent-soft: light-dark(rgba(143, 106, 28, 0.12), rgba(194, 164, 106, 0.12));
   --color-ok: light-dark(#4f7d5b, #7fae88);
   --color-ok-soft: light-dark(rgba(79, 125, 91, 0.12), rgba(127, 174, 136, 0.12));
   /* amber marks "waiting for you" and the D in the logo */
@@ -61,10 +61,10 @@ body {
 }
 
 /* Accent — the single emphasis colour. Every option stays desaturated and in the same key
-   as the default warm grey; none of them turn PID into a coloured app. */
-[data-accent="amber"] {
-  --color-accent: light-dark(#8f6a1c, #c2a46a);
-  --color-accent-soft: light-dark(rgba(143, 106, 28, 0.12), rgba(194, 164, 106, 0.12));
+   as the default amber; none of them turn PID into a coloured app. */
+[data-accent="grey"] {
+  --color-accent: light-dark(#5a584f, #b9b7ae);
+  --color-accent-soft: light-dark(rgba(90, 88, 79, 0.1), rgba(185, 183, 174, 0.1));
 }
 [data-accent="sage"] {
   --color-accent: light-dark(#4f7d5b, #7fae88);
