@@ -42,6 +42,14 @@ describe("renderReference", () => {
     expect(r.chars).toBeLessThan(MAX_TOTAL_CHARS + 600);
     expect(r.included).toBeLessThan(20);
   });
+  it("keeps the newest messages when the character budget truncates", () => {
+    const r = renderReference(ref(20, 5000));
+    const body = r.text.split("\n").slice(1, -1);
+    expect(body.at(-1)).toContain("m19 ");
+    expect(body[0]).toContain(`m${20 - r.included} `);
+    expect(r.text).not.toContain("[user] m0 ");
+    expect(r.text).toContain(`scope="last ${r.included} of 20 messages`);
+  });
 });
 
 describe("expandReferences", () => {

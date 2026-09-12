@@ -25,22 +25,26 @@ export interface RenderedReference {
   chars: number;
 }
 
-/** Last MAX_MESSAGES messages, each clipped, total clipped. Deterministic and inspectable. */
+/**
+ * Last MAX_MESSAGES messages, each clipped, total clipped. Deterministic and inspectable.
+ * The character budget is filled newest-first so the most recent messages always survive;
+ * the result is rendered in chronological order.
+ */
 export function renderReference(ref: SessionReference): RenderedReference {
   const total = ref.messages.length;
   const tail = ref.messages.slice(-MAX_MESSAGES);
   const lines: string[] = [];
   let chars = 0;
-  let included = 0;
-  for (const m of tail) {
+  for (let i = tail.length - 1; i >= 0; i--) {
+    const m = tail[i];
     const body =
       m.text.length > MAX_MESSAGE_CHARS ? `${m.text.slice(0, MAX_MESSAGE_CHARS)}…[clipped]` : m.text;
     const line = `[${m.role}] ${body}`;
     if (chars + line.length > MAX_TOTAL_CHARS) break;
-    lines.push(line);
+    lines.unshift(line);
     chars += line.length;
-    included++;
   }
+  const included = lines.length;
   const label = ref.session.name || ref.session.firstMessage || ref.session.id;
   const header =
     `<session-reference token="${ref.token}" title="${label.replace(/"/g, "'")}" folder="${ref.session.cwd}" ` +
