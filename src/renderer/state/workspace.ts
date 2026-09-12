@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { isPidWidget, type McpStatusSnapshot, parseMcpStatus, WIDGET_MCP_STATUS } from "@shared/mcp-status";
 import type { PiEvent, PiHandle, RpcSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./conversation";
@@ -16,6 +17,8 @@ export interface Proc {
   /** setWidget lines by widget key, e.g. pi-worktree's "🌲 branch → main · ↑2 · 1 dirty". */
   widgets: Record<string, string>;
   dialogs: DialogRequest[];
+  /** Live MCP server status from pi-mcp-adapter, via pid-bridge. Undefined until the first snapshot. */
+  mcp?: McpStatusSnapshot;
   /** Set when the process exited; the entry stays until dismissed so the user sees why. */
   exit?: string;
   /**
@@ -115,6 +118,11 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
             case "setStatus":
               return { ...p, statuses: { ...p.statuses, [ev.statusKey]: ev.statusText ?? "" } };
             case "setWidget":
+              // `pid:*` widgets are data from PID's own bridge extension, never something to render.
+              if (isPidWidget(ev.widgetKey)) {
+                if (ev.widgetKey === WIDGET_MCP_STATUS) return { ...p, mcp: parseMcpStatus(ev.widgetLines) };
+                return p;
+              }
               return { ...p, widgets: { ...p.widgets, [ev.widgetKey]: (ev.widgetLines ?? []).join(" ") } };
             default:
               return p;

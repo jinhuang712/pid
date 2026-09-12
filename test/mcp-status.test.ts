@@ -1,0 +1,84 @@
+import { parseMcpStatus, WIDGET_MCP_STATUS } from "@shared/mcp-status";
+import type { PiHandle, RpcSessionState } from "@shared/protocol";
+import { describe, expect, it } from "vitest";
+import { locateBundled, adapterSource, bundledExtensionArgs } from "../src/main/pi/bundled";
+import { emptyWorkspace, workspaceReducer } from "../src/renderer/state/workspace";
+
+// Real snapshot captured from pi-mcp-adapter 2.33.0 via pid-bridge (see resources/pid-bridge).
+const SNAPSHOT =
+  '{"version":1,"servers":[{"name":"fs","status":"connected","listenState":"legacy","toolCount":14,"directToolCount":0,"resourceCount":0,"disabled":false}],"totalTools":14,"totalResources":0,"connectedCount":1,"disabledCount":0}';
+
+describe("parseMcpStatus", () => {
+  it("reads the adapter's v1 snapshot", () => {
+    const s = parseMcpStatus([SNAPSHOT]);
+    expect(s?.version).toBe(1);
+    expect(s?.servers[0]).toMatchObject({ name: "fs", status: "connected", toolCount: 14 });
+    expect(s?.connectedCount).toBe(1);
+  });
+  it("treats a cleared or malformed widget as no status", () => {
+    expect(parseMcpStatus(undefined)).toBeUndefined();
+    expect(parseMcpStatus([])).toBeUndefined();
+    expect(parseMcpStatus(["not json"])).toBeUndefined();
+    expect(parseMcpStatus(['{"servers":"nope"}'])).toBeUndefined();
+  });
+});
+
+describe("workspace pid:* widgets", () => {
+  const handle: PiHandle = {
+    key: "k",
+    cwd: "/repo",
+    state: { sessionFile: null } as unknown as RpcSessionState,
+    earlyEvents: [],
+  };
+  const ws0 = workspaceReducer(emptyWorkspace(), { type: "add", handle });
+  it("stores the MCP snapshot on the proc and keeps it out of rendered widgets", () => {
+    const ws = workspaceReducer(ws0, {
+      type: "event",
+      key: "k",
+      event: {
+        type: "extension_ui_request",
+        id: "1",
+        method: "setWidget",
+        widgetKey: WIDGET_MCP_STATUS,
+        widgetLines: [SNAPSHOT],
+      },
+    });
+    expect(ws.procs.k.mcp?.servers[0].name).toBe("fs");
+    expect(ws.procs.k.widgets[WIDGET_MCP_STATUS]).toBeUndefined();
+  });
+  it("still renders other extensions' widgets", () => {
+    const ws = workspaceReducer(ws0, {
+      type: "event",
+      key: "k",
+      event: {
+        type: "extension_ui_request",
+        id: "2",
+        method: "setWidget",
+        widgetKey: "pi-worktree",
+        widgetLines: ["🌲 main"],
+      },
+    });
+    expect(ws.procs.k.widgets["pi-worktree"]).toBe("🌲 main");
+    expect(ws.procs.k.mcp).toBeUndefined();
+  });
+});
+
+describe("bundled extensions", () => {
+  const bundled = { bridge: "/app/resources/pid-bridge/index.ts", adapter: "/app/node_modules/pi-mcp-adapter/index.ts" };
+  it("prefers the user's adapter and never loads a second one", () => {
+    expect(adapterSource(["npm:pi-mcp-adapter"], bundled)).toBe("user");
+    expect(bundledExtensionArgs(["npm:pi-mcp-adapter"], bundled)).toEqual(["-e", bundled.bridge]);
+  });
+  it("loads the bundled adapter when the user has none", () => {
+    expect(adapterSource([], bundled)).toBe("bundled");
+    expect(bundledExtensionArgs([], bundled)).toEqual(["-e", bundled.adapter, "-e", bundled.bridge]);
+  });
+  it("reports none when nothing is available", () => {
+    expect(adapterSource([], {})).toBe("none");
+    expect(bundledExtensionArgs([], {})).toEqual([]);
+  });
+  it("finds the bridge shipped in this repo", () => {
+    const b = locateBundled(process.cwd(), {});
+    expect(b.bridge).toMatch(/resources\/pid-bridge\/index\.ts$/);
+  });
+});

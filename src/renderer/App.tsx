@@ -654,7 +654,9 @@ export function App() {
             }}
           />
         )}
-        {page === "mcp" && <McpPage folder={folder} />}
+        {page === "mcp" && (
+          <McpPage folder={folder} live={active?.mcp} liveSession={active ? title : undefined} />
+        )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
         {page === "settings" && <SettingsPage />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>

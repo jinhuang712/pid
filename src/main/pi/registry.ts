@@ -11,6 +11,8 @@ import type {
 import type { BrowserWindow } from "electron";
 import { loadSettings } from "../settings";
 import { warmShellEnv } from "../shell-env";
+import { bundledExtensionArgs, currentBundled } from "./bundled";
+import { readPiHome } from "./ecosystem";
 import { PiProcess } from "./rpc-process";
 
 /** How long a fresh `pi --mode rpc` gets to answer get_state before we call the start failed. */
@@ -31,7 +33,11 @@ export class PiRegistry {
       cwd: opts.cwd,
       sessionPath: opts.sessionPath,
       binary: adv.piBinary || undefined,
-      extraArgs: adv.piExtraArgs.split(/\s+/).filter(Boolean),
+      // PID's bridge (and the bundled MCP adapter when the user has none) ride along per process.
+      extraArgs: [
+        ...bundledExtensionArgs(readPiHome().packages, currentBundled()),
+        ...adv.piExtraArgs.split(/\s+/).filter(Boolean),
+      ],
       onEvent: (event) => {
         if (early) early.push(event);
         else this.send("pi:event", { key, event } satisfies PiEventEnvelope);

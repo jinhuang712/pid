@@ -38,6 +38,7 @@
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "dompurify": "^3.4.15",
-    "marked": "^18.0.12"
+    "marked": "^18.0.12",
+    "pi-mcp-adapter": "2.33.0"
   }
 }

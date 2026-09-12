@@ -10,6 +10,7 @@ import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
 import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
+import { configureBundled } from "./pi/bundled";
 import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
@@ -39,6 +40,8 @@ const PAPER_DARK = "#121211";
 const paperColor = () => (nativeTheme.shouldUseDarkColors ? PAPER_DARK : PAPER_LIGHT);
 
 let mainWindow: BrowserWindow | undefined;
+// Extensions PID ships (pid-bridge, and pi-mcp-adapter when the user has none) are located once.
+configureBundled(app.getAppPath());
 const pi = new PiRegistry(() => mainWindow);
 
 function createWindow(): BrowserWindow {
