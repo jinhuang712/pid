@@ -15,19 +15,30 @@ import { useEcoScope } from "./scope";
  * - live status (what is *connected right now*), from the adapter running inside the active
  *   session's Pi, relayed by pid-bridge. Absent when no session is open.
  */
-export function McpPage({
-  folder,
-  live,
-  liveSession,
-}: {
-  folder?: string;
-  live?: McpStatusSnapshot;
-  liveSession?: string;
-}) {
+/** A running session that has reported MCP status. */
+export interface McpLiveSource {
+  key: string;
+  cwd: string;
+  active: boolean;
+  mcp: McpStatusSnapshot;
+}
+
+export function McpPage({ folder, sources = [] }: { folder?: string; sources?: McpLiveSource[] }) {
   const [view, setView] = useState<McpView>();
   const [open, setOpen] = useState<string>();
   const [error, setError] = useState<string>();
   const sc = useEcoScope(folder);
+  // Live status belongs to a process, and MCP config is per folder: prefer a session in the
+  // folder being looked at, then the active session, so the numbers match the list below.
+  const source =
+    sources.find((s) => s.cwd === sc.cwd && s.active) ??
+    sources.find((s) => s.cwd === sc.cwd) ??
+    sources.find((s) => s.active) ??
+    sources[0];
+  const live = source?.mcp;
+  const liveSession = source
+    ? `${source.cwd.split("/").filter(Boolean).pop() ?? source.cwd} session`
+    : undefined;
 
   const load = () => void bridge.eco.mcp(sc.cwd).then(setView);
   useEffect(load, [sc.cwd]);
