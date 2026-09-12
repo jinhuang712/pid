@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: PidSettings = {
     codeFontSize: 12.5,
     density: "comfortable",
     contentWidth: "medium",
-    accent: "grey",
+    accent: "amber",
     reduceMotion: false,
     toolCardsCollapsed: true,
     thinkingCollapsed: true,
