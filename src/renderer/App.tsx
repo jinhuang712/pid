@@ -3,7 +3,7 @@ import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { PiEvent, RpcExtensionUIRequest, RpcExtensionUIResponse } from "@shared/protocol";
 import type { SessionSummary } from "@shared/sessions";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { type Attachment, appendAttachments, parseAttachments, toAttachment } from "./attachments";
+import { appendAttachments, parseAttachments, toAttachment } from "./attachments";
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
@@ -19,8 +19,9 @@ import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { McpPage } from "./pages/McpPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
-import { expandReferences, refToken, type SessionReference } from "./session-reference";
+import { expandReferences, refToken } from "./session-reference";
 import { useSettings } from "./settings";
+import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
 import { emptyWorkspace, fromMessages, procForSession, workspaceReducer } from "./state/workspace";
 
@@ -34,9 +35,6 @@ export function App() {
   const [sessionsByFolder, setSessionsByFolder] = useState<Record<string, SessionSummary[]>>({});
   const [repos, setRepos] = useState<Record<string, RepoInfo | null>>({});
   const [ws, dispatch] = useReducer(workspaceReducer, undefined, emptyWorkspace);
-  const [draft, setDraft] = useState("");
-  const [refs, setRefs] = useState<SessionReference[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [status, setStatus] = useState<string>();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -46,6 +44,11 @@ export function App() {
   const active = ws.activeKey ? ws.procs[ws.activeKey] : undefined;
   const key = active?.key;
   const conv = active?.conv ?? emptyConversation();
+  // Draft, $session refs, and attachments live per session; the entry view has its own scope.
+  const composer = useComposer(active?.key ?? HOME_SCOPE);
+  const { draft, refs, attachments, setDraft } = composer;
+  const composerRef = useRef(composer);
+  composerRef.current = composer;
   const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
 
   // ---- folders and their sessions (read-only projections of disk) ----
@@ -151,6 +154,7 @@ export function App() {
           return undefined;
         }
         dispatch({ type: "add", handle, replaces: pendingKey });
+        if (pendingKey) composerRef.current.move(pendingKey, handle.key);
         for (const ev of handle.earlyEvents)
           if (ev.type === "extension_ui_request" && ev.method === "notify") toast(ev.message, ev.notifyType);
         if (sessionPath) {
@@ -243,15 +247,12 @@ export function App() {
     [ws, start],
   );
 
-  const referenceSession = useCallback((s: SessionSummary) => {
+  const referenceSession = (s: SessionSummary) => {
     const token = refToken(s);
-    setDraft((d) => (d.includes(token) ? d : `${d}${d && !d.endsWith(" ") ? " " : ""}${token} `));
-    void bridge.sessions
-      .read(s.path)
-      .then((messages) =>
-        setRefs((rs) => [...rs.filter((r) => r.token !== token), { token, session: s, messages }]),
-      );
-  }, []);
+    const c = composer; // the scope the user was looking at when they clicked
+    c.setDraft((d) => (d.includes(token) ? d : `${d}${d && !d.endsWith(" ") ? " " : ""}${token} `));
+    void bridge.sessions.read(s.path).then((messages) => c.addRef({ token, session: s, messages }));
+  };
 
   const sessionActions: SessionActions = {
     openFolder: (dir) => {
@@ -292,18 +293,11 @@ export function App() {
   };
 
   // ---- attachments: absolute paths only, stat'd for the chip, appended to the message as text ----
-  const attach = useCallback((paths: string[]) => {
-    void bridge.files.stat(paths).then((infos) =>
-      setAttachments((cur) => {
-        const have = new Set(cur.map((a) => a.path));
-        return [...cur, ...infos.filter((i) => !have.has(i.path)).map(toAttachment)];
-      }),
-    );
-  }, []);
-  const removeAttachment = useCallback(
-    (path: string) => setAttachments((cur) => cur.filter((a) => a.path !== path)),
-    [],
-  );
+  const attach = (paths: string[]) => {
+    const c = composer;
+    void bridge.files.stat(paths).then((infos) => c.addAttachments(infos.map(toAttachment)));
+  };
+  const removeAttachment = composer.removeAttachment;
   /** Pasted image → temp file → attached by path, the same way the Pi terminal treats a paste. */
   const pasteImage = (file: File) =>
     void run(
@@ -313,25 +307,29 @@ export function App() {
         .then((path) => attach([path])),
     );
 
-  /** The text Pi receives: draft, then `$session` blocks, then the attachment paths. Nothing hidden. */
-  const compose = (raw: string) => {
-    const { text, used } = expandReferences(raw, refs);
-    if (used.length > 0) setRefs((rs) => rs.filter((r) => !used.includes(r)));
-    const full = appendAttachments(text, attachments);
-    if (attachments.length > 0) setAttachments([]);
-    return full;
+  /**
+   * Send the composed message: draft, then `$session` blocks, then the attachment paths. Nothing
+   * hidden. Refs and attachments are dropped only after Pi accepted the message; if the send fails
+   * the draft comes back too, so a dead process never eats what the user typed or dragged in.
+   */
+  const deliver = (k: string, raw: string, kind: "prompt" | "follow_up") => {
+    const c = composer;
+    const { text, used } = expandReferences(raw, c.refs);
+    const message = appendAttachments(text, c.attachments);
+    const sent = c.attachments;
+    return bridge.pi.command(k, { type: kind, message }).then(
+      () => c.consume(used, sent),
+      (e) => {
+        c.restoreDraft(raw);
+        throw e;
+      },
+    );
   };
 
   // ---- sending, queue ----
   const send = (raw: string) => {
-    if (!key) return;
-    const text = compose(raw);
-    void run(
-      bridge.pi.command(
-        key,
-        conv.isStreaming ? { type: "follow_up", message: text } : { type: "prompt", message: text },
-      ),
-    );
+    if (!key || active?.pending || active?.exit) return;
+    void run(deliver(key, raw, conv.isStreaming ? "follow_up" : "prompt"));
   };
   const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
 
@@ -351,9 +349,13 @@ export function App() {
           if (!dir) return;
           await selectFolder(dir);
         }
+        const c = composer;
         const k = await start(dir);
-        if (!k) return;
-        await bridge.pi.command(k, { type: "prompt", message: compose(raw) });
+        if (!k) {
+          c.restoreDraft(raw);
+          return;
+        }
+        await deliver(k, raw, "prompt");
       })(),
     );
   };
@@ -437,7 +439,7 @@ export function App() {
     folder,
     sessions: allSessions,
     actions,
-    onReference: (ref) => setRefs((rs) => [...rs.filter((r) => r.token !== ref.token), ref]),
+    onReference: composer.addRef,
   });
   const loadModels = useCallback(
     async () => (key ? (await bridge.pi.command(key, { type: "get_available_models" })).models : []),
@@ -504,10 +506,7 @@ export function App() {
       if (cmd === "fork") return key && setForkKey(key);
       if (cmd === "compact") return actions.compact();
       if (cmd === "abort") return abort();
-      if (cmd === "close-session") {
-        closeActive();
-        setDraft("");
-      }
+      if (cmd === "close-session") closeActive();
     });
   });
 
@@ -516,6 +515,7 @@ export function App() {
     if (!active) return;
     if (active.pending) cancelledPending.current.add(active.key);
     else void bridge.pi.stop(active.key);
+    composer.clear(active.key);
     dispatch({ type: "remove", key: active.key });
   };
 
@@ -528,7 +528,7 @@ export function App() {
       await selectFolder(info.devOpenFolder);
       const k = await start(info.devOpenFolder, info.devOpenSession);
       if (!k) return;
-      if (info.devDraft) setTimeout(() => setDraft(info.devDraft ?? ""), 500);
+      if (info.devDraft) setTimeout(() => composerRef.current.setDraft(info.devDraft ?? ""), 500);
       if (info.devAttach) attach(info.devAttach.split(":").filter(Boolean));
       if (info.devPrompt) await bridge.pi.command(k, { type: "prompt", message: info.devPrompt });
       if (info.devFollowUp)
@@ -707,7 +707,13 @@ export function App() {
                   onRemove={removeQueued}
                 />
                 <Composer
-                  disabled={false}
+                  blocked={
+                    active.pending
+                      ? "Starting Pi… you can type; sending waits until it is ready."
+                      : active.exit
+                        ? "Pi exited. Reopen the session to continue."
+                        : undefined
+                  }
                   folder={active?.cwd ?? folder}
                   complete={complete}
                   pick={pick}
@@ -721,7 +727,7 @@ export function App() {
                   onRemoveAttachment={removeAttachment}
                   onPasteImage={pasteImage}
                   refs={refs}
-                  onRemoveRef={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
+                  onRemoveRef={composer.removeRef}
                   model={
                     active?.piState.model
                       ? {
@@ -783,7 +789,7 @@ export function App() {
                       onRemoveAttachment={removeAttachment}
                       onPasteImage={pasteImage}
                       refs={refs}
-                      onRemoveRef={(t) => setRefs((rs) => rs.filter((r) => r.token !== t))}
+                      onRemoveRef={composer.removeRef}
                       loadModels={loadModels}
                       loadLevels={loadLevels}
                       onModel={() => {}}
