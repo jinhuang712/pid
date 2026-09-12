@@ -11,6 +11,7 @@ import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { configureBundled } from "./pi/bundled";
+import { runDiagnostics } from "./pi/diagnostics";
 import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
@@ -174,6 +175,7 @@ ipcMain.handle("pi:uiResponse", (_e, key: string, response: RpcExtensionUIRespon
   pi.respondUI(key, response),
 );
 ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
+ipcMain.handle("pi:diagnostics", () => runDiagnostics());
 
 app.whenReady().then(() => {
   applyTheme(); // decide the theme before the first frame

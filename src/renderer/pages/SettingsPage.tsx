@@ -1,3 +1,4 @@
+import type { PiDiagnostics } from "@shared/diagnostics";
 import {
   ACCENTS,
   type Accent,
@@ -9,9 +10,10 @@ import {
   UI_SCALES,
 } from "@shared/settings";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { bridge } from "../bridge";
 import { useSettings } from "../settings";
-import { PageShell, Toggle } from "./PageShell";
+import { Badge, PageShell, PathLink, Toggle } from "./PageShell";
 
 type SectionId = keyof PidSettings;
 
@@ -382,9 +384,72 @@ export function SettingsPage() {
               </Row>
             </Group>
           )}
+          {section === "advanced" && <Diagnostics binary={settings.advanced.piBinary} />}
         </div>
       </div>
     </PageShell>
+  );
+}
+
+/**
+ * The two Pis PID deals with, side by side: the binary it spawns and the SDK it bundles, plus the
+ * MCP adapter and bridge that ride along. Re-probed when the configured binary changes.
+ */
+function Diagnostics({ binary }: { binary: string }) {
+  const [d, setD] = useState<PiDiagnostics>();
+  const [err, setErr] = useState<string>();
+  useEffect(() => {
+    setD(undefined);
+    bridge.pi.diagnostics().then(setD, (e: unknown) => setErr(String(e)));
+  }, [binary]);
+  const compat: Record<PiDiagnostics["compat"], { label: string; tone: "ok" | "warn" | "danger" | "muted" }> =
+    {
+      tested: { label: "tested combination", tone: "ok" },
+      newer: { label: "pi newer than PID's SDK", tone: "warn" },
+      older: { label: "pi older than PID's SDK", tone: "warn" },
+      unknown: { label: "unknown", tone: "muted" },
+    };
+  return (
+    <Group
+      title="Diagnostics"
+      note="PID drives the pi on your PATH but reads sessions and resources with its own pinned SDK. When the two drift apart, what PID shows and what Pi does can differ."
+    >
+      {err && <div className="px-3.5 py-2.5 text-xs text-danger">{err}</div>}
+      {!d && !err && <div className="px-3.5 py-2.5 text-xs text-ink-3">Probing pi…</div>}
+      {d && (
+        <>
+          <Row label="pi executable" hint={d.piPath ? undefined : d.piError}>
+            {d.piPath ? <PathLink path={d.piPath} /> : <Badge tone="danger">not found</Badge>}
+          </Row>
+          <Row label="pi runtime version" hint={d.piPath && d.piError ? d.piError : undefined}>
+            <span className="font-mono text-sm text-ink">{d.piVersion ?? "?"}</span>
+          </Row>
+          <Row label="PID bundled SDK">
+            <span className="font-mono text-sm text-ink">{d.sdkVersion}</span>
+          </Row>
+          <Row label="Compatibility">
+            <Badge tone={compat[d.compat].tone}>{compat[d.compat].label}</Badge>
+          </Row>
+          <Row
+            label="MCP adapter"
+            hint={
+              d.adapterSource === "user"
+                ? "pi-mcp-adapter from your Pi packages; PID adds nothing."
+                : d.adapterSource === "bundled"
+                  ? "Loaded per session with -e; your Pi settings are untouched."
+                  : "Not installed and not bundled: the MCP page is read-only."
+            }
+          >
+            <span className="font-mono text-sm text-ink">
+              {d.adapterSource === "bundled" ? `bundled ${d.adapterVersion ?? ""}` : d.adapterSource}
+            </span>
+          </Row>
+          <Row label="PID bridge extension" hint="Relays MCP status into PID. Loaded per session with -e.">
+            {d.bridgePath ? <PathLink path={d.bridgePath} /> : <Badge tone="warn">missing</Badge>}
+          </Row>
+        </>
+      )}
+    </Group>
   );
 }
 
