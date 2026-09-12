@@ -47,6 +47,8 @@ export interface ComposerProps {
   onModel: (m: AnyModel) => void;
   onLevel: (l: ThinkingLevel) => void;
   disabled?: boolean;
+  /** Typing works but nothing can be sent yet (Pi starting) or any more (Pi exited); shown as the placeholder. */
+  blocked?: string;
   /** Paths the next message carries. Dropped, pasted, or picked; always absolute; never copied. */
   attachments: Attachment[];
   onAttach: (paths: string[]) => void;
@@ -150,7 +152,7 @@ export function Composer(p: ComposerProps) {
     });
   };
 
-  const canSend = (text.trim().length > 0 || attachments.length > 0) && !p.disabled;
+  const canSend = (text.trim().length > 0 || attachments.length > 0) && !p.disabled && !p.blocked;
   const send = () => {
     if (!canSend) return;
     onSend(text.trim());
@@ -238,9 +240,11 @@ export function Composer(p: ComposerProps) {
 
   const placeholder = p.disabled
     ? "Choose a folder first."
-    : streaming
-      ? "Pi is working. Anything you send now waits its turn."
-      : "Ask Pi about this folder";
+    : p.blocked
+      ? p.blocked
+      : streaming
+        ? "Pi is working. Anything you send now waits its turn."
+        : "Ask Pi about this folder";
 
   const insertSigil = (sig: string) => {
     const el = ref.current;
