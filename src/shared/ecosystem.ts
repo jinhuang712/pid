@@ -74,7 +74,13 @@ export interface McpServerView {
 }
 
 export interface McpView {
-  adapterInstalled: boolean;
+  /**
+   * Which pi-mcp-adapter a PID-started Pi loads: the user's own package, PID's bundled copy
+   * (added per process with `-e`, nothing written to Pi's settings), or none.
+   */
+  adapterSource: "user" | "bundled" | "none";
+  /** Version of the bundled copy, when that is what will load. */
+  adapterVersion?: string;
   configPaths: string[];
   cachePath?: string;
   servers: McpServerView[];

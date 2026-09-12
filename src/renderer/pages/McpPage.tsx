@@ -1,4 +1,5 @@
 import type { McpServerView, McpView } from "@shared/ecosystem";
+import type { McpServerStatus, McpStatusSnapshot } from "@shared/mcp-status";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { Badge, PageShell, PathLink, ScopeBar, Toggle, tilde } from "./PageShell";
@@ -7,9 +8,22 @@ import { useEcoScope } from "./scope";
 /**
  * MCP servers as configured for pi-mcp-adapter, the MCP integration in this Pi install.
  * Switches write the adapter's `disabled` flag: globally in ~/.pi/agent/mcp.json, per project as a
- * disabled-only override in .pi/mcp.json. Tools listed here come from the adapter's cache.
+ * disabled-only override in .pi/mcp.json.
+ *
+ * Two sources of truth are shown side by side and never conflated:
+ * - config + the adapter's tool cache (what is *configured*, what was *once* discovered), from disk;
+ * - live status (what is *connected right now*), from the adapter running inside the active
+ *   session's Pi, relayed by pid-bridge. Absent when no session is open.
  */
-export function McpPage({ folder }: { folder?: string }) {
+export function McpPage({
+  folder,
+  live,
+  liveSession,
+}: {
+  folder?: string;
+  live?: McpStatusSnapshot;
+  liveSession?: string;
+}) {
   const [view, setView] = useState<McpView>();
   const [open, setOpen] = useState<string>();
   const [error, setError] = useState<string>();
@@ -28,25 +42,29 @@ export function McpPage({ folder }: { folder?: string }) {
   const toolCount = view?.servers.reduce((n, s) => n + (s.cachedTools?.length ?? 0), 0) ?? 0;
   const offCount = view?.servers.filter((s) => s.disabled).length ?? 0;
   const globalPath = view?.configPaths[0];
+  const liveByName = new Map((live?.servers ?? []).map((s) => [s.name, s]));
 
   return (
     <PageShell
       title="MCP"
       note={
         view ? (
-          view.adapterInstalled ? (
+          view.adapterSource === "none" ? (
             <>
-              {view.servers.length} servers · {toolCount} cached tools
-              {offCount > 0 ? ` · ${offCount} off` : ""} · via pi-mcp-adapter. Switches write the adapter's{" "}
-              <span className="font-mono">disabled</span> flag, like{" "}
-              <span className="font-mono">/mcp disable</span>; running sessions apply it after{" "}
-              <span className="font-mono">/reload</span>.
+              No MCP adapter available. Install pi-mcp-adapter into Pi with{" "}
+              <span className="font-mono">pi install npm:pi-mcp-adapter</span>, or run PID from a build that
+              bundles it.
             </>
           ) : (
             <>
-              pi-mcp-adapter is not in Pi's packages. Install it with{" "}
-              <span className="font-mono">pi install npm:pi-mcp-adapter</span>; PID does not add a second MCP
-              runtime.
+              {view.servers.length} servers · {toolCount} cached tools
+              {offCount > 0 ? ` · ${offCount} off` : ""} · via{" "}
+              {view.adapterSource === "user"
+                ? "pi-mcp-adapter from your Pi packages"
+                : `pi-mcp-adapter ${view.adapterVersion ?? ""} bundled with PID`}
+              . Switches write the adapter's <span className="font-mono">disabled</span> flag, like{" "}
+              <span className="font-mono">/mcp disable</span>; running sessions apply it after{" "}
+              <span className="font-mono">/reload</span>.
             </>
           )
         ) : (
@@ -89,6 +107,11 @@ export function McpPage({ folder }: { folder?: string }) {
               </div>
             )}
             {view.configPaths.length === 0 && <div>No mcp.json found in ~/.pi/agent or this folder.</div>}
+            <div>
+              {live
+                ? `live status from ${liveSession ?? "the active session"}: ${live.connectedCount} connected · ${live.totalTools} tools`
+                : "live status appears here while a session is open"}
+            </div>
           </div>
           <div className="flex flex-col gap-2">
             {view.servers.map((s) => {
@@ -97,6 +120,7 @@ export function McpPage({ folder }: { folder?: string }) {
               const inGlobal = s.globalDisabled !== undefined || s.configPath === globalPath;
               const projectOnly = sc.scope === "global" && !inGlobal;
               const needsDir = sc.scope === "project" && !sc.cwd;
+              const now = liveByName.get(s.name);
               return (
                 <article
                   key={key}
@@ -132,10 +156,11 @@ export function McpPage({ folder }: { folder?: string }) {
                           project {s.projectDisabled ? "off" : "on"}
                         </Badge>
                       )}
+                      {now ? <LiveBadge s={now} /> : live ? <Badge tone="muted">not in session</Badge> : null}
                       {s.cachedTools ? (
-                        <Badge tone="ok">{s.cachedTools.length} tools cached</Badge>
+                        <Badge tone="muted">{s.cachedTools.length} tools cached</Badge>
                       ) : (
-                        <Badge tone="warn">never connected</Badge>
+                        <Badge tone="muted">no tool cache</Badge>
                       )}
                       <span className="text-ink-3 text-xs">{isOpen ? "▾" : "▸"}</span>
                     </button>
@@ -177,4 +202,28 @@ export function McpPage({ folder }: { folder?: string }) {
       )}
     </PageShell>
   );
+}
+
+/** The adapter's runtime status for one server, worded as a state, not a health promise. */
+function LiveBadge({ s }: { s: McpServerStatus }) {
+  switch (s.status) {
+    case "connected":
+      return <Badge tone="ok">connected · {s.toolCount} tools</Badge>;
+    case "needs-auth":
+      return <Badge tone="warn">needs auth</Badge>;
+    case "failed":
+      return (
+        <Badge tone="danger">
+          failed{s.failedAgoSeconds !== undefined ? ` ${s.failedAgoSeconds}s ago` : ""}
+        </Badge>
+      );
+    case "disabled":
+      return <Badge tone="muted">disabled</Badge>;
+    case "cached":
+      return <Badge tone="muted">cached · not connected</Badge>;
+    case "not-connected":
+      return <Badge tone="muted">not connected</Badge>;
+    default:
+      return <Badge tone="muted">{s.status}</Badge>;
+  }
 }

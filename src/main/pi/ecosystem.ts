@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { ResolvedResource } from "@earendil-works/pi-coding-agent";
 import type { Compat, ExtensionView, McpServerView, McpView, PiHome, SkillView } from "@shared/ecosystem";
+import { adapterSource, currentBundled } from "./bundled";
 import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
 
 /**
@@ -277,7 +278,8 @@ export async function listExtensions(cwd?: string): Promise<ExtensionView[]> {
 /** MCP as configured for pi-mcp-adapter: layers merged by server name, project files winning. */
 export function readMcp(cwd?: string): McpView {
   const home = readPiHome();
-  const adapterInstalled = home.packages.some((p) => p.includes("pi-mcp-adapter"));
+  const bundled = currentBundled();
+  const source = adapterSource(home.packages, bundled);
   const globalPath = mcpGlobalPath();
   const layers: { path: string; scope: "global" | "shared" | "pi" }[] = [
     { path: globalPath, scope: "global" },
@@ -343,5 +345,11 @@ export function readMcp(cwd?: string): McpView {
       // unreadable cache: show servers without tools
     }
   }
-  return { adapterInstalled, configPaths, cachePath: existsSync(cachePath) ? cachePath : undefined, servers };
+  return {
+    adapterSource: source,
+    adapterVersion: source === "bundled" ? bundled.adapterVersion : undefined,
+    configPaths,
+    cachePath: existsSync(cachePath) ? cachePath : undefined,
+    servers,
+  };
 }
