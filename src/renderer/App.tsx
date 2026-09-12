@@ -682,6 +682,7 @@ export function App() {
                 ? [{ key: p.key, cwd: p.cwd, active: p.key === key, mcp: p.mcp }]
                 : [],
             )}
+            runCommand={(k, command) => bridge.pi.command(k, { type: "prompt", message: command })}
           />
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}

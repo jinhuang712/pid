@@ -23,7 +23,16 @@ export interface McpLiveSource {
   mcp: McpStatusSnapshot;
 }
 
-export function McpPage({ folder, sources = [] }: { folder?: string; sources?: McpLiveSource[] }) {
+export function McpPage({
+  folder,
+  sources = [],
+  runCommand,
+}: {
+  folder?: string;
+  sources?: McpLiveSource[];
+  /** Run a slash command in a session; Pi executes it without a model turn. */
+  runCommand?: (sessionKey: string, command: string) => Promise<unknown>;
+}) {
   const [view, setView] = useState<McpView>();
   const [open, setOpen] = useState<string>();
   const [error, setError] = useState<string>();
@@ -49,6 +58,16 @@ export function McpPage({ folder, sources = [] }: { folder?: string; sources?: M
       .setMcp({ name: s.name, scope: sc.scope, cwd: sc.cwd, disabled: !on })
       .then(load, (e: unknown) => setError(String(e instanceof Error ? e.message : e)));
   };
+
+  /** Adapter commands go through the session that owns the live status, as `/mcp …` would. */
+  const act = (command: string) => {
+    if (!source || !runCommand) return;
+    setError(undefined);
+    runCommand(source.key, command).catch((e: unknown) =>
+      setError(String(e instanceof Error ? e.message : e)),
+    );
+  };
+  const actBtn = "h-6 px-1.5 rounded-md text-xs text-ink-3 hover:bg-paper-3 hover:text-ink";
 
   const toolCount = view?.servers.reduce((n, s) => n + (s.cachedTools?.length ?? 0), 0) ?? 0;
   const offCount = view?.servers.filter((s) => s.disabled).length ?? 0;
@@ -175,6 +194,38 @@ export function McpPage({ folder, sources = [] }: { folder?: string; sources?: M
                       )}
                       <span className="text-ink-3 text-xs">{isOpen ? "▾" : "▸"}</span>
                     </button>
+                    {source && runCommand && !s.disabled && (
+                      <>
+                        {(now?.status === "needs-auth" || s.auth || s.transport === "http") && (
+                          <button
+                            type="button"
+                            className={actBtn}
+                            title={`/mcp-auth ${s.name} in the ${liveSession}; the browser flow shows up as a dialog here`}
+                            onClick={() => act(`/mcp-auth ${s.name}`)}
+                          >
+                            Auth
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={actBtn}
+                          title={`/mcp reconnect ${s.name} in the ${liveSession}`}
+                          onClick={() => act(`/mcp reconnect ${s.name}`)}
+                        >
+                          Reconnect
+                        </button>
+                        {(s.auth || s.transport === "http") && (
+                          <button
+                            type="button"
+                            className={actBtn}
+                            title={`/mcp logout ${s.name}: clear stored OAuth credentials and disconnect`}
+                            onClick={() => act(`/mcp logout ${s.name}`)}
+                          >
+                            Logout
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                   {isOpen && (
                     <div className="px-3 pb-3 text-xs flex flex-col gap-1.5 border-t border-line pt-2">
