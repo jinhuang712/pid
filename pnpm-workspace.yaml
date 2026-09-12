@@ -1,0 +1,12 @@
+allowBuilds:
+  '@google/genai': true
+  electron-winstaller: true
+  esbuild: true
+  protobufjs: true
+minimumReleaseAgeExclude:
+  - electron-to-chromium@1.5.427
+  - nanoid@3.3.19
+  - update-browserslist-db@1.3.3
+
+# pi-mcp-adapter pins @modelcontextprotocol/* to pkg.pr.new commit URLs; pnpm 12 blocks those by default.
+blockExoticSubdeps: false
