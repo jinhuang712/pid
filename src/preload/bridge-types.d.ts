@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { PiDiagnostics } from "@shared/diagnostics";
 import type { ExtensionView, McpToggle, McpView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
 import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
@@ -100,6 +101,8 @@ export interface Bridge {
     stop(key: string): Promise<void>;
     onEvent(listener: (e: PiEventEnvelope) => void): () => void;
     onExit(listener: (e: PiExitEnvelope) => void): () => void;
+    /** Which pi binary, which version, which SDK, which MCP adapter. Probes `pi --version`. */
+    diagnostics(): Promise<PiDiagnostics>;
   };
 }
 

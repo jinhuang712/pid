@@ -68,6 +68,7 @@ const bridge: Bridge = {
     command: (key, command) => ipcRenderer.invoke("pi:command", key, command),
     uiResponse: (key, response) => ipcRenderer.invoke("pi:uiResponse", key, response),
     stop: (key) => ipcRenderer.invoke("pi:stop", key),
+    diagnostics: () => ipcRenderer.invoke("pi:diagnostics"),
     onEvent: (l) => on("pi:event", l),
     onExit: (l) => on("pi:exit", l),
   },
