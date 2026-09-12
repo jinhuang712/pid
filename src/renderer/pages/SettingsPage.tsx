@@ -398,6 +398,7 @@ export function SettingsPage() {
 function Diagnostics({ binary }: { binary: string }) {
   const [d, setD] = useState<PiDiagnostics>();
   const [err, setErr] = useState<string>();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-probe when the configured binary changes
   useEffect(() => {
     setD(undefined);
     bridge.pi.diagnostics().then(setD, (e: unknown) => setErr(String(e)));
