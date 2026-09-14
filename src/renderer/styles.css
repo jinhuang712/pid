@@ -194,6 +194,7 @@ code {
   padding: 0.1em 0.4em;
   border-radius: 5px;
   color: var(--color-ink);
+  overflow-wrap: anywhere;
 }
 .prose pre {
   background: var(--color-paper-2);
@@ -231,6 +232,9 @@ code {
   color: var(--color-ink-2);
 }
 .prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   font-size: calc(var(--pid-prose-size) - 1.5px);
 }
