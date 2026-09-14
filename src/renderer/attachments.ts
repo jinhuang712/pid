@@ -1,4 +1,5 @@
 import type { PathInfo } from "@shared/files";
+import { SKILL_BLOCK_RE } from "@shared/prompt-blocks";
 
 /**
  * Attachments are absolute paths, nothing more. PID never copies bytes: the path goes into the
@@ -122,6 +123,30 @@ export function hostOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+// ---- skill invocations in a sent message ----
+
+export interface SentSkill {
+  name: string;
+  location: string;
+  /** SKILL.md body as Pi inlined it. */
+  text: string;
+}
+
+/**
+ * Pi expands `/klook-status extra words` into the skill's full SKILL.md before it becomes the user
+ * message, so that is all the transcript ever sees. Fold it back: the body is what the user
+ * effectively typed (`/klook-status extra words`), the skill text becomes a collapsible chip.
+ */
+export function parseSkillBlock(text: string): { body: string; skill?: SentSkill } {
+  const m = SKILL_BLOCK_RE.exec(text);
+  if (!m) return { body: text };
+  const args = (m[4] ?? "").trim();
+  return {
+    body: args ? `/${m[1]} ${args}` : `/${m[1]}`,
+    skill: { name: m[1], location: m[2], text: m[3] },
+  };
 }
 
 // ---- session reference blocks in a sent message ----

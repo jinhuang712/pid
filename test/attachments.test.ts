@@ -7,6 +7,7 @@ import {
   kindOf,
   parseAttachments,
   parseReferences,
+  parseSkillBlock,
   segment,
   toAttachment,
   urlsIn,
@@ -96,5 +97,29 @@ describe("stripPromptBlocks", () => {
     expect(stripPromptBlocks(text)).toBe('fix this $01a08eb2 ("debug")');
     expect(stripPromptBlocks("<attachments>\nfolder /x\n</attachments>")).toBe("");
     expect(stripPromptBlocks("plain")).toBe("plain");
+  });
+});
+
+describe("parseSkillBlock", () => {
+  const block = (args = "") =>
+    `<skill name="klook-status" location="/w/skills/klook-status/SKILL.md">\n# KLOOK Status\n\nRun the probes.\n</skill>${args ? `\n\n${args}` : ""}`;
+  it("folds Pi's expanded skill back into the typed command", () => {
+    const r = parseSkillBlock(block());
+    expect(r.body).toBe("/klook-status");
+    expect(r.skill).toEqual({
+      name: "klook-status",
+      location: "/w/skills/klook-status/SKILL.md",
+      text: "# KLOOK Status\n\nRun the probes.",
+    });
+  });
+  it("keeps trailing arguments the user typed after the command", () => {
+    expect(parseSkillBlock(block("region hk")).body).toBe("/klook-status region hk");
+  });
+  it("leaves ordinary messages alone, even ones mentioning <skill", () => {
+    expect(parseSkillBlock('what does <skill name="x"> mean?')).toEqual({ body: 'what does <skill name="x"> mean?' });
+  });
+  it("titles a skill session by the command, not the SKILL.md heading", () => {
+    expect(stripPromptBlocks(block("region hk"))).toBe("/klook-status region hk");
+    expect(stripPromptBlocks(`${block()}\n\n<attachments>\nfile   /x/a.txt\n</attachments>`)).toBe("/klook-status");
   });
 });
