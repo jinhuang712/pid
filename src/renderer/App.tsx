@@ -801,7 +801,6 @@ export function App() {
                   thinkingLevel={active?.piState.thinkingLevel}
                   usage={conv.lastUsage}
                   compacting={conv.compacting}
-                  turnStartedAt={conv.turnStartedAt}
                   loadModels={loadModels}
                   loadLevels={loadLevels}
                   onModel={(m) =>
