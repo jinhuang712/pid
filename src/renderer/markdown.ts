@@ -1,7 +1,5 @@
 import DOMPurify from "dompurify";
-import { marked } from "marked";
-
-marked.setOptions({ gfm: true, breaks: false });
+import { marked } from "./marked-setup";
 
 /**
  * Parsed + sanitized HTML by source text, shared by every Markdown instance. Switching sessions
