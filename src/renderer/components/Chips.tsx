@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { type Attachment, fmtSize, hostOf } from "../attachments";
+import { type Attachment, fmtSize } from "../attachments";
 import { bridge } from "../bridge";
 
 /**
@@ -232,27 +232,6 @@ export function AttachmentChip({
       tone={a.missing ? "danger" : undefined}
       onRemove={onRemove}
       onClick={onOpen}
-    />
-  );
-}
-
-export function LinkChip({ href }: { href: string }) {
-  const path = (() => {
-    try {
-      const u = new URL(href);
-      const p = u.pathname === "/" ? "" : u.pathname;
-      return p.length > 28 ? `${p.slice(0, 27)}…` : p;
-    } catch {
-      return "";
-    }
-  })();
-  return (
-    <Chip
-      glyph={<Glyph kind="link" />}
-      label={hostOf(href)}
-      meta={path || undefined}
-      title={href}
-      href={href}
     />
   );
 }

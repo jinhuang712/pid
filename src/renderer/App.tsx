@@ -15,6 +15,7 @@ import { Palette, type PaletteAction } from "./components/Palette";
 import { QueuePanel } from "./components/QueuePanel";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
 import { Timeline } from "./components/Timeline";
+import { expandLinks } from "./links";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { McpPage } from "./pages/McpPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -58,7 +59,7 @@ export function App() {
   const conv = active?.conv ?? emptyConversation();
   // Draft, $session refs, and attachments live per session; the entry view has its own scope.
   const composer = useComposer(active?.key ?? HOME_SCOPE);
-  const { draft, refs, attachments, setDraft } = composer;
+  const { draft, refs, attachments, links, setDraft } = composer;
   const composerRef = useRef(composer);
   composerRef.current = composer;
   const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
@@ -382,11 +383,12 @@ export function App() {
    */
   const deliver = (k: string, raw: string, kind: "prompt" | "follow_up") => {
     const c = composer;
-    const { text, used } = expandReferences(raw, c.refs);
+    const unfolded = expandLinks(raw, c.links);
+    const { text, used } = expandReferences(unfolded.text, c.refs);
     const message = appendAttachments(text, c.attachments);
     const sent = c.attachments;
     return bridge.pi.command(k, { type: kind, message }).then(
-      () => c.consume(used, sent),
+      () => c.consume(used, sent, unfolded.used),
       (e) => {
         c.restoreDraft(raw);
         throw e;
@@ -851,6 +853,8 @@ export function App() {
                   onPasteImage={pasteImage}
                   refs={refs}
                   onRemoveRef={removeRef}
+                  links={links}
+                  onAddLinks={composer.addLinks}
                   model={
                     active?.piState.model
                       ? {
@@ -912,6 +916,8 @@ export function App() {
                       onPasteImage={pasteImage}
                       refs={refs}
                       onRemoveRef={removeRef}
+                      links={links}
+                      onAddLinks={composer.addLinks}
                       loadModels={loadModels}
                       loadLevels={loadLevels}
                       onModel={() => {}}

@@ -7,28 +7,26 @@ import {
   type SessionReference,
   shortId,
 } from "../session-reference";
-import { AttachmentChip, Chip, Glyph, LinkChip } from "./Chips";
+import { AttachmentChip, Chip, Glyph } from "./Chips";
 
 /**
  * Everything the next message carries besides its words, in one row inside the composer:
- * attached paths, `$session` references, and the links found in the draft. Attachments and
- * references can be removed here; links are just the text and go away with it.
+ * attached paths and `$session` references, both removable here. Links stay inline in the text
+ * as folded "🔗host/…" tokens and go away with it.
  */
 export function ContextTray({
   attachments,
   refs,
-  urls,
   onRemoveAttachment,
   onRemoveRef,
 }: {
   attachments: Attachment[];
   refs: SessionReference[];
-  urls: string[];
   onRemoveAttachment: (path: string) => void;
   onRemoveRef: (token: string) => void;
 }) {
   const [openToken, setOpenToken] = useState<string>();
-  if (attachments.length + refs.length + urls.length === 0) return null;
+  if (attachments.length + refs.length === 0) return null;
   const open = refs.find((r) => r.token === openToken);
   const rendered = open ? renderReference(open) : undefined;
   return (
@@ -64,9 +62,6 @@ export function ContextTray({
             />
           );
         })}
-        {urls.map((u) => (
-          <LinkChip key={u} href={u} />
-        ))}
       </div>
       {rendered && open && (
         <div className="mt-2 rounded-lg border border-line bg-paper">
