@@ -95,7 +95,7 @@ function SentReferenceChip({ r }: { r: SentReference }) {
         tone="warn"
         label={
           <>
-            <span className="font-mono text-warn">{r.token}</span> <span>{r.title}</span>
+            <span className="font-mono text-warn">{r.token.slice(0, 9)}</span> <span>{r.title}</span>
           </>
         }
         meta={compactScope(r.scope)}

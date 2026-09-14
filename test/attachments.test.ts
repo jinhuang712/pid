@@ -59,12 +59,18 @@ describe("attachments block", () => {
 });
 
 describe("segment", () => {
-  it("finds urls, session tokens with labels, and @mentions", () => {
-    const s = segment('see https://example.com/a?b=1, then $01a08eb2 ("debug the cache") and @src/x.ts.');
+  it("finds urls, session references, and @mentions", () => {
+    const s = segment("see https://example.com/a?b=1, then $debug the cache(01a08eb2) and @src/x.ts.");
     expect(s.map((x) => x.type)).toEqual(["text", "url", "text", "session", "text", "mention", "text"]);
     expect(s[1]).toMatchObject({ href: "https://example.com/a?b=1" });
-    expect(s[3]).toMatchObject({ token: "$01a08eb2", label: "debug the cache" });
+    expect(s[3]).toMatchObject({ token: "$debug the cache(01a08eb2)" });
     expect(s[5]).toMatchObject({ path: "src/x.ts" });
+  });
+  it("still recognises a raw full token and the legacy short form with a label", () => {
+    const full = segment("see $01a08eb2-74e4-7740-a79d-92ddc4bcb638 now");
+    expect(full[1]).toMatchObject({ type: "session", token: "$01a08eb2-74e4-7740-a79d-92ddc4bcb638" });
+    const legacy = segment('see $01a08eb2 ("debug") now');
+    expect(legacy[1]).toMatchObject({ type: "session", token: "$01a08eb2", label: "debug" });
   });
   it("does not treat emails or mid-word $ as tokens", () => {
     expect(segment("mail me@host.com about cost$12345678").every((x) => x.type === "text")).toBe(true);
@@ -77,13 +83,13 @@ describe("segment", () => {
 describe("parseReferences", () => {
   it("splits the visible session blocks off the body", () => {
     const text =
-      'compare $01a08eb2 ("debug")\n\nReferenced sessions (explicitly attached by the user):\n' +
-      '<session-reference token="$01a08eb2" title="debug" folder="/repo" scope="last 2 of 2 messages, tool calls and thinking omitted">\n' +
+      "compare $debug(01a08eb2)\n\nReferenced sessions (explicitly attached by the user):\n" +
+      '<session-reference token="$01a08eb2-74e4-7740-a79d-92ddc4bcb638" title="debug" folder="/repo" scope="last 2 of 2 messages, tool calls and thinking omitted">\n' +
       "[user] hi\n[assistant] yo\n</session-reference>";
     const r = parseReferences(text);
-    expect(r.body).toBe('compare $01a08eb2 ("debug")');
+    expect(r.body).toBe("compare $debug(01a08eb2)");
     expect(r.references).toHaveLength(1);
-    expect(r.references[0]).toMatchObject({ token: "$01a08eb2", title: "debug", folder: "/repo" });
+    expect(r.references[0]).toMatchObject({ token: "$01a08eb2-74e4-7740-a79d-92ddc4bcb638", title: "debug", folder: "/repo" });
     expect(r.references[0].text).toBe("[user] hi\n[assistant] yo");
   });
 });
@@ -91,10 +97,10 @@ describe("parseReferences", () => {
 describe("stripPromptBlocks", () => {
   it("keeps only the words the user typed", () => {
     const text =
-      'fix this $01a08eb2 ("debug")\n\nReferenced sessions (explicitly attached by the user):\n' +
-      '<session-reference token="$01a08eb2" title="d" folder="/r" scope="s">\nx\n</session-reference>\n\n' +
+      "fix this $debug(01a08eb2)\n\nReferenced sessions (explicitly attached by the user):\n" +
+      '<session-reference token="$01a08eb2-74e4-7740-a79d-92ddc4bcb638" title="d" folder="/r" scope="s">\nx\n</session-reference>\n\n' +
       "<attachments>\nimage  /a/b.png\n</attachments>";
-    expect(stripPromptBlocks(text)).toBe('fix this $01a08eb2 ("debug")');
+    expect(stripPromptBlocks(text)).toBe("fix this $debug(01a08eb2)");
     expect(stripPromptBlocks("<attachments>\nfolder /x\n</attachments>")).toBe("");
     expect(stripPromptBlocks("plain")).toBe("plain");
   });

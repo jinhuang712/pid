@@ -19,7 +19,14 @@ import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { McpPage } from "./pages/McpPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
-import { expandReferences, refToken } from "./session-reference";
+import {
+  DISPLAY_RE,
+  expandReferences,
+  refDisplay,
+  refMatches,
+  refToken,
+  TOKEN_RE,
+} from "./session-reference";
 import { useSettings } from "./settings";
 import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
@@ -283,16 +290,21 @@ export function App() {
     );
   };
 
-  // A $token that appears in the draft (pasted, typed, or restored) and names a known session is
-  // attached automatically, so the reference is visible in the tray before it is sent.
+  // A reference that appears in the draft (pasted, typed, or restored) and names a known session is
+  // attached automatically, so it shows in the tray before it is sent. A pasted full $token is
+  // rewritten to its display form, "$label(shortid)", the moment the session is recognised.
   const resolving = useRef(new Set<string>());
   useEffect(() => {
     const scope = active?.key ?? HOME_SCOPE;
-    for (const token of new Set(draft.match(/\$[0-9a-f]{8}\b/g) ?? [])) {
+    const spelled = draft.match(new RegExp(`${TOKEN_RE.source}\\b`, "g")) ?? [];
+    const displayed = [...draft.matchAll(new RegExp(DISPLAY_RE.source, "g"))].map((m) => m[1]);
+    for (const hit of new Set([...spelled, ...displayed])) {
+      const s = allSessions.find((x) => refMatches(x, hit));
+      if (!s) continue;
+      const token = refToken(s);
+      if (hit.startsWith("$")) setDraft((d) => d.split(hit).join(refDisplay(s)));
       const pending = `${scope}:${token}`;
       if (refs.some((r) => r.token === token) || resolving.current.has(pending)) continue;
-      const s = allSessions.find((x) => refToken(x) === token);
-      if (!s) continue;
       resolving.current.add(pending);
       void bridge.sessions
         .read(s.path)
@@ -300,12 +312,14 @@ export function App() {
         .catch((e) => setStatus(String(e)))
         .finally(() => resolving.current.delete(pending));
     }
-  }, [draft, refs, allSessions, active?.key]);
+  }, [draft, refs, allSessions, active?.key, setDraft]);
 
-  /** Dropping a reference from the tray also drops its $token from the draft, so it does not come back. */
+  /** Dropping a reference from the tray also drops it from the draft, so it does not come back. */
   const removeRef = (token: string) => {
+    const ref = refs.find((r) => r.token === token);
     composer.removeRef(token);
-    setDraft((d) => d.replace(new RegExp(`\\${token}\\b ?`, "g"), ""));
+    const forms = ref ? [refDisplay(ref.session), token] : [token];
+    setDraft((d) => forms.reduce((t, f) => t.split(`${f} `).join("").split(f).join(""), d));
   };
 
   const sessionActions: SessionActions = {

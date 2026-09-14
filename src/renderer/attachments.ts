@@ -1,5 +1,6 @@
 import type { PathInfo } from "@shared/files";
 import { SKILL_BLOCK_RE } from "@shared/prompt-blocks";
+import { DISPLAY_RE, TOKEN_RE as SESSION_TOKEN_RE } from "./session-reference";
 
 /**
  * Attachments are absolute paths, nothing more. PID never copies bytes: the path goes into the
@@ -92,9 +93,15 @@ export type Segment =
   | { type: "session"; text: string; token: string; label?: string }
   | { type: "mention"; text: string; path: string };
 
-/** URL, then $token with an optional ("label") that expandReferences adds, then @path. Order matters: first match wins. */
-const TOKEN_RE =
-  /(https?:\/\/[^\s<>()"']+[^\s<>()"'.,;:!?])|(?<=^|\s)(\$[0-9a-f]{8})(?: \("((?:[^"\\]|\\.)*)"\))?|(?<=^|\s)(@\/?[^\s@]*[^\s@.,;:!?])/g;
+/**
+ * URL, then a session reference, then @path. Order matters: first match wins. A reference is its
+ * display form "$label(shortid)", a raw full "$token", or the legacy 8-hex "$token ("label")"
+ * that older sent messages carry.
+ */
+const TOKEN_RE = new RegExp(
+  `(https?:\\/\\/[^\\s<>()"']+[^\\s<>()"'.,;:!?])|(?<=^|\\s)(${DISPLAY_RE.source.replace("([0-9a-f]{8})", "[0-9a-f]{8}")}|${SESSION_TOKEN_RE.source}|\\$[0-9a-f]{8}\\b)(?: \\("((?:[^"\\\\]|\\\\.)*)"\\))?|(?<=^|\\s)(@\\/?[^\\s@]*[^\\s@.,;:!?])`,
+  "g",
+);
 
 export function segment(text: string): Segment[] {
   const out: Segment[] = [];
