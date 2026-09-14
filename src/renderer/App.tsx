@@ -52,7 +52,9 @@ export function App() {
   const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
 
   // ---- folders and their sessions (read-only projections of disk) ----
+  const loaded = useRef(new Set<string>());
   const loadFolder = useCallback(async (dir: string) => {
+    loaded.current.add(dir);
     const [sessions, repo] = await Promise.all([bridge.sessions.list(dir), bridge.git.repo(dir)]);
     setSessionsByFolder((m) => ({ ...m, [dir]: sessions }));
     setRepos((m) => ({ ...m, [dir]: repo ?? null }));
@@ -80,7 +82,9 @@ export function App() {
       // Persist recency for the next launch, but keep this window's order stable: a click must not reshuffle the tree.
       // Nothing waits on the write: opening a session must not queue behind it.
       void bridge.folders.remember(dir);
-      void loadFolder(dir);
+      // A folder already in the tree keeps its listing: agent_end reloads it, and re-reading every
+      // session file plus git on each click made unfolding stutter.
+      if (!loaded.current.has(dir)) void loadFolder(dir);
     },
     [loadFolder],
   );
@@ -93,7 +97,9 @@ export function App() {
       .filter((p) => p.piState.sessionFile && !p.exit && !p.pending)
       .map((p) => `${p.cwd}\u0000${p.piState.sessionFile}`);
     const activePath = ws.activeKey ? ws.procs[ws.activeKey]?.piState.sessionFile : undefined;
-    return JSON.stringify({ open, activePath });
+    // One entry per file: a renderer reload leaves the previous processes running in main, and
+    // restoring their duplicates would double the list on every reload.
+    return JSON.stringify({ open: [...new Set(open)], activePath });
   }, [ws]);
   useEffect(() => {
     if (!restored.current) return; // don't overwrite the saved list before it has been restored
@@ -479,9 +485,16 @@ export function App() {
         restored.current = true;
         return;
       }
-      setStatus(`reopening ${openSessions.length} session${openSessions.length === 1 ? "" : "s"}…`);
+      // A state file written before entries were unique may list one session many times.
+      const unique = openSessions.filter((o, i) => openSessions.findIndex((x) => x.path === o.path) === i);
+      setStatus(`reopening ${unique.length} session${unique.length === 1 ? "" : "s"}…`);
+      // Every reopened session needs its folder row, or the tab has nowhere to appear.
+      for (const cwd of new Set(unique.map((o) => o.cwd))) {
+        setFolders((cur) => (cur.includes(cwd) ? cur : [...cur, cwd]));
+        if (!loaded.current.has(cwd)) void loadFolder(cwd);
+      }
       let activeKey: string | undefined;
-      for (const o of openSessions) {
+      for (const o of unique) {
         const k = await start(o.cwd, o.path);
         if (k && o.path === activeSession) activeKey = k;
       }
