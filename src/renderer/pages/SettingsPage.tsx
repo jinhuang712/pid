@@ -322,12 +322,6 @@ export function SettingsPage({ initialSection }: { initialSection?: string }) {
                   onChange={(onQuitWhileRunning) => update("sessions", { onQuitWhileRunning })}
                 />
               </Row>
-              <Row label="Nest forks under their parent" hint="Off: every session is a flat row.">
-                <Toggle
-                  value={settings.sessions.showForkLineage}
-                  onChange={(showForkLineage) => update("sessions", { showForkLineage })}
-                />
-              </Row>
             </Group>
           )}
 

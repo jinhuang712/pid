@@ -12,6 +12,7 @@ import type { BrowserWindow } from "electron";
 import { loadSettings } from "../settings";
 import { warmShellEnv } from "../shell-env";
 import { bundledExtensionArgs, currentBundled } from "./bundled";
+import { detachFork } from "./detach-fork";
 import { readPiHome } from "./ecosystem";
 import { PiProcess } from "./rpc-process";
 
@@ -63,8 +64,15 @@ export class PiRegistry {
     return { key, cwd: opts.cwd, state, earlyEvents };
   }
 
-  command(key: string, command: PiCommand) {
-    return this.get(key).request(command);
+  async command(key: string, command: PiCommand) {
+    const proc = this.get(key);
+    const r = await proc.request(command);
+    // a fork is a plain new session in PID: drop pi's parentSession stamp from its header
+    if (command.type === "fork") {
+      const state = await proc.request({ type: "get_state" });
+      if (state.sessionFile) await detachFork(state.sessionFile);
+    }
+    return r;
   }
 
   respondUI(key: string, response: RpcExtensionUIResponse) {

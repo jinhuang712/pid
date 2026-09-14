@@ -12,7 +12,6 @@ function toSummary(s: Info): SessionSummary {
     id: s.id,
     cwd: s.cwd,
     name: s.name,
-    parentSessionPath: s.parentSessionPath,
     created: s.created.toISOString(),
     modified: s.modified.toISOString(),
     messageCount: s.messageCount,
