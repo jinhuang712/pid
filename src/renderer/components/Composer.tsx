@@ -394,8 +394,6 @@ export function Composer(p: ComposerProps) {
           <span className="flex-1" />
           {streaming ? (
             <span className="flex items-center gap-2 text-[12.5px] text-ink-3 pr-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-              <span>Running</span>
               {p.turnStartedAt !== undefined && <Elapsed since={p.turnStartedAt} />}
               <Keys keys={["⏎"]} label="queue" className="ml-1" />
               <button

@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
-import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { parseAttachments, parseReferences, type SentReference, segment } from "../attachments";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
@@ -295,7 +295,6 @@ const TurnBlock = memo(function TurnBlock({
 });
 
 export function Timeline({ state }: { state: ConversationState }) {
-  const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const [stick, setStick] = useState(true);
   /** How many of the newest messages are mounted; grows as the user scrolls toward the top. */
@@ -312,10 +311,15 @@ export function Timeline({ state }: { state: ConversationState }) {
   const tailOpen = last !== undefined && last.summary === undefined;
 
   // Follow the stream: the tail grows on every event, so this runs per event by design.
+  // It runs before paint so a new row never shows unscrolled, and it reads `follow` through a ref
+  // so the user's own scroll toward the bottom does not snap the viewport on every wheel tick.
+  const followRef = useRef(follow);
+  followRef.current = follow;
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on every state change to follow the stream
-  useEffect(() => {
-    if (follow) bottom.current?.scrollIntoView({ block: "end" });
-  }, [state, follow]);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (followRef.current && el) el.scrollTop = el.scrollHeight;
+  }, [state]);
 
   const onScroll = () => {
     const el = scroller.current;
@@ -358,13 +362,12 @@ export function Timeline({ state }: { state: ConversationState }) {
         ))}
         {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
         {state.streaming && !tailOpen && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
-        {state.isStreaming && !state.streaming && (
+        {state.isStreaming && (
           <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
             Working…
           </div>
         )}
-        <div ref={bottom} />
       </div>
     </div>
   );
