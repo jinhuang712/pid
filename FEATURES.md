@@ -120,6 +120,7 @@ Worktree creation, landing, and removal are Pi's (`pi-worktree`). PID adds no wo
 - tools per server `[Pi]`
 - errors `[Pi]`
 - reconnect / refresh where Pi allows `[Pi]`
+- servers an extension registered at runtime are listed read-only, from the adapter's snapshot `[Pi]`
 - on/off switch per server, global or per project, via the adapter's `disabled` flag `[Pi]`
 - MCP tools flow through Pi `[Pi]`
 - unified Tool Card rendering `[Presentation]`
