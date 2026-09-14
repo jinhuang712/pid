@@ -484,7 +484,7 @@ function Highlights({ text }: { text: string }) {
         switch (s.type) {
           case "url":
             return (
-              <span key={key} className="text-ink underline decoration-line-2 underline-offset-2">
+              <span key={key} className="text-accent underline decoration-accent/45 underline-offset-2">
                 {s.text}
               </span>
             );

@@ -206,9 +206,20 @@ code {
   font-size: inherit;
 }
 .prose a {
-  color: var(--color-ink);
+  color: var(--color-accent);
+  font-weight: 500;
   text-decoration: underline;
-  text-decoration-color: var(--color-line-2);
+  text-decoration-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.prose a:hover {
+  text-decoration-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-radius: 2px;
+}
+.prose a code {
+  color: inherit;
 }
 .prose blockquote {
   border-left: 2px solid var(--color-line-2);
