@@ -1,5 +1,13 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { isPidWidget, type McpStatusSnapshot, parseMcpStatus, WIDGET_MCP_STATUS } from "@shared/mcp-status";
+import {
+  isPidWidget,
+  type McpOAuthOutcome,
+  type McpStatusSnapshot,
+  parseMcpOAuth,
+  parseMcpStatus,
+  WIDGET_MCP_OAUTH,
+  WIDGET_MCP_STATUS,
+} from "@shared/mcp-status";
 import type { PiEvent, PiHandle, RpcSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
 import { type ConversationState, emptyConversation, fromMessages, reduce } from "./conversation";
@@ -17,8 +25,10 @@ export interface Proc {
   /** setWidget lines by widget key, e.g. pi-worktree's "🌲 branch → main · ↑2 · 1 dirty". */
   widgets: Record<string, string>;
   dialogs: DialogRequest[];
-  /** Live MCP server status from pi-mcp-adapter, via pid-bridge. Undefined until the first snapshot. */
+  /** Live MCP server status from the MCP extension (pid-mcp), via pid-bridge. Undefined until the first snapshot. */
   mcp?: McpStatusSnapshot;
+  /** The most recent OAuth outcome the MCP extension reported, via pid-bridge. */
+  mcpOAuth?: McpOAuthOutcome;
   /** Set when the process exited; the entry stays until dismissed so the user sees why. */
   exit?: string;
   /**
@@ -133,6 +143,8 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
               // `pid:*` widgets are data from PID's own bridge extension, never something to render.
               if (isPidWidget(ev.widgetKey)) {
                 if (ev.widgetKey === WIDGET_MCP_STATUS) return { ...p, mcp: parseMcpStatus(ev.widgetLines) };
+                if (ev.widgetKey === WIDGET_MCP_OAUTH)
+                  return { ...p, mcpOAuth: parseMcpOAuth(ev.widgetLines) };
                 return p;
               }
               return { ...p, widgets: { ...p.widgets, [ev.widgetKey]: (ev.widgetLines ?? []).join(" ") } };

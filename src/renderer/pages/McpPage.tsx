@@ -1,19 +1,26 @@
 import type { McpServerView, McpToolSummary, McpView } from "@shared/ecosystem";
-import { type McpServerStatus, type McpStatusSnapshot, runtimeOnly } from "@shared/mcp-status";
+import {
+  type McpOAuthOutcome,
+  type McpServerStatus,
+  type McpStatusSnapshot,
+  runtimeOnly,
+} from "@shared/mcp-status";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { Badge, PageShell, PathLink, ScopeBar, Toggle, tilde } from "./PageShell";
 import { useEcoScope } from "./scope";
 
 /**
- * MCP servers as configured for pi-mcp-adapter, the MCP integration in this Pi install.
- * Switches write the adapter's `disabled` flag: globally in ~/.pi/agent/mcp.json, per project as a
- * disabled-only override in .pi/mcp.json.
+ * MCP servers as configured for the MCP extension in this Pi install: pid-mcp, bundled with PID,
+ * or a pi-mcp-adapter the user installed. Switches write the `disabled` flag both read: globally in
+ * ~/.pi/agent/mcp.json, per project as a disabled-only override in .pi/mcp.json.
  *
- * Two sources of truth are shown side by side and never conflated:
- * - config + the adapter's tool cache (what is *configured*, what was *once* discovered), from disk;
- * - live status (what is *connected right now*), from the adapter running inside the active
- *   session's Pi, relayed by pid-bridge. Absent when no session is open.
+ * Three states are shown side by side and never conflated:
+ * - config + the tool cache (what is *configured*, what was *once* discovered), from disk;
+ * - live status (what is *connected right now*), from the extension running inside the active
+ *   session's Pi, relayed by pid-bridge. Absent when no session is open;
+ * - active tools (what the *model can see right now*): pid-mcp registers every MCP tool as a Pi
+ *   tool but keeps it out of the model's view until `mcp_search` activates it or the config pins it.
  *
  * Servers a Pi extension registered at runtime are the third case: Pi is running them, no config
  * file mentions them, so there is nothing to switch and nothing on disk to read. They come from the
@@ -25,6 +32,8 @@ export interface McpLiveSource {
   cwd: string;
   active: boolean;
   mcp: McpStatusSnapshot;
+  /** Last OAuth outcome the session reported, if any. */
+  oauth?: McpOAuthOutcome;
 }
 
 export function McpPage({
@@ -63,7 +72,7 @@ export function McpPage({
       .then(load, (e: unknown) => setError(String(e instanceof Error ? e.message : e)));
   };
 
-  /** Adapter commands go through the session that owns the live status, as `/mcp …` would. */
+  /** MCP commands go through the session that owns the live status, as `/mcp …` would. */
   const act = (command: string) => {
     if (!source || !runCommand) return;
     setError(undefined);
@@ -90,19 +99,21 @@ export function McpPage({
         view ? (
           view.adapterSource === "none" ? (
             <>
-              No MCP adapter available. Install pi-mcp-adapter into Pi with{" "}
-              <span className="font-mono">pi install npm:pi-mcp-adapter</span>, or run PID from a build that
-              bundles it.
+              No MCP extension available. This PID build does not bundle pid-mcp; install it into Pi with{" "}
+              <span className="font-mono">pi install npm:pid-mcp</span>, or run PID from a build that bundles
+              it.
             </>
           ) : (
             <>
               {view.servers.length + runtimeRows.length} servers · {toolCount + runtimeToolCount} cached tools
               {runtimeRows.length > 0 ? ` · ${runtimeRows.length} registered at runtime` : ""}
-              {offCount > 0 ? ` · ${offCount} off` : ""} · via{" "}
+              {offCount > 0 ? ` · ${offCount} off` : ""}
+              {live?.activeToolCount !== undefined ? ` · ${live.activeToolCount} visible to the model` : ""} ·
+              via{" "}
               {view.adapterSource === "user"
-                ? "pi-mcp-adapter from your Pi packages"
-                : `pi-mcp-adapter ${view.adapterVersion ?? ""} bundled with PID`}
-              . Switches write the adapter's <span className="font-mono">disabled</span> flag, like{" "}
+                ? `${view.adapterName ?? "the MCP extension"} from your Pi packages`
+                : `pid-mcp ${view.adapterVersion ?? ""} bundled with PID`}
+              . Switches write the <span className="font-mono">disabled</span> flag, like{" "}
               <span className="font-mono">/mcp disable</span>; running sessions apply it after{" "}
               <span className="font-mono">/reload</span>.
             </>
@@ -149,9 +160,15 @@ export function McpPage({
             {view.configPaths.length === 0 && <div>No mcp.json found in ~/.pi/agent or this folder.</div>}
             <div>
               {live
-                ? `live status from ${liveSession ?? "the active session"}: ${live.connectedCount} connected · ${live.totalTools} tools`
+                ? `live status from ${liveSession ?? "the active session"}: ${live.connectedCount} connected · ${live.totalTools} tools${live.activeToolCount !== undefined ? ` · ${live.activeToolCount} active` : ""}${live.source ? ` · ${live.source}${live.pidMcpVersion ? ` ${live.pidMcpVersion}` : ""}` : ""}`
                 : "live status appears here while a session is open"}
             </div>
+            {source?.oauth && (
+              <div className={source.oauth.status === "failed" ? "text-danger" : "text-ok"}>
+                OAuth {source.oauth.server}: {source.oauth.status}
+                {source.oauth.message ? ` — ${source.oauth.message}` : ""}
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             {view.servers.map((s) => {
@@ -189,7 +206,12 @@ export function McpPage({
                       <span className="font-medium text-ink">{s.name}</span>
                       <Badge tone="muted">{s.transport}</Badge>
                       {s.auth && <Badge tone="accent">{s.auth}</Badge>}
-                      {s.directTools === false && <Badge tone="muted">prompt tools</Badge>}
+                      <ExposureBadge directTools={s.directTools} />
+                      {now?.lastError && (
+                        <span title={now.lastError}>
+                          <Badge tone="danger">error</Badge>
+                        </span>
+                      )}
                       <span className="flex-1" />
                       {sc.scope === "project" && s.projectDisabled !== undefined && (
                         <Badge tone={s.projectDisabled ? "warn" : "ok"}>
@@ -248,21 +270,19 @@ export function McpPage({
                           <PathLink key={p} path={p} />
                         ))}
                       </div>
+                      {now?.lastError && (
+                        <div className="text-danger break-all">last error: {now.lastError}</div>
+                      )}
+                      {now?.activeToolNames !== undefined && (
+                        <div className="text-ink-3">
+                          {now.activeToolNames.length} of {now.toolCount} tools visible to the model
+                          {now.pinnedToolCount ? ` · ${now.pinnedToolCount} pinned by config` : ""}
+                          {" · the rest wait for "}
+                          <span className="font-mono">mcp_search</span>
+                        </div>
+                      )}
                       {s.cachedTools && s.cachedTools.length > 0 && (
-                        <ul className="mt-1 grid gap-1 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
-                          {s.cachedTools.map((t) => (
-                            <li
-                              key={t.name}
-                              className="rounded-md bg-paper-3 px-2 py-1 min-w-0"
-                              title={t.description}
-                            >
-                              <div className="font-mono text-ink truncate">{t.name}</div>
-                              {t.description && (
-                                <div className="text-ink-3 line-clamp-2">{t.description}</div>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
+                        <ToolGrid tools={s.cachedTools} activeNames={now?.activeToolNames} />
                       )}
                     </div>
                   )}
@@ -298,10 +318,50 @@ export function McpPage({
   );
 }
 
+/** How a server's tools reach the model, from its `directTools` setting. */
+function ExposureBadge({ directTools }: { directTools?: boolean | string[] | "search" }) {
+  if (directTools === true) return <Badge tone="accent">always visible</Badge>;
+  if (Array.isArray(directTools)) return <Badge tone="accent">{directTools.length} pinned</Badge>;
+  return <Badge tone="muted">on search</Badge>;
+}
+
+/** Cached tools, with the ones the model can currently see marked. */
+function ToolGrid({ tools, activeNames }: { tools: McpToolSummary[]; activeNames?: string[] }) {
+  const isActive = (name: string) =>
+    activeNames?.some((n) => n === name || n.endsWith(`_${name.replace(/\./g, "_")}`)) ?? false;
+  return (
+    <ul className="mt-1 grid gap-1 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+      {tools.map((t) => {
+        const active = isActive(t.name);
+        return (
+          <li
+            key={t.name}
+            className={`rounded-md px-2 py-1 min-w-0 ${active ? "bg-paper-3 ring-1 ring-accent/40" : "bg-paper-3"}`}
+            title={t.description}
+          >
+            <div className="font-mono text-ink truncate flex items-center gap-1">
+              {activeNames !== undefined && (
+                <span
+                  className={active ? "text-accent" : "text-ink-3"}
+                  title={active ? "active" : "inactive"}
+                >
+                  {active ? "●" : "○"}
+                </span>
+              )}
+              {t.name}
+            </div>
+            {t.description && <div className="text-ink-3 line-clamp-2">{t.description}</div>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
- * A server an extension registered at runtime: live status, its definition as the adapter reports
- * it, and the tools the adapter once discovered. Read-only by nature — there is no config entry to
- * flip, only Pi's own `/mcp reconnect` to fall back on.
+ * A server an extension registered at runtime: live status, its definition as the MCP extension
+ * reports it, and the tools once discovered. Read-only by nature — there is no config entry to
+ * flip, only `/mcp reconnect` to fall back on.
  */
 function RuntimeServerCard({
   s,
@@ -349,30 +409,35 @@ function RuntimeServerCard({
       {open && (
         <div className="px-3 pb-3 text-xs flex flex-col gap-1.5 border-t border-line pt-2">
           <div className="font-mono text-ink-2 break-all">
-            {startedFrom || "the adapter reported no definition for this server"}
+            {startedFrom || "the MCP extension reported no definition for this server"}
           </div>
           <div className="text-ink-3">registered by an extension at session start · no mcp.json</div>
-          {tools && tools.length > 0 && (
-            <ul className="mt-1 grid gap-1 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
-              {tools.map((t) => (
-                <li key={t.name} className="rounded-md bg-paper-3 px-2 py-1 min-w-0" title={t.description}>
-                  <div className="font-mono text-ink truncate">{t.name}</div>
-                  {t.description && <div className="text-ink-3 line-clamp-2">{t.description}</div>}
-                </li>
-              ))}
-            </ul>
+          {s.lastError && <div className="text-danger break-all">last error: {s.lastError}</div>}
+          {s.activeToolNames !== undefined && (
+            <div className="text-ink-3">
+              {s.activeToolNames.length} of {s.toolCount} tools visible to the model · the rest wait for{" "}
+              <span className="font-mono">mcp_search</span>
+            </div>
           )}
+          {tools && tools.length > 0 && <ToolGrid tools={tools} activeNames={s.activeToolNames} />}
         </div>
       )}
     </article>
   );
 }
 
-/** The adapter's runtime status for one server, worded as a state, not a health promise. */
+/** The MCP extension's runtime status for one server, worded as a state, not a health promise. */
 function LiveBadge({ s }: { s: McpServerStatus }) {
   switch (s.status) {
     case "connected":
-      return <Badge tone="ok">connected · {s.toolCount} tools</Badge>;
+      return (
+        <Badge tone="ok">
+          connected ·{" "}
+          {s.activeToolCount !== undefined
+            ? `${s.activeToolCount}/${s.toolCount} active`
+            : `${s.toolCount} tools`}
+        </Badge>
+      );
     case "needs-auth":
       return <Badge tone="warn">needs auth</Badge>;
     case "failed":

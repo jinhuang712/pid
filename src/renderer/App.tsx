@@ -717,7 +717,7 @@ export function App() {
             folder={folder}
             sources={Object.values(ws.procs).flatMap((p) =>
               p.mcp && !p.pending && !p.exit
-                ? [{ key: p.key, cwd: p.cwd, active: p.key === key, mcp: p.mcp }]
+                ? [{ key: p.key, cwd: p.cwd, active: p.key === key, mcp: p.mcp, oauth: p.mcpOAuth }]
                 : [],
             )}
             runCommand={(k, command) => bridge.pi.command(k, { type: "prompt", message: command })}

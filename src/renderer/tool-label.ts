@@ -15,7 +15,8 @@ export const MCP_PREFIX = "mcp__";
 export function label(call: ToolCall): Label {
   const a = (call.arguments ?? {}) as Record<string, unknown>;
   const str = (k: string) => (typeof a[k] === "string" ? (a[k] as string) : "");
-  // pi-mcp-adapter registers one tool per server: mcp__<server> with { tool, args }
+  // pi-mcp-adapter's gateway tool: mcp__<server> with { tool, args }. pid-mcp registers each MCP
+  // tool under its own name (<server>_<tool>), so those fall through to the default label.
   if (call.name.startsWith(MCP_PREFIX)) {
     const server = call.name.slice(MCP_PREFIX.length);
     const tool = str("tool") || str("name");

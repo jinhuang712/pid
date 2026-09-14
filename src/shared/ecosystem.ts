@@ -17,7 +17,7 @@ export interface SkillView {
   description: string;
   path: string;
   baseDir: string;
-  /** Where it was discovered: "user", "project", or a package source such as "npm:pi-mcp-adapter". */
+  /** Where it was discovered: "user", "project", or a package source such as "npm:pi-view". */
   source: string;
   disableModelInvocation: boolean;
   /** Effective state after global and project settings, as Pi resolves it. */
@@ -51,7 +51,7 @@ export interface ExtensionView {
   projectState?: ProjectState;
 }
 
-/** One entry of pi-mcp-adapter's discovered-tool cache. */
+/** One entry of the MCP tool cache (`~/.pi/agent/mcp-cache.json`, shared by pid-mcp and pi-mcp-adapter). */
 export interface McpToolSummary {
   name: string;
   description?: string;
@@ -68,23 +68,29 @@ export interface McpServerView {
   args?: string[];
   url?: string;
   auth?: string;
-  directTools?: boolean;
+  /**
+   * How the server's tools reach the model: `true` always visible, a list pins those names,
+   * anything else ("search", false, absent) waits for `mcp_search`.
+   */
+  directTools?: boolean | string[] | "search";
   /** Effective `disabled` after all layers. */
   disabled: boolean;
   /** `disabled` as written in the global mcp.json, if that file defines the server. */
   globalDisabled?: boolean;
   /** `disabled` as written in the project's .pi/mcp.json override, if any. */
   projectDisabled?: boolean;
-  /** From pi-mcp-adapter's tool cache; undefined when the server has never been connected. */
+  /** From the MCP tool cache; undefined when the server has never been connected. */
   cachedTools?: McpToolSummary[];
 }
 
 export interface McpView {
   /**
-   * Which pi-mcp-adapter a PID-started Pi loads: the user's own package, PID's bundled copy
+   * Which MCP extension a PID-started Pi loads: the user's own package, PID's bundled pid-mcp
    * (added per process with `-e`, nothing written to Pi's settings), or none.
    */
   adapterSource: "user" | "bundled" | "none";
+  /** Name of the extension that will load: "pid-mcp" or "pi-mcp-adapter". */
+  adapterName?: string;
   /** Version of the bundled copy, when that is what will load. */
   adapterVersion?: string;
   configPaths: string[];

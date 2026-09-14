@@ -8,7 +8,7 @@ files:
   # Extensions PID loads into `pi --mode rpc` with -e (see src/main/pi/bundled.ts).
   - resources/pid-bridge/**
 # No asar: the `pi` child process is a plain Node program that reads pid-bridge and the bundled
-# pi-mcp-adapter (plus its node_modules) straight from disk, and it cannot look inside an archive.
+# pid-mcp (plus its node_modules) straight from disk, and it cannot look inside an archive.
 asar: false
 mac:
   category: public.app-category.developer-tools

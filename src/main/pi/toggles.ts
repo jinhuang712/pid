@@ -18,7 +18,7 @@ import { agentDir } from "./ecosystem";
  * ~/.pi/agent/settings.json; project scope edits <cwd>/.pi/settings.json exactly like
  * `pi config --local`, including the three-state load / unload / inherit override.
  *
- * MCP servers: the `disabled` flag pi-mcp-adapter reads. Global scope edits the entry in
+ * MCP servers: the `disabled` flag pid-mcp (and pi-mcp-adapter) reads. Global scope edits the entry in
  * ~/.pi/agent/mcp.json; project scope writes a `{ disabled }`-only override to <cwd>/.pi/mcp.json,
  * the way the adapter's own /mcp panel does. No server definition or credential is ever copied.
  */

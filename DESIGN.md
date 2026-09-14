@@ -225,7 +225,9 @@ Lists every skill available in the current Pi environment: name, description, so
 
 ### MCP
 
-Lists configured MCP servers: name, connection status, tool count, tools, recent errors, and metadata. Each server has a switch that writes pi-mcp-adapter's `disabled` flag, globally in `~/.pi/agent/mcp.json` or as a project override in `.pi/mcp.json`, the same thing `/mcp disable` does. Refresh and reconnect are offered where Pi allows them. Servers an extension registered at runtime — a Pi package handing the adapter a definition instead of writing an mcp.json — are listed below them, read-only: Pi is running them, no file defines them, so there is no switch to flip. There is no marketplace, no permission engine, no workflow builder.
+Lists configured MCP servers: name, connection status, tool count, tools, recent errors, and metadata. Each server has a switch that writes the `disabled` flag the MCP extension reads, globally in `~/.pi/agent/mcp.json` or as a project override in `.pi/mcp.json`, the same thing `/mcp disable` does. Refresh and reconnect are offered where Pi allows them. Servers an extension registered at runtime — a Pi package handing the MCP extension a definition instead of writing an mcp.json — are listed below them, read-only: Pi is running them, no file defines them, so there is no switch to flip.
+
+With pid-mcp (bundled with PID) every MCP tool is a native Pi tool. The page shows which of a server's tools the model can see right now: pinned by config, activated by `mcp_search` during the session, or still waiting. Cached, connected, and active are three different states and are never conflated. There is no marketplace, no permission engine, no workflow builder.
 
 ### Extensions
 

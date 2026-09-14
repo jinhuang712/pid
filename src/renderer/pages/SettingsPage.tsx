@@ -455,17 +455,21 @@ function Diagnostics({ binary }: { binary: string }) {
             <Badge tone={compat[d.compat].tone}>{compat[d.compat].label}</Badge>
           </Row>
           <Row
-            label="MCP adapter"
+            label="MCP extension"
             hint={
               d.adapterSource === "user"
-                ? "pi-mcp-adapter from your Pi packages; PID adds nothing."
+                ? `${d.adapterName ?? "An MCP extension"} from your Pi packages; PID adds nothing.`
                 : d.adapterSource === "bundled"
-                  ? "Loaded per session with -e; your Pi settings are untouched."
+                  ? "pid-mcp, loaded per session with -e; your Pi settings are untouched."
                   : "Not installed and not bundled: the MCP page is read-only."
             }
           >
             <span className="font-mono text-sm text-ink">
-              {d.adapterSource === "bundled" ? `bundled ${d.adapterVersion ?? ""}` : d.adapterSource}
+              {d.adapterSource === "bundled"
+                ? `pid-mcp ${d.adapterVersion ?? ""} (bundled)`
+                : d.adapterSource === "user"
+                  ? (d.adapterName ?? "user")
+                  : d.adapterSource}
             </span>
           </Row>
           <Row label="PID bridge extension" hint="Relays MCP status into PID. Loaded per session with -e.">

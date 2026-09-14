@@ -2,7 +2,7 @@ import { parseMcpStatus, runtimeOnly, WIDGET_MCP_STATUS } from "@shared/mcp-stat
 import type { PiHandle, RpcSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { withRuntimeDefinitions } from "../resources/pid-bridge/index";
-import { locateBundled, adapterSource, bundledExtensionArgs } from "../src/main/pi/bundled";
+import { locateBundled, adapterSource, bundledExtensionArgs, userMcpExtension } from "../src/main/pi/bundled";
 import { emptyWorkspace, workspaceReducer } from "../src/renderer/state/workspace";
 
 // Real snapshot captured from pi-mcp-adapter 2.33.0 via pid-bridge (see resources/pid-bridge).
@@ -15,6 +15,15 @@ describe("parseMcpStatus", () => {
     expect(s?.version).toBe(1);
     expect(s?.servers[0]).toMatchObject({ name: "fs", status: "connected", toolCount: 14 });
     expect(s?.connectedCount).toBe(1);
+  });
+  it("keeps pid-mcp's extra fields", () => {
+    const s = parseMcpStatus([
+      '{"version":1,"source":"pid-mcp","pidMcpVersion":"0.1.0","activeToolCount":2,"servers":[{"name":"gh","status":"connected","toolCount":10,"directToolCount":2,"disabled":false,"activeToolNames":["gh_search_issues","gh_get_issue"],"activeToolCount":2,"pinnedToolCount":1,"lastError":"boom","transport":"http"}],"totalTools":10,"totalResources":0,"connectedCount":1,"disabledCount":0}',
+    ]);
+    expect(s?.source).toBe("pid-mcp");
+    expect(s?.activeToolCount).toBe(2);
+    expect(s?.servers[0]?.activeToolNames).toEqual(["gh_search_issues", "gh_get_issue"]);
+    expect(s?.servers[0]?.lastError).toBe("boom");
   });
   it("treats a cleared or malformed widget as no status", () => {
     expect(parseMcpStatus(undefined)).toBeUndefined();
@@ -109,14 +118,23 @@ describe("workspace pid:* widgets", () => {
 });
 
 describe("bundled extensions", () => {
-  const bundled = { bridge: "/app/resources/pid-bridge/index.ts", adapter: "/app/node_modules/pi-mcp-adapter/index.ts" };
-  it("prefers the user's adapter and never loads a second one", () => {
+  const bundled = { bridge: "/app/resources/pid-bridge/index.ts", adapter: "/app/node_modules/pid-mcp/src/index.ts" };
+  it("prefers the user's MCP extension, whichever it is, and never loads a second one", () => {
     expect(adapterSource(["npm:pi-mcp-adapter"], bundled)).toBe("user");
+    expect(userMcpExtension(["npm:pi-mcp-adapter"])).toBe("pi-mcp-adapter");
     expect(bundledExtensionArgs(["npm:pi-mcp-adapter"], bundled)).toEqual(["-e", bundled.bridge]);
+    expect(adapterSource(["../../dev/pi/pid-mcp"], bundled)).toBe("user");
+    expect(userMcpExtension(["../../dev/pi/pid-mcp"])).toBe("pid-mcp");
+    expect(bundledExtensionArgs(["../../dev/pi/pid-mcp"], bundled)).toEqual(["-e", bundled.bridge]);
   });
-  it("loads the bundled adapter when the user has none", () => {
-    expect(adapterSource([], bundled)).toBe("bundled");
+  it("loads the bundled pid-mcp when the user has no MCP extension", () => {
+    expect(adapterSource(["npm:pi-view"], bundled)).toBe("bundled");
     expect(bundledExtensionArgs([], bundled)).toEqual(["-e", bundled.adapter, "-e", bundled.bridge]);
+  });
+  it("resolves the pid-mcp dependency in this repo and reads its version", () => {
+    const b = locateBundled(process.cwd(), {});
+    expect(b.adapter).toMatch(/node_modules\/pid-mcp\/src\/index\.ts$/);
+    expect(b.adapterVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
   it("reports none when nothing is available", () => {
     expect(adapterSource([], {})).toBe("none");

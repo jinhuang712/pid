@@ -5,7 +5,7 @@ import { delimiter, isAbsolute, join } from "node:path";
 import { compareCompat, type PiDiagnostics } from "@shared/diagnostics";
 import { loadSettings } from "../settings";
 import { warmShellEnv } from "../shell-env";
-import { adapterSource, currentBundled } from "./bundled";
+import { adapterSource, currentBundled, userMcpExtension } from "./bundled";
 import { readPiHome } from "./ecosystem";
 
 const sdkVersion = (): string => {
@@ -49,7 +49,8 @@ export async function runDiagnostics(): Promise<PiDiagnostics> {
     : { error: `${piBinary} not found on the login shell PATH` };
   const sdk = sdkVersion();
   const bundled = currentBundled();
-  const source = adapterSource(readPiHome().packages, bundled);
+  const packages = readPiHome().packages;
+  const source = adapterSource(packages, bundled);
   return {
     piBinary,
     piPath,
@@ -58,6 +59,8 @@ export async function runDiagnostics(): Promise<PiDiagnostics> {
     sdkVersion: sdk,
     compat: compareCompat(probe.version, sdk),
     adapterSource: source,
+    adapterName:
+      source === "user" ? userMcpExtension(packages) : source === "bundled" ? "pid-mcp" : undefined,
     adapterVersion: source === "bundled" ? bundled.adapterVersion : undefined,
     bridgePath: bundled.bridge,
   };
