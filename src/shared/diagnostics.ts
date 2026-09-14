@@ -1,7 +1,7 @@
 /**
  * What PID is actually driving. Two Pis are involved: the `pi` binary PID spawns (the user's),
  * and the Pi SDK PID bundles for read-only discovery. This makes both visible, plus the MCP
- * adapter and bridge that ride along, so version drift is a fact on screen instead of a guess.
+ * extension and bridge that ride along, so version drift is a fact on screen instead of a guess.
  */
 export type PiCompat =
   /** Runtime and bundled SDK share major.minor: the combination PID was built against. */
@@ -23,6 +23,8 @@ export interface PiDiagnostics {
   sdkVersion: string;
   compat: PiCompat;
   adapterSource: "user" | "bundled" | "none";
+  /** "pid-mcp" or "pi-mcp-adapter", whichever will load. */
+  adapterName?: string;
   adapterVersion?: string;
   bridgePath?: string;
 }

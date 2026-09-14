@@ -71,13 +71,15 @@ in the Skills, Extensions, and MCP pages; those toggles edit the same `settings.
 Two small extensions ride along in every `pi --mode rpc` PID starts, passed with `-e` so nothing
 is added to your Pi packages:
 
-- `resources/pid-bridge`: relays [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter)'s
-  status and OAuth events into the RPC stream so the MCP page can show what is connected right now.
-- `pi-mcp-adapter`, pinned in `package.json`, but only when your Pi does not already have it. A
-  user-installed adapter always wins, so the terminal and PID agree on MCP behaviour.
+- `resources/pid-bridge`: relays the MCP extension's status and OAuth events into the RPC stream so
+  the MCP page can show what is connected and which tools the model can see right now.
+- [`pid-mcp`](../pid-mcp), pinned in `package.json`: every MCP tool becomes a native Pi tool, held
+  out of the model's view until `mcp_search` activates it. Loaded only when your Pi does not already
+  have an MCP extension (pid-mcp or pi-mcp-adapter). A user-installed one always wins, so the
+  terminal and PID agree on MCP behaviour.
 
 Settings › Advanced › Diagnostics shows which `pi` binary and version PID drives, the SDK version
-it bundles, and where the MCP adapter comes from.
+it bundles, and which MCP extension loads.
 
 ## Documents
 

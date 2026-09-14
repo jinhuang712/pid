@@ -42,7 +42,7 @@ const PAPER_DARK = "#121211";
 const paperColor = () => (nativeTheme.shouldUseDarkColors ? PAPER_DARK : PAPER_LIGHT);
 
 let mainWindow: BrowserWindow | undefined;
-// Extensions PID ships (pid-bridge, and pi-mcp-adapter when the user has none) are located once.
+// Extensions PID ships (pid-bridge, and pid-mcp when the user has no MCP extension) are located once.
 configureBundled(app.getAppPath());
 const pi = new PiRegistry(() => mainWindow);
 

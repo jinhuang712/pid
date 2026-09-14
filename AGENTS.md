@@ -95,14 +95,14 @@ Pi Coding Agent SDK
 - **Live agent**: one `pi --mode rpc` child process per open session (`src/main/pi/rpc-process.ts`).
   Commands and events are Pi's RPC protocol types, imported from the pinned
   `@earendil-works/pi-coding-agent` package. PID adds only a process key. This means PID runs the
-  user's installed `pi`, with their extensions, MCP adapter, models, and auth, unchanged.
+  user's installed `pi`, with their extensions, MCP extension, models, and auth, unchanged.
 - **Discovery**: session lists (`SessionManager.list/listAll`), skills (`loadSkillsFromDir`),
   and skill/extension enablement resolved by Pi's `DefaultPackageManager` so it matches `pi config`.
-  MCP config is parsed from the adapter's `mcp.json` layers.
+  MCP config is parsed from the `mcp.json` layers pid-mcp and pi-mcp-adapter both read.
 - **On/off switches** (`src/main/pi/toggles.ts`): the only writes PID makes under `~/.pi/agent` or
   `<cwd>/.pi`, and they are Pi's own formats through Pi's own code paths. Skills and extensions go
   through `SettingsManager` as the same `+pattern` / `-pattern` entries `pi config` writes (global
-  or `--local`, including the project-layer inherit state). MCP servers get pi-mcp-adapter's
+  or `--local`, including the project-layer inherit state). MCP servers get the MCP extension's
   `disabled` flag: edited in place globally, or as a `{ disabled }`-only override in
   `<cwd>/.pi/mcp.json` like `/mcp disable`. No other key in those files is touched.
 - **Appended system prompt** (`src/main/pi/system-prompt.ts`): the Settings page edits

@@ -5,21 +5,26 @@ import { dirname, join } from "node:path";
 /**
  * Extensions PID ships and loads into its own `pi --mode rpc` children with `-e`.
  *
- * - pid-bridge: relays adapter status/OAuth events to PID (resources/pid-bridge/index.ts).
- * - pi-mcp-adapter: MCP for Pi, pinned in package.json. Loaded only when the user has not
- *   installed it themselves; a user-installed copy always wins so the terminal and PID agree.
+ * - pid-bridge: relays MCP status/OAuth events to PID (resources/pid-bridge/index.ts).
+ * - pid-mcp: MCP for Pi, pinned in package.json. Loaded only when the user has not installed an
+ *   MCP extension themselves (pid-mcp or pi-mcp-adapter); a user-installed one always wins so the
+ *   terminal and PID agree.
  *
  * Nothing is written to Pi's settings. `-e` is per process and leaves the user's setup alone.
  */
 export interface BundledPi {
   /** Absolute path to pid-bridge's entry, or undefined when it cannot be found. */
   bridge?: string;
-  /** Absolute path to the bundled adapter's entry, or undefined when it is not available. */
+  /** Absolute path to the bundled pid-mcp entry, or undefined when it is not available. */
   adapter?: string;
   adapterVersion?: string;
 }
 
 export type McpAdapterSource = "user" | "bundled" | "none";
+
+/** MCP extensions PID recognises in the user's Pi packages. First match wins for display. */
+export const KNOWN_MCP_EXTENSIONS = ["pid-mcp", "pi-mcp-adapter"] as const;
+export type McpExtensionName = (typeof KNOWN_MCP_EXTENSIONS)[number];
 
 /**
  * @param appRoot directory that holds `resources/` and `node_modules/` (Electron's app path in
@@ -31,12 +36,11 @@ export function locateBundled(appRoot: string, env: NodeJS.ProcessEnv = process.
     join(appRoot, "resources", "pid-bridge", "index.ts"),
     join(appRoot, "..", "resources", "pid-bridge", "index.ts"),
   ]);
-  let adapter =
-    env.PID_MCP_ADAPTER_PATH && existsSync(env.PID_MCP_ADAPTER_PATH) ? env.PID_MCP_ADAPTER_PATH : undefined;
+  let adapter = env.PID_MCP_PATH && existsSync(env.PID_MCP_PATH) ? env.PID_MCP_PATH : undefined;
   if (!adapter) {
     try {
-      const pkg = createRequire(join(appRoot, "package.json")).resolve("pi-mcp-adapter/package.json");
-      adapter = join(dirname(pkg), "index.ts");
+      const pkg = createRequire(join(appRoot, "package.json")).resolve("pid-mcp/package.json");
+      adapter = join(dirname(pkg), "src", "index.ts");
       if (!existsSync(adapter)) adapter = undefined;
     } catch {
       adapter = undefined;
@@ -45,9 +49,15 @@ export function locateBundled(appRoot: string, env: NodeJS.ProcessEnv = process.
   return { bridge, adapter, adapterVersion: adapter ? readVersion(adapter) : undefined };
 }
 
-/** Which MCP adapter a PID-started Pi will have: the user's package, PID's bundled copy, or none. */
+/** The MCP extension the user installed into Pi themselves, if any. */
+export function userMcpExtension(userPackages: string[]): McpExtensionName | undefined {
+  for (const name of KNOWN_MCP_EXTENSIONS) if (userPackages.some((p) => p.includes(name))) return name;
+  return undefined;
+}
+
+/** Which MCP extension a PID-started Pi will have: the user's package, PID's bundled pid-mcp, or none. */
 export function adapterSource(userPackages: string[], bundled: BundledPi): McpAdapterSource {
-  if (userPackages.some((p) => p.includes("pi-mcp-adapter"))) return "user";
+  if (userMcpExtension(userPackages)) return "user";
   return bundled.adapter ? "bundled" : "none";
 }
 
@@ -73,11 +83,15 @@ function firstExisting(paths: (string | undefined)[]): string | undefined {
   return paths.find((p): p is string => !!p && existsSync(p));
 }
 
+/** pid-mcp's entry is `src/index.ts`; its package.json is one directory up from `src/`. */
 function readVersion(entry: string): string | undefined {
-  try {
-    return (JSON.parse(readFileSync(join(dirname(entry), "package.json"), "utf8")) as { version?: string })
-      .version;
-  } catch {
-    return undefined;
+  for (const dir of [dirname(entry), dirname(dirname(entry))]) {
+    try {
+      const v = (JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { version?: string }).version;
+      if (v) return v;
+    } catch {
+      // try the parent
+    }
   }
+  return undefined;
 }

@@ -11,7 +11,7 @@ import type {
   PiHome,
   SkillView,
 } from "@shared/ecosystem";
-import { adapterSource, currentBundled } from "./bundled";
+import { adapterSource, currentBundled, userMcpExtension } from "./bundled";
 import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
 
 /**
@@ -283,7 +283,7 @@ export async function listExtensions(cwd?: string): Promise<ExtensionView[]> {
   return out;
 }
 
-/** MCP as configured for pi-mcp-adapter: layers merged by server name, project files winning. */
+/** MCP as configured for the MCP extension: layers merged by server name, project files winning. */
 export function readMcp(cwd?: string): McpView {
   const home = readPiHome();
   const bundled = currentBundled();
@@ -321,7 +321,12 @@ export function readMcp(cwd?: string): McpView {
         args: Array.isArray(raw.args) ? (raw.args as string[]) : undefined,
         url: str(raw.url),
         auth: str(raw.auth),
-        directTools: typeof raw.directTools === "boolean" ? raw.directTools : undefined,
+        directTools:
+          typeof raw.directTools === "boolean" || raw.directTools === "search"
+            ? raw.directTools
+            : Array.isArray(raw.directTools)
+              ? (raw.directTools as string[]).filter((t): t is string => typeof t === "string")
+              : undefined,
         disabled: raw.disabled === true,
         globalDisabled: prev?.globalDisabled,
         projectDisabled: prev?.projectDisabled,
@@ -361,6 +366,8 @@ export function readMcp(cwd?: string): McpView {
   }
   return {
     adapterSource: source,
+    adapterName:
+      source === "user" ? userMcpExtension(home.packages) : source === "bundled" ? "pid-mcp" : undefined,
     adapterVersion: source === "bundled" ? bundled.adapterVersion : undefined,
     configPaths,
     cachePath: existsSync(cachePath) ? cachePath : undefined,
