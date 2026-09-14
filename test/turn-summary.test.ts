@@ -67,9 +67,15 @@ describe("conversation turn markers", () => {
     t = 13_000;
     s = reduce(s, { type: "agent_end" } as never, now);
     expect(s.turnStartedAt).toBeUndefined();
-    expect(s.markers).toEqual([
-      { afterIndex: 1, kind: "turn", text: "12s · 400 tokens · $0.30", detail: "300 in · 100 out · 0 cached" },
-    ]);
+    expect(s.markers).toHaveLength(1);
+    expect(s.markers[0]).toMatchObject({
+      afterIndex: 1,
+      kind: "turn",
+      text: "12s · 400 tokens · $0.30",
+      detail: "300 in · 100 out · 0 cached",
+      durationMs: 12_000,
+    });
+    expect(s.markers[0].usage?.input).toBe(300);
     expect(addUsage(usage(1, 1, 1), usage(2, 2, 2)).cost.total).toBe(3);
   });
 

@@ -19,6 +19,9 @@ export interface Marker {
   text: string;
   /** Hover detail, used by turn markers for the token breakdown. */
   detail?: string;
+  /** Turn markers: what the collapsed step line is built from. */
+  usage?: Usage;
+  durationMs?: number;
 }
 
 export interface ConversationState {
@@ -52,16 +55,25 @@ export function fromMessages(messages: AgentMessage[]): ConversationState {
   const s = emptyConversation();
   s.messages = messages;
   let turn: Usage | undefined;
+  // Loaded history has no agent_start clock; the span from the user message to the last reply stands in.
+  let startedAt = 0;
+  let endedAt = 0;
   const closeTurn = (afterIndex: number) => {
-    const summary = turn && summarizeTurn(turn);
-    if (summary) s.markers.push({ afterIndex, kind: "turn", ...summary });
+    const durationMs = startedAt > 0 && endedAt > startedAt ? endedAt - startedAt : undefined;
+    const summary = turn && summarizeTurn(turn, durationMs);
+    if (summary && turn) s.markers.push({ afterIndex, kind: "turn", ...summary, usage: turn, durationMs });
     turn = undefined;
   };
   for (const [i, m] of messages.entries()) {
-    if (m.role === "user" && turn) closeTurn(i - 1);
+    if (m.role === "user") {
+      if (turn) closeTurn(i - 1);
+      startedAt = m.timestamp;
+      endedAt = 0;
+    }
     if (m.role === "assistant") {
       s.lastUsage = m.usage;
       turn = addUsage(turn ?? emptyUsage(), m.usage);
+      endedAt = m.timestamp;
     }
     if (m.role === "toolResult") {
       s.toolRuns[m.toolCallId] = {
@@ -93,12 +105,8 @@ export function reduce(
         turnUsage: emptyUsage(),
       };
     case "agent_end": {
-      const summary =
-        state.turnUsage &&
-        summarizeTurn(
-          state.turnUsage,
-          state.turnStartedAt === undefined ? undefined : now() - state.turnStartedAt,
-        );
+      const durationMs = state.turnStartedAt === undefined ? undefined : now() - state.turnStartedAt;
+      const summary = state.turnUsage && summarizeTurn(state.turnUsage, durationMs);
       return {
         ...state,
         isStreaming: false,
@@ -106,7 +114,16 @@ export function reduce(
         turnStartedAt: undefined,
         turnUsage: undefined,
         markers: summary
-          ? [...state.markers, { afterIndex: state.messages.length - 1, kind: "turn", ...summary }]
+          ? [
+              ...state.markers,
+              {
+                afterIndex: state.messages.length - 1,
+                kind: "turn",
+                ...summary,
+                usage: state.turnUsage,
+                durationMs,
+              },
+            ]
           : state.markers,
       };
     }

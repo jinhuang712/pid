@@ -219,6 +219,15 @@ export function SettingsPage() {
                     onChange={(thinkingCollapsed) => update("appearance", { thinkingCollapsed })}
                   />
                 </Row>
+                <Row
+                  label="Fold steps when a turn finishes"
+                  hint="Thinking and tool calls stay open while Pi works, then collapse behind one line."
+                >
+                  <Toggle
+                    value={a.stepsCollapsed}
+                    onChange={(stepsCollapsed) => update("appearance", { stepsCollapsed })}
+                  />
+                </Row>
                 <Row label="Reduce motion" hint="Nothing in PID needs a transition to be readable.">
                   <Toggle
                     value={a.reduceMotion}
