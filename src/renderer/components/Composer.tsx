@@ -105,7 +105,19 @@ export function Composer(p: ComposerProps) {
   const refreshToken = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setToken(activeToken(el.value, el.selectionStart));
+    const next = activeToken(el.value, el.selectionStart);
+    // Keep the previous object when nothing changed, so arrow keys inside an open
+    // popup do not re-run the completion and snap the cursor back to the first item.
+    setToken((prev) =>
+      prev &&
+      next &&
+      prev.sigil === next.sigil &&
+      prev.query === next.query &&
+      prev.start === next.start &&
+      prev.end === next.end
+        ? prev
+        : next,
+    );
   }, []);
 
   useEffect(() => {
