@@ -764,7 +764,11 @@ export function App() {
               <>
                 {/* keyed per session file (stable across the pending → live handover): scroll position
                     and the rendered window start fresh for each session */}
-                <Timeline key={active.piState.sessionFile ?? key} state={conv} />
+                <Timeline
+                  key={active.piState.sessionFile ?? key}
+                  state={conv}
+                  mcpServers={active.mcp?.servers.map((s) => s.name)}
+                />
                 {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}
                 <QueuePanel
                   streaming={conv.isStreaming}
