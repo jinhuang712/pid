@@ -59,6 +59,15 @@ body {
   font-size: var(--pid-font-size);
   -webkit-font-smoothing: antialiased;
 }
+/* Single-user desktop app driven by the mouse: nobody tabs between controls, so the
+   browser's blue focus ring only ever shows up as an accident (e.g. after a dialog
+   hands focus back to the row it was opened from). */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: none;
+}
 
 /* Accent — the single emphasis colour. Every option stays desaturated and in the same key
    as the default amber; none of them turn PID into a coloured app. */
