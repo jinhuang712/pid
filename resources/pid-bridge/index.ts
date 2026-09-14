@@ -89,6 +89,15 @@ export default function pidBridge(pi: ExtensionAPI) {
   });
   pi.events.on(MCP_OAUTH_EVENT, (outcome: unknown) => relay(WIDGET_MCP_OAUTH, outcome));
 
+  // Pi handles `/reload` only in its TUI; over RPC the literal text would reach the model as a
+  // prompt. Registering the command here makes `/reload` real in PID's children as well.
+  pi.registerCommand("reload", {
+    description: "Reload extensions, skills, prompts, themes, and context files",
+    handler: async (_args, c) => {
+      await c.reload();
+    },
+  });
+
   pi.on("session_start", (_ev, c) => {
     ctx = c;
     // The adapter may have published before we had a context; replay the latest snapshot.
