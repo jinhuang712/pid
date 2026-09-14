@@ -1,10 +1,11 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
-import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { parseAttachments, parseReferences, type SentReference, segment } from "../attachments";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
 import { describeTurn, groupTurns, splitReply, type Turn } from "../state/turns";
+import { fmtDuration } from "../turn-summary";
 import { AttachmentChip, Chip, Glyph } from "./Chips";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
@@ -294,6 +295,17 @@ const TurnBlock = memo(function TurnBlock({
   );
 });
 
+/** Seconds since the turn started, ticking once a second. */
+function Elapsed({ since }: { since: number }): ReactNode {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="font-mono tabular-nums text-ink-3/80">{fmtDuration(now - since)}</span>;
+}
+
 export function Timeline({ state }: { state: ConversationState }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [stick, setStick] = useState(true);
@@ -366,6 +378,7 @@ export function Timeline({ state }: { state: ConversationState }) {
           <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
             Working…
+            {state.turnStartedAt !== undefined && <Elapsed since={state.turnStartedAt} />}
           </div>
         )}
       </div>
