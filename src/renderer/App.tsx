@@ -914,6 +914,7 @@ export function App() {
                 <Timeline
                   key={active.piState.sessionFile ?? key}
                   state={conv}
+                  cwd={active.cwd}
                   mcpServers={active.mcp?.servers.map((s) => s.name)}
                 />
                 {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}

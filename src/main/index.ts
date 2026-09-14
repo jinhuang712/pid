@@ -49,6 +49,8 @@ const pi = new PiRegistry(() => mainWindow);
 
 /** File tokens in the timeline may carry "~/…"; Electron's shell wants a real absolute path. */
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir());
+/** The only schemes a click inside the app may hand to the OS. */
+const isWebUrl = (url: string) => /^(?:https?:|mailto:)/i.test(url);
 
 function createWindow(): BrowserWindow {
   const state = windowStateKeeper({ defaultWidth: 1440, defaultHeight: 900 });
@@ -90,15 +92,17 @@ function createWindow(): BrowserWindow {
     });
   }
 
+  // The renderer routes link clicks itself (Markdown.tsx); these two are the safety net so the
+  // window never navigates away. A relative href resolves against the app's own file:// URL,
+  // which is not a place to send the OS, so only web URLs go out.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isWebUrl(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, url) => {
-    if (url !== win.webContents.getURL()) {
-      e.preventDefault();
-      void shell.openExternal(url);
-    }
+    if (url === win.webContents.getURL()) return;
+    e.preventDefault();
+    if (isWebUrl(url)) void shell.openExternal(url);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -157,6 +161,9 @@ ipcMain.handle("eco:appendSystemPrompt", () => readAppendSystemPrompt());
 ipcMain.handle("eco:setAppendSystemPrompt", (_e, text: string) => writeAppendSystemPrompt(text));
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(expandHome(path)));
 ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(expandHome(path)));
+ipcMain.handle("shell:openExternal", async (_e, url: string) => {
+  if (isWebUrl(url)) await shell.openExternal(url);
+});
 ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
 ipcMain.handle("files:stat", (_e, paths: string[]) => statPaths(paths));
 ipcMain.handle("files:thumbnail", (_e, path: string) => thumbnail(path));
