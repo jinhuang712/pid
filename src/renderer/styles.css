@@ -122,14 +122,18 @@ code {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-line-2);
-  border-radius: 4px;
+  background: light-dark(rgba(0, 0, 0, 0.18), rgba(255, 255, 255, 0.16));
+  border-radius: 2px;
 }
-::-webkit-scrollbar-track {
+::-webkit-scrollbar-thumb:hover {
+  background: light-dark(rgba(0, 0, 0, 0.3), rgba(255, 255, 255, 0.28));
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background: transparent;
 }
 
