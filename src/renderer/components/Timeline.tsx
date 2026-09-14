@@ -42,7 +42,7 @@ function Inline({ text }: { text: string }): ReactNode {
             target="_blank"
             rel="noreferrer"
             title={s.href}
-            className="text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink [overflow-wrap:anywhere]"
+            className="font-medium text-accent underline decoration-accent/45 underline-offset-2 hover:decoration-accent hover:bg-accent-soft rounded-[2px] [overflow-wrap:anywhere]"
           >
             {s.text}
           </a>
