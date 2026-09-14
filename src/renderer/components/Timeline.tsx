@@ -21,6 +21,56 @@ import { ToolCard } from "./ToolCard";
 /** Turns rendered at first; older ones mount as you scroll up. Long sessions run to hundreds. */
 const WINDOW = 40;
 const WINDOW_STEP = 40;
+/** A turn edge this close to the viewport edge counts as already reached. */
+const JUMP_SLACK = 4;
+/** Breathing room between the viewport edge and the turn the jump lands on. */
+const JUMP_PAD = 12;
+
+/** One of the two floating jump buttons: up lands on the previous prompt, down on the end of a reply. */
+function JumpButton({
+  dir,
+  disabled,
+  onClick,
+}: {
+  dir: "up" | "down";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const up = dir === "up";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={up ? "Jump to previous prompt  ⌥↑" : "Jump to end of this prompt  ⌥↓"}
+      className="w-7 h-7 rounded-full border border-line-2 bg-paper-2 text-ink-2 shadow-[0_2px_8px_rgba(0,0,0,0.08)] flex items-center justify-center transition-colors hover:text-ink hover:bg-paper-3 active:bg-paper-4 active:shadow-none disabled:opacity-40 disabled:pointer-events-none"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <title>{up ? "jump up" : "jump down"}</title>
+        {up ? (
+          <>
+            <path d="M3.5 4.5h9" />
+            <path d="m4.5 11 3.5-3.5 3.5 3.5" />
+          </>
+        ) : (
+          <>
+            <path d="m4.5 5 3.5 3.5L11.5 5" />
+            <path d="M3.5 11.5h9" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
 
 function userText(m: UserMessage): string {
   return typeof m.content === "string"
@@ -321,7 +371,8 @@ const TurnBlock = memo(function TurnBlock({
   const unfolded = !settled || open;
   const replies = settled ? steps : turn.replies;
   return (
-    <div>
+    // data-turn anchors the jump buttons: the block's top is the prompt, its bottom the end of the reply
+    <div data-turn={turn.start}>
       {turn.user && <User m={turn.user.m} />}
       {settled && (
         <Steps turn={turn} open={open} onToggle={steps.length > 0 ? () => setOpen(!open) : undefined} />
@@ -381,10 +432,84 @@ export function Timeline({
     if (followRef.current && el) el.scrollTop = el.scrollHeight;
   }, [state]);
 
+  // Jump buttons: move one turn at a time. "Up" lands on the top of the nearest turn that starts
+  // above the viewport; "down" lands on the bottom of the nearest turn that ends below it.
+  const [canJump, setCanJump] = useState({ up: false, down: false });
+  /** Mounted turn blocks with their top/bottom in scroller coordinates, in document order. */
+  const turnBounds = (el: HTMLDivElement) => {
+    const base = el.getBoundingClientRect().top - el.scrollTop;
+    return Array.from(el.querySelectorAll<HTMLElement>("[data-turn]")).map((node) => {
+      const r = node.getBoundingClientRect();
+      return { node, top: r.top - base, bottom: r.bottom - base };
+    });
+  };
+  const measureJump = () => {
+    const el = scroller.current;
+    if (!el) return;
+    const bounds = turnBounds(el);
+    const viewTop = el.scrollTop + JUMP_SLACK;
+    const viewBottom = el.scrollTop + el.clientHeight - JUMP_SLACK;
+    setCanJump({
+      up: hidden > 0 || bounds.some((b) => b.top < viewTop),
+      down: bounds.some((b) => b.bottom > viewBottom),
+    });
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure whenever the rows change
+  useLayoutEffect(measureJump, [state, shown]);
+
+  const scrollTo = (el: HTMLDivElement, top: number) => {
+    const reduced = document.documentElement.dataset.motion === "reduced";
+    el.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+  };
+  const jumpUp = () => {
+    const el = scroller.current;
+    if (!el) return;
+    setStick(false);
+    const above = turnBounds(el).filter((b) => b.top < el.scrollTop - JUMP_SLACK);
+    const target = above[above.length - 1];
+    if (target) {
+      scrollTo(el, target.top - JUMP_PAD);
+      return;
+    }
+    if (hidden > 0) {
+      // the previous turn is not mounted yet: mount everything, then land on it after layout
+      const prev = turns[from - 1].start;
+      setShown(turns.length);
+      requestAnimationFrame(() => {
+        const node = el.querySelector<HTMLElement>(`[data-turn="${prev}"]`);
+        if (!node) return;
+        const base = el.getBoundingClientRect().top - el.scrollTop;
+        scrollTo(el, node.getBoundingClientRect().top - base - JUMP_PAD);
+      });
+    }
+  };
+  const jumpDown = () => {
+    const el = scroller.current;
+    if (!el) return;
+    const viewBottom = el.scrollTop + el.clientHeight;
+    const target = turnBounds(el).find((b) => b.bottom > viewBottom + JUMP_SLACK);
+    if (target) scrollTo(el, target.bottom + JUMP_PAD - el.clientHeight);
+  };
+
+  // ⌥↑ / ⌥↓ mirror the buttons, except while typing in a field
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.key === "ArrowUp") jumpUp();
+      else jumpDown();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
     setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48);
+    measureJump();
     if (hidden > 0 && el.scrollTop < 400) {
       // keep the viewport anchored while older rows mount above it
       const before = el.scrollHeight;
@@ -397,42 +522,50 @@ export function Timeline({
 
   return (
     <McpServersContext.Provider value={mcpServers}>
-      <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overflow-x-hidden pb-6">
-        <div className="max-w-[var(--pid-measure)] mx-auto min-w-0">
-          {hidden > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShown(turns.length)}
-              className="w-full px-6 py-3 text-[12.5px] text-ink-3 hover:text-ink-2 text-center"
-            >
-              {hidden} earlier message{hidden === 1 ? "" : "s"} · show all
-            </button>
-          ) : (
-            state.markers
-              .filter((k) => k.afterIndex < 0)
-              .map((k) => (
-                <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />
-              ))
-          )}
-          {turns.slice(from).map((t) => (
-            // messages are append-only, so a turn's first index is a stable key
-            <TurnBlock
-              key={t.start}
-              turn={t}
-              toolRuns={state.toolRuns}
-              streaming={t === last && tailOpen ? state.streaming : undefined}
-            />
-          ))}
-          {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
-          {state.streaming && !tailOpen && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
-          {state.isStreaming && (
-            <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-              Working…
-              {state.turnStartedAt !== undefined && <Elapsed since={state.turnStartedAt} />}
-            </div>
-          )}
+      <div className="flex-1 min-h-0 relative flex flex-col">
+        <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overflow-x-hidden pb-6">
+          <div className="max-w-[var(--pid-measure)] mx-auto min-w-0">
+            {hidden > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShown(turns.length)}
+                className="w-full px-6 py-3 text-[12.5px] text-ink-3 hover:text-ink-2 text-center"
+              >
+                {hidden} earlier message{hidden === 1 ? "" : "s"} · show all
+              </button>
+            ) : (
+              state.markers
+                .filter((k) => k.afterIndex < 0)
+                .map((k) => (
+                  <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />
+                ))
+            )}
+            {turns.slice(from).map((t) => (
+              // messages are append-only, so a turn's first index is a stable key
+              <TurnBlock
+                key={t.start}
+                turn={t}
+                toolRuns={state.toolRuns}
+                streaming={t === last && tailOpen ? state.streaming : undefined}
+              />
+            ))}
+            {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
+            {state.streaming && !tailOpen && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
+            {state.isStreaming && (
+              <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                Working…
+                {state.turnStartedAt !== undefined && <Elapsed since={state.turnStartedAt} />}
+              </div>
+            )}
+          </div>
         </div>
+        {turns.length > 1 && (
+          <div className="absolute right-4 bottom-4 flex flex-col gap-1.5">
+            <JumpButton dir="up" disabled={!canJump.up} onClick={jumpUp} />
+            <JumpButton dir="down" disabled={!canJump.down} onClick={jumpDown} />
+          </div>
+        )}
       </div>
     </McpServersContext.Provider>
   );
