@@ -82,6 +82,7 @@ The timeline shows the session as Pi understands it, with a clear hierarchy:
 - **Assistant messages** render as Markdown with code blocks.
 - **Thinking** appears as a collapsible block with lower visual weight. Collapsed by default.
 - **Tool calls** render as Tool Cards: one line of summary (tool name, key argument, status) with expandable input and output. Long outputs collapse. Edits render as diffs. File reads show the path and range. Bash shows command and output.
+- **Steps fold when a turn finishes.** While Pi works, every thinking block and tool call stays open so output can be read as it arrives. Once the turn settles, everything before the final answer folds behind one step line — `Worked for 1m 53s · 4 tool calls · edited 2 files · 66.6k tokens (75% cached) · $0.42` — that sits above the answer and unfolds on click. Cost is omitted on a subscription plan. A turn loaded from history is already settled.
 - **Errors** use one consistent visual language regardless of whether they came from a model, a tool, an extension, or an MCP server.
 - **Compaction** appears as an inline marker showing where context was compacted and how much.
 - **Queue state** appears between the active response and the composer: the active response, then queued steers, then queued follow-ups, in order.
@@ -242,7 +243,7 @@ Extensions that rely on terminal widgets or terminal layout are labeled Unsuppor
 
 Settings hold PID's own preferences and light control over Pi runtime preferences that Pi already exposes.
 
-- **Appearance**: theme, font size, conversation density, code font, default collapse state for tool cards and thinking, sidebar behavior, panel layout.
+- **Appearance**: theme, font size, conversation density, code font, default collapse state for tool cards, thinking, and finished steps, sidebar behavior, panel layout.
 - **Conversation**: Enter and Shift+Enter behavior, default send mode, steer and follow-up shortcuts, auto-scroll, tool output expansion, session reference preview behavior.
 - **Sessions**: default sorting, recent folder behavior, search scope, preview length, fork tree display, visibility of closed sessions.
 - **Files & Worktrees**: ignore patterns for `@` search, hidden file visibility, worktree display, default worktree parent directory, confirmation for destructive worktree actions.

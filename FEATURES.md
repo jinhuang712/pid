@@ -96,6 +96,7 @@ $   Session References
 - bash output `[Presentation]`
 - search output `[Presentation]`
 - long output collapse `[Presentation]`
+- steps fold behind a "Worked for …" line once a turn finishes `[Presentation]`
 - markdown rendering `[Presentation]`
 - code rendering `[Presentation]`
 - context usage visualization `[Presentation]`
