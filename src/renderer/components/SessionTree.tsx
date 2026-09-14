@@ -91,9 +91,16 @@ export function SessionTree({
 
   const activeProc = ws.activeKey ? ws.procs[ws.activeKey] : undefined;
   const activePath = activeProc?.piState.sessionFile;
+  const activeCwd = activeProc?.cwd;
 
   const isOpen = (f: string) => expanded[f] ?? f === activeFolder;
   const toggle = (f: string) => setExpanded((e) => ({ ...e, [f]: !isOpen(f) }));
+  // The folder of the session you switched to unfolds so the highlighted row is in view; folding it
+  // again afterwards is respected until the next switch.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeKey is the trigger — switching sessions within one folder must unfold it too
+  useEffect(() => {
+    if (activeCwd) setExpanded((e) => (e[activeCwd] === true ? e : { ...e, [activeCwd]: true }));
+  }, [activeCwd, ws.activeKey]);
 
   const visible = (f: string) => sessionsByFolder[f] ?? [];
 
@@ -165,27 +172,32 @@ export function SessionTree({
       <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-px">
         {orderedFolders.map((f) => {
           const list = visible(f);
-          const total = sessionsByFolder[f]?.length ?? 0;
           const open = isOpen(f);
           const liveHere = Object.values(ws.procs).filter((p) => p.cwd === f);
           const liveStatus = liveHere.map(procStatus);
           const isActive = f === activeFolder;
-          // live sessions always show; closed ones stay folded except the most recent few
-          const live = list.filter((x) => procForSession(ws, x.path));
-          const closed = list.filter((x) => !procForSession(ws, x.path));
+          // Live processes are the rows that always show, whether or not the disk listing has caught
+          // up with their file yet (a fresh session is unlisted until the folder reloads at agent_end).
+          const byPath = new Map(list.map((s) => [s.path, s]));
+          const liveFiles = new Set(liveHere.map((p) => p.piState.sessionFile));
+          const live = liveHere.flatMap((p) =>
+            p.piState.sessionFile ? (byPath.get(p.piState.sessionFile) ?? []) : [],
+          );
+          const unlisted = liveHere.filter(
+            (p) => !p.piState.sessionFile || !byPath.has(p.piState.sessionFile),
+          );
+          // closed sessions stay folded except the most recent few
+          const closed = list.filter((x) => !liveFiles.has(x.path));
           const limit = CLOSED_PREVIEW + (revealed[f] ?? 0);
           const shown = [...live, ...closed.slice(0, limit)];
           const hidden = closed.length - Math.min(closed.length, limit);
+          const total = list.length + unlisted.length;
           // forks nest under their parent when both are in this folder
-          const byPath = new Map(list.map((s) => [s.path, s]));
           const roots = settings.sessions.showForkLineage
             ? shown.filter((s) => !(s.parentSessionPath && byPath.has(s.parentSessionPath)))
             : shown;
           const childrenOf = (s: SessionSummary) =>
             settings.sessions.showForkLineage ? shown.filter((c) => c.parentSessionPath === s.path) : [];
-
-          // sessions that have a live process but no file on disk yet (fresh, nothing persisted)
-          const unsaved = liveHere.filter((p) => !p.piState.sessionFile);
 
           return (
             <div key={f}>
@@ -207,8 +219,9 @@ export function SessionTree({
                 <button
                   type="button"
                   onClick={() => {
-                    actions.openFolder(f);
-                    if (!open) toggle(f);
+                    // The name folds and unfolds like the icon; unfolding also makes the folder current.
+                    toggle(f);
+                    if (!open) actions.openFolder(f);
                   }}
                   title={f}
                   className={`flex-1 min-w-0 text-left truncate ${isActive ? "font-medium" : ""}`}
@@ -250,11 +263,11 @@ export function SessionTree({
 
               {open && (
                 <div className="pl-3.5 flex flex-col gap-px mb-1">
-                  {unsaved.map((p) => (
+                  {unlisted.map((p) => (
                     <SessionRow
                       key={p.key}
                       title={p.conv.messages.length === 0 ? "New session" : userText(p)}
-                      meta="now"
+                      meta={metaFor(placeholder(p), p)}
                       status={procStatus(p)}
                       active={p.key === ws.activeKey}
                       onActivate={() => actions.openSession({ ...placeholder(p), path: `proc:${p.key}` })}
@@ -312,7 +325,7 @@ export function SessionTree({
                       Fold closed sessions
                     </button>
                   )}
-                  {shown.length === 0 && unsaved.length === 0 && hidden === 0 && (
+                  {shown.length === 0 && unlisted.length === 0 && hidden === 0 && (
                     <div className="h-6 px-2 text-xs text-ink-3 flex items-center">No sessions</div>
                   )}
                 </div>
