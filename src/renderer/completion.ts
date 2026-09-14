@@ -15,6 +15,7 @@ export interface PiActions {
   abort: () => void;
   clearQueue: () => void;
   exportHtml: () => void;
+  reload: () => void;
   setThinking: (level: string) => void;
   fork: () => void;
 }
@@ -86,6 +87,7 @@ export function useCompletion(opts: {
               detail: "Drop queued steers and follow-ups",
             },
             { id: "export", label: "export", detail: "Export session to HTML" },
+            { id: "reload", label: "reload", detail: "Reload skills, extensions and MCP servers" },
             ...levels.current.list.map((l) => ({
               id: `thinking:${l}`,
               label: `thinking:${l}`,
@@ -130,6 +132,7 @@ export function useCompletion(opts: {
           else if (id === "abort") actions.abort();
           else if (id === "clear-queue") actions.clearQueue();
           else if (id === "export") actions.exportHtml();
+          else if (id === "reload") actions.reload();
           else if (id.startsWith("thinking:")) actions.setThinking(id.slice("thinking:".length));
           return undefined;
         }
