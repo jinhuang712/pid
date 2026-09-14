@@ -1,7 +1,14 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { parseAttachments, parseReferences, type SentReference, segment } from "../attachments";
+import {
+  parseAttachments,
+  parseReferences,
+  parseSkillBlock,
+  type SentReference,
+  type SentSkill,
+  segment,
+} from "../attachments";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
 import { describeTurn, groupTurns, splitReply, type Turn } from "../state/turns";
@@ -104,14 +111,46 @@ function SentReferenceChip({ r }: { r: SentReference }) {
   );
 }
 
+function SentSkillChip({ s }: { s: SentSkill }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Chip
+        glyph={<Glyph kind="file" />}
+        label={
+          <>
+            <span className="text-ink-3">skill</span> <span className="font-mono">{s.name}</span>
+          </>
+        }
+        meta={`${(s.text.length / 4).toFixed(0)} tokens`}
+        title={s.location}
+        onClick={() => setOpen(!open)}
+        wide
+      />
+      {open && (
+        <pre className="w-full max-h-64 overflow-y-auto rounded-lg border border-line bg-paper-2 px-3 py-2 text-left text-xs text-ink-2 whitespace-pre-wrap font-mono">
+          {s.text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function User({ m }: { m: UserMessage }) {
   const raw = userText(m);
-  const { body, attachments, references, images } = useMemo(() => {
+  const { body, attachments, references, skill, images } = useMemo(() => {
     const a = parseAttachments(raw);
     const r = parseReferences(a.body);
-    return { body: r.body, attachments: a.attachments, references: r.references, images: userImages(m) };
+    const k = parseSkillBlock(r.body);
+    return {
+      body: k.body,
+      attachments: a.attachments,
+      references: r.references,
+      skill: k.skill,
+      images: userImages(m),
+    };
   }, [raw, m]);
-  const extras = attachments.length + references.length + images.length > 0;
+  const extras = attachments.length + references.length + images.length > 0 || skill !== undefined;
   return (
     <div className="timeline-item px-6 py-3 flex flex-col items-end gap-1.5">
       {body.trim() && (
@@ -136,6 +175,7 @@ function User({ m }: { m: UserMessage }) {
           {references.map((r) => (
             <SentReferenceChip key={r.token} r={r} />
           ))}
+          {skill && <SentSkillChip s={skill} />}
         </div>
       )}
     </div>
