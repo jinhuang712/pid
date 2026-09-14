@@ -1,4 +1,5 @@
 import type { PiDiagnostics } from "@shared/diagnostics";
+import type { AppendSystemPrompt } from "@shared/ecosystem";
 import {
   ACCENTS,
   type Accent,
@@ -15,7 +16,8 @@ import { bridge } from "../bridge";
 import { useSettings } from "../settings";
 import { Badge, PageShell, PathLink, Toggle } from "./PageShell";
 
-type SectionId = keyof PidSettings;
+/** PID's own sections, plus the one Pi file that reads like a preference: the appended system prompt. */
+type SectionId = keyof PidSettings | "prompt";
 
 const SECTIONS: { id: SectionId; label: string; note: string }[] = [
   {
@@ -35,6 +37,11 @@ const SECTIONS: { id: SectionId; label: string; note: string }[] = [
     note: "The @ file picker. Worktrees belong to Pi (pi-worktree) and show on the session title bar.",
   },
   { id: "notifications", label: "Notifications", note: "Desktop notifications for things that need you." },
+  {
+    id: "prompt",
+    label: "System prompt",
+    note: "Rules Pi appends to its system prompt, stored in Pi's own APPEND_SYSTEM.md. Applies to new sessions.",
+  },
   {
     id: "advanced",
     label: "Advanced",
@@ -84,9 +91,11 @@ const ACCENT_SWATCH: Record<Accent, string> = {
  * Fine-grained but restrained: PID's own preferences only. Skills, MCP, Extensions,
  * providers, and models are not settings and do not live here.
  */
-export function SettingsPage() {
+export function SettingsPage({ initialSection }: { initialSection?: string }) {
   const { settings, update } = useSettings();
-  const [section, setSection] = useState<SectionId>("appearance");
+  const [section, setSection] = useState<SectionId>(
+    SECTIONS.some((s) => s.id === initialSection) ? (initialSection as SectionId) : "appearance",
+  );
   const meta = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
   const a = settings.appearance;
 
@@ -372,6 +381,8 @@ export function SettingsPage() {
             </Group>
           )}
 
+          {section === "prompt" && <AppendSystemPromptEditor />}
+
           {section === "advanced" && (
             <Group title="The pi process">
               <Row
@@ -464,6 +475,82 @@ function Diagnostics({ binary }: { binary: string }) {
 }
 
 /* ---- layout primitives: a captioned card with hairline-separated rows ---- */
+
+/**
+ * Edits ~/.pi/agent/APPEND_SYSTEM.md in place: Pi's global append-system-prompt file, the same
+ * one `pi` picks up in the terminal. Saved a moment after typing stops; an empty box removes the
+ * file so Pi is back on its default prompt plus AGENTS.md.
+ */
+function AppendSystemPromptEditor() {
+  const [file, setFile] = useState<AppendSystemPrompt | undefined>();
+  const [draft, setDraft] = useState<string | undefined>();
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    let alive = true;
+    void bridge.eco.appendSystemPrompt().then((f) => {
+      if (!alive) return;
+      setFile(f);
+      setDraft(f.text);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (draft === undefined || file === undefined || draft === file.text) return;
+    const t = setTimeout(() => {
+      bridge.eco
+        .setAppendSystemPrompt(draft)
+        .then((f) => {
+          setFile(f);
+          setError(undefined);
+        })
+        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [draft, file]);
+
+  if (file === undefined || draft === undefined) return null;
+  const dirty = draft !== file.text;
+  return (
+    <Group
+      title="Appended to every session"
+      note="A trusted project's <folder>/.pi/APPEND_SYSTEM.md replaces this file for sessions in that folder. Replacing the whole prompt is SYSTEM.md, which PID leaves to you."
+    >
+      <Stacked
+        label="Extra rules for Pi"
+        hint="Markdown. Pi adds this after its built-in system prompt and before AGENTS.md context."
+      >
+        <textarea
+          value={draft}
+          rows={14}
+          spellCheck={false}
+          placeholder={
+            "- Answer in the user's language; keep code, commands, and error text verbatim.\n- Ask before destructive git operations."
+          }
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-full px-2.5 py-2 rounded-md bg-paper border border-line text-xs font-mono leading-[1.6] text-ink outline-none focus:border-accent placeholder:text-ink-3 resize-y"
+        />
+        <div className="flex items-center gap-3 min-w-0">
+          <PathLink path={file.path} />
+          <span className="ml-auto shrink-0 text-2xs text-ink-3">
+            {error ? (
+              <span className="text-danger">{error}</span>
+            ) : dirty ? (
+              "Saving…"
+            ) : file.exists ? (
+              "Saved"
+            ) : (
+              "No file: Pi runs on its default prompt"
+            )}
+          </span>
+        </div>
+      </Stacked>
+    </Group>
+  );
+}
 
 function Group({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (

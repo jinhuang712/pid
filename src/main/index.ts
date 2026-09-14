@@ -17,6 +17,7 @@ import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
 import { readSessionBranch, readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
+import { readAppendSystemPrompt, writeAppendSystemPrompt } from "./pi/system-prompt";
 import { setMcpDisabled, setResourceState } from "./pi/toggles";
 import {
   flushState,
@@ -148,6 +149,8 @@ ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
 ipcMain.handle("eco:mcp", (_e, cwd?: string) => readMcp(cwd));
 ipcMain.handle("eco:setResource", (_e, req: ResourceToggle) => setResourceState(req));
 ipcMain.handle("eco:setMcp", (_e, req: McpToggle) => setMcpDisabled(req));
+ipcMain.handle("eco:appendSystemPrompt", () => readAppendSystemPrompt());
+ipcMain.handle("eco:setAppendSystemPrompt", (_e, text: string) => writeAppendSystemPrompt(text));
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(path));
 ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(path));
 ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));

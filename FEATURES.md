@@ -156,6 +156,7 @@ No PID Extension Framework.
 - Sessions `[PID]`
 - Files & Worktrees `[PID]`
 - Notifications `[PID]`
+- System prompt: edits `~/.pi/agent/APPEND_SYSTEM.md`, Pi's appended system prompt `[Pi]`
 - Advanced `[PID]`
 
 Excludes Skills, MCP, Extensions, provider config, model registry config.

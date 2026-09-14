@@ -50,6 +50,8 @@ const bridge: Bridge = {
     mcp: (cwd) => ipcRenderer.invoke("eco:mcp", cwd),
     setResource: (req) => ipcRenderer.invoke("eco:setResource", req),
     setMcp: (req) => ipcRenderer.invoke("eco:setMcp", req),
+    appendSystemPrompt: () => ipcRenderer.invoke("eco:appendSystemPrompt"),
+    setAppendSystemPrompt: (text) => ipcRenderer.invoke("eco:setAppendSystemPrompt", text),
   },
   shell: {
     reveal: (path) => ipcRenderer.invoke("shell:reveal", path),

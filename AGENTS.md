@@ -105,6 +105,10 @@ Pi Coding Agent SDK
   or `--local`, including the project-layer inherit state). MCP servers get pi-mcp-adapter's
   `disabled` flag: edited in place globally, or as a `{ disabled }`-only override in
   `<cwd>/.pi/mcp.json` like `/mcp disable`. No other key in those files is touched.
+- **Appended system prompt** (`src/main/pi/system-prompt.ts`): the Settings page edits
+  `~/.pi/agent/APPEND_SYSTEM.md` in place, Pi's own global append-system-prompt file, so the same
+  rules apply in the terminal. An empty box removes the file. PID keeps no copy and never writes
+  `SYSTEM.md` or a project's `.pi/APPEND_SYSTEM.md`.
 - **Renderer state**: the streaming assistant message is rebuilt from `message_update` deltas;
   `message_end` is authoritative. Everything else is a projection of Pi events.
 - **Extension UI**: the RPC `extension_ui_request` sub-protocol is answered with real dialogs;
