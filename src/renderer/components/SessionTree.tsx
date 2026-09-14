@@ -192,12 +192,6 @@ export function SessionTree({
           const shown = [...live, ...closed.slice(0, limit)];
           const hidden = closed.length - Math.min(closed.length, limit);
           const total = list.length + unlisted.length;
-          // forks nest under their parent when both are in this folder
-          const roots = settings.sessions.showForkLineage
-            ? shown.filter((s) => !(s.parentSessionPath && byPath.has(s.parentSessionPath)))
-            : shown;
-          const childrenOf = (s: SessionSummary) =>
-            settings.sessions.showForkLineage ? shown.filter((c) => c.parentSessionPath === s.path) : [];
 
           return (
             <div key={f}>
@@ -273,7 +267,7 @@ export function SessionTree({
                       onActivate={() => actions.openSession({ ...placeholder(p), path: `proc:${p.key}` })}
                     />
                   ))}
-                  {roots.map((s) => (
+                  {shown.map((s) => (
                     <div key={s.path}>
                       <SessionRow
                         title={titleOf(s)}
@@ -288,23 +282,6 @@ export function SessionTree({
                         onFork={() => actions.fork(s)}
                         onMenu={(e) => openMenu(e, sessionMenu(s, procForSession(ws, s.path)), titleOf(s))}
                       />
-                      {childrenOf(s).map((c) => (
-                        <SessionRow
-                          key={c.path}
-                          nested
-                          title={titleOf(c)}
-                          meta={metaFor(c, procForSession(ws, c.path))}
-                          status={
-                            procForSession(ws, c.path)
-                              ? procStatus(procForSession(ws, c.path) as Proc)
-                              : "closed"
-                          }
-                          active={c.path === activePath}
-                          onActivate={() => actions.openSession(c)}
-                          onFork={() => actions.fork(c)}
-                          onMenu={(e) => openMenu(e, sessionMenu(c, procForSession(ws, c.path)), titleOf(c))}
-                        />
-                      ))}
                     </div>
                   ))}
                   {hidden > 0 && (
@@ -430,7 +407,6 @@ function SessionRow({
   meta,
   status,
   active,
-  nested,
   onActivate,
   onFork,
   onMenu,
@@ -439,7 +415,6 @@ function SessionRow({
   meta: string;
   status: SessionStatus;
   active: boolean;
-  nested?: boolean;
   onActivate: () => void;
   onFork?: () => void;
   onMenu?: (e: MouseEvent) => void;
@@ -448,12 +423,11 @@ function SessionRow({
   return (
     <section
       aria-label={title}
-      className={`group h-[30px] rounded-lg flex items-center gap-2 pr-1 ${nested ? "pl-5" : "pl-2"} ${
+      className={`group h-[30px] rounded-lg flex items-center gap-2 pr-1 pl-2 ${
         active ? "bg-paper-3 text-ink" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
       }`}
       onContextMenu={onMenu}
     >
-      {nested && <span className="text-line-2 -ml-1">└</span>}
       <Dot status={status} />
       <button
         type="button"

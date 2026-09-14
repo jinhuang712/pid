@@ -4,7 +4,6 @@ export interface SessionSummary {
   id: string;
   cwd: string;
   name?: string;
-  parentSessionPath?: string;
   created: string;
   modified: string;
   messageCount: number;
