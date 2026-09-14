@@ -1,11 +1,47 @@
 import { type MouseEvent, memo, useCallback, useMemo } from "react";
+import { useCwd } from "../cwd-context";
+import { fromFileUrl } from "../file-paths";
 import { renderMarkdown } from "../markdown";
 
-/** The file token under a click, if any: `<a class="file-link" data-path>` rendered by marked-setup. */
-function filePathAt(e: MouseEvent<HTMLElement>): string | undefined {
-  const a = (e.target as HTMLElement).closest?.("a.file-link[data-path]");
-  return a instanceof HTMLAnchorElement ? a.dataset.path : undefined;
+/** The anchor under a click, if any. */
+function anchorAt(e: MouseEvent<HTMLElement>): HTMLAnchorElement | undefined {
+  const a = (e.target as HTMLElement).closest?.("a");
+  return a instanceof HTMLAnchorElement ? a : undefined;
 }
+
+/** Where a click on an anchor should go. `file-link` tokens carry the real path in `data-path`. */
+export type LinkTarget = { kind: "path"; path: string } | { kind: "url"; url: string } | undefined;
+
+const WEB_RE = /^(?:https?:|mailto:)/i;
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * Anything that is not a web URL is a file: an absolute or "~" path opens as is, "file://" is
+ * unwrapped, and a relative href ("docs/report.html") means a file under the session's cwd.
+ */
+export function resolveLink(
+  href: string | null,
+  tokenPath: string | undefined,
+  cwd: string | undefined,
+): LinkTarget {
+  if (tokenPath) return { kind: "path", path: tokenPath };
+  if (!href || href === "#") return undefined;
+  if (WEB_RE.test(href)) return { kind: "url", url: href };
+  if (href.startsWith("file://")) return { kind: "path", path: fromFileUrl(href) };
+  if (SCHEME_RE.test(href)) return undefined;
+  let path: string;
+  try {
+    path = decodeURIComponent(href);
+  } catch {
+    path = href;
+  }
+  if (path.startsWith("/") || path === "~" || path.startsWith("~/")) return { kind: "path", path };
+  if (!cwd) return undefined;
+  return { kind: "path", path: `${cwd.replace(/\/$/, "")}/${path.replace(/^\.\//, "")}` };
+}
+
+const targetOf = (a: HTMLAnchorElement, cwd: string | undefined) =>
+  resolveLink(a.getAttribute("href"), a.dataset.path, cwd);
 
 export const Markdown = memo(function Markdown({
   source,
@@ -18,21 +54,34 @@ export const Markdown = memo(function Markdown({
   live?: boolean;
 }) {
   const html = useMemo(() => renderMarkdown(source, !live), [source, live]);
+  const cwd = useCwd();
 
-  // Click opens with the default app; ⌘-click / ⌥-click / right-click reveals in Finder instead.
-  const onClick = useCallback((e: MouseEvent<HTMLElement>) => {
-    const path = filePathAt(e);
-    if (!path) return;
-    e.preventDefault();
-    if (e.metaKey || e.altKey) void window.bridge.shell.reveal(path);
-    else void window.bridge.shell.openPath(path);
-  }, []);
-  const onContextMenu = useCallback((e: MouseEvent<HTMLElement>) => {
-    const path = filePathAt(e);
-    if (!path) return;
-    e.preventDefault();
-    void window.bridge.shell.reveal(path);
-  }, []);
+  // Every anchor is handled here: web URLs open in the browser, files in their default app,
+  // and ⌘-click / ⌥-click / right-click on a file reveals it in Finder instead.
+  const onClick = useCallback(
+    (e: MouseEvent<HTMLElement>) => {
+      const a = anchorAt(e);
+      if (!a) return;
+      e.preventDefault();
+      const target = targetOf(a, cwd);
+      if (!target) return;
+      if (target.kind === "url") void window.bridge.shell.openExternal(target.url);
+      else if (e.metaKey || e.altKey) void window.bridge.shell.reveal(target.path);
+      else void window.bridge.shell.openPath(target.path);
+    },
+    [cwd],
+  );
+  const onContextMenu = useCallback(
+    (e: MouseEvent<HTMLElement>) => {
+      const a = anchorAt(e);
+      if (!a) return;
+      const target = targetOf(a, cwd);
+      if (target?.kind !== "path") return;
+      e.preventDefault();
+      void window.bridge.shell.reveal(target.path);
+    },
+    [cwd],
+  );
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: delegated handler for the <a> tokens inside

@@ -96,6 +96,8 @@ export interface Bridge {
   shell: {
     reveal(path: string): Promise<void>;
     openPath(path: string): Promise<string>;
+    /** http(s) and mailto only; anything else is ignored. */
+    openExternal(url: string): Promise<void>;
   };
   sessions: {
     list(cwd: string): Promise<SessionSummary[]>;

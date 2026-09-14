@@ -56,6 +56,7 @@ const bridge: Bridge = {
   shell: {
     reveal: (path) => ipcRenderer.invoke("shell:reveal", path),
     openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
+    openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
   },
   sessions: {
     list: (cwd) => ipcRenderer.invoke("sessions:list", cwd),

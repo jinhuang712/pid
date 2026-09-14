@@ -9,6 +9,7 @@ import {
   type SentSkill,
   segment,
 } from "../attachments";
+import { CwdContext } from "../cwd-context";
 import { McpServersContext } from "../mcp-servers-context";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
@@ -448,9 +449,12 @@ function Elapsed({ since }: { since: number }): ReactNode {
 
 export function Timeline({
   state,
+  cwd,
   mcpServers = [],
 }: {
   state: ConversationState;
+  /** Session working directory; relative links in assistant markdown resolve against it. */
+  cwd?: string;
   /** MCP server names the session reports, for labelling pid-mcp's native tool calls. */
   mcpServers?: readonly string[];
 }) {
@@ -596,54 +600,58 @@ export function Timeline({
 
   return (
     <McpServersContext.Provider value={mcpServers}>
-      <div className="flex-1 min-h-0 relative flex flex-col">
-        <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overflow-x-hidden pb-6">
-          <div className="max-w-[var(--pid-measure)] mx-auto min-w-0">
-            {hidden > 0 ? (
-              <button
-                type="button"
-                onClick={() => setShown(turns.length)}
-                className="w-full px-6 py-3 text-[12.5px] text-ink-3 hover:text-ink-2 text-center"
-              >
-                {hidden} earlier message{hidden === 1 ? "" : "s"} · show all
-              </button>
-            ) : (
-              state.markers
-                .filter((k) => k.afterIndex < 0)
-                .map((k) => (
-                  <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />
-                ))
-            )}
-            {turns.slice(from).map((t) => (
-              // messages are append-only, so a turn's first index is a stable key
-              <TurnBlock
-                key={t.start}
-                turn={t}
-                toolRuns={state.toolRuns}
-                streaming={t === last && tailOpen ? state.streaming : undefined}
-              />
-            ))}
-            {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
-            {state.commands.map((c) => (
-              <MarkerRow key={c.id} kind="command" text={c.text} live />
-            ))}
-            {state.streaming && !tailOpen && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
-            {state.isStreaming && (
-              <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                Working…
-                {state.turnStartedAt !== undefined && <Elapsed since={state.turnStartedAt} />}
-              </div>
-            )}
+      <CwdContext.Provider value={cwd}>
+        <div className="flex-1 min-h-0 relative flex flex-col">
+          <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overflow-x-hidden pb-6">
+            <div className="max-w-[var(--pid-measure)] mx-auto min-w-0">
+              {hidden > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShown(turns.length)}
+                  className="w-full px-6 py-3 text-[12.5px] text-ink-3 hover:text-ink-2 text-center"
+                >
+                  {hidden} earlier message{hidden === 1 ? "" : "s"} · show all
+                </button>
+              ) : (
+                state.markers
+                  .filter((k) => k.afterIndex < 0)
+                  .map((k) => (
+                    <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />
+                  ))
+              )}
+              {turns.slice(from).map((t) => (
+                // messages are append-only, so a turn's first index is a stable key
+                <TurnBlock
+                  key={t.start}
+                  turn={t}
+                  toolRuns={state.toolRuns}
+                  streaming={t === last && tailOpen ? state.streaming : undefined}
+                />
+              ))}
+              {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
+              {state.commands.map((c) => (
+                <MarkerRow key={c.id} kind="command" text={c.text} live />
+              ))}
+              {state.streaming && !tailOpen && (
+                <Assistant m={state.streaming} live toolRuns={state.toolRuns} />
+              )}
+              {state.isStreaming && (
+                <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                  Working…
+                  {state.turnStartedAt !== undefined && <Elapsed since={state.turnStartedAt} />}
+                </div>
+              )}
+            </div>
           </div>
+          {turns.length > 1 && (
+            <div className="absolute right-4 bottom-4 flex flex-col gap-1.5">
+              <JumpButton dir="up" disabled={!canJump.up} onClick={jumpUp} />
+              <JumpButton dir="down" disabled={!canJump.down} onClick={jumpDown} />
+            </div>
+          )}
         </div>
-        {turns.length > 1 && (
-          <div className="absolute right-4 bottom-4 flex flex-col gap-1.5">
-            <JumpButton dir="up" disabled={!canJump.up} onClick={jumpUp} />
-            <JumpButton dir="down" disabled={!canJump.down} onClick={jumpDown} />
-          </div>
-        )}
-      </div>
+      </CwdContext.Provider>
     </McpServersContext.Provider>
   );
 }
