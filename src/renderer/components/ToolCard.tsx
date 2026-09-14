@@ -1,5 +1,6 @@
 import type { ToolCall } from "@earendil-works/pi-ai";
 import { useState } from "react";
+import { useMcpServers } from "../mcp-servers-context";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
 import { label, MCP_PREFIX } from "../tool-label";
@@ -26,13 +27,14 @@ function diffStats(patch?: string): string | undefined {
  */
 export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
   const { settings } = useSettings();
+  const mcpServers = useMcpServers();
   const [open, setOpen] = useState(!settings.appearance.toolCardsCollapsed);
   const status = run?.status ?? "running";
   const isError = run?.isError === true;
   const diff: string | undefined = call.name === "edit" ? run?.result?.details?.diff : undefined;
   const stats = call.name === "edit" ? diffStats(run?.result?.details?.patch) : undefined;
   const out = resultText(run);
-  const lbl = label(call);
+  const lbl = label(call, mcpServers);
   const verb = status === "running" ? lbl.running : lbl.done;
 
   return (
