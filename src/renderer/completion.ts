@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { bridge } from "./bridge";
 import type { AutocompleteItem } from "./components/Autocomplete";
 import { fuzzyFilter } from "./fuzzy";
-import { refToken, type SessionReference } from "./session-reference";
+import { refDisplay, refToken, type SessionReference } from "./session-reference";
 import type { Sigil } from "./sigils";
 
 const RANK: Record<string, number> = { skill: 0, prompt: 1, extension: 2 };
@@ -141,7 +141,7 @@ export function useCompletion(opts: {
           if (!s) return undefined;
           const token = refToken(s);
           void bridge.sessions.read(s.path).then((messages) => onReference({ token, session: s, messages }));
-          return token;
+          return refDisplay(s);
         }
         default:
           return undefined;

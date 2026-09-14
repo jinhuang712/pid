@@ -1,6 +1,12 @@
 import { useState } from "react";
 import type { Attachment } from "../attachments";
-import { estimateTokens, renderReference, type SessionReference } from "../session-reference";
+import {
+  estimateTokens,
+  refLabel,
+  renderReference,
+  type SessionReference,
+  shortId,
+} from "../session-reference";
 import { AttachmentChip, Chip, Glyph, LinkChip } from "./Chips";
 
 /**
@@ -38,7 +44,7 @@ export function ContextTray({
         ))}
         {refs.map((r) => {
           const rr = renderReference(r);
-          const label = r.session.name || r.session.firstMessage.slice(0, 40) || r.session.id;
+          const label = refLabel(r.session);
           const isOpen = openToken === r.token;
           return (
             <Chip
@@ -47,7 +53,7 @@ export function ContextTray({
               tone="warn"
               label={
                 <>
-                  <span className="font-mono text-warn">{r.token}</span> <span>{label}</span>
+                  <span className="font-mono text-warn">${shortId(r.session)}</span> <span>{label}</span>
                 </>
               }
               meta={`${rr.included}/${rr.total} · ~${estimateTokens(rr.chars).toLocaleString()} tok`}

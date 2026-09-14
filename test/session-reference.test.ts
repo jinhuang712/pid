@@ -5,6 +5,8 @@ import {
   MAX_TOTAL_CHARS,
   type SessionReference,
   expandReferences,
+  refDisplay,
+  refMatches,
   refToken,
   renderReference,
 } from "../src/renderer/session-reference";
@@ -26,8 +28,14 @@ const ref = (n: number, len = 10): SessionReference => ({
 });
 
 describe("renderReference", () => {
-  it("uses the first 8 chars of the id as token", () => {
-    expect(refToken(session)).toBe("$01a08eb2");
+  it("uses the full session id as token and label(shortid) as display form", () => {
+    expect(refToken(session)).toBe("$01a08eb2-74e4-7740-a79d-92ddc4bcb638");
+    expect(refDisplay(session)).toBe("$debug the cache(01a08eb2)");
+    expect(refDisplay({ ...session, name: "fix (the) $bug" })).toBe("$fix the bug(01a08eb2)");
+    expect(refDisplay({ ...session, firstMessage: "" })).toBe("$session(01a08eb2)");
+    expect(refMatches(session, "01a08eb2")).toBe(true);
+    expect(refMatches(session, refToken(session))).toBe(true);
+    expect(refMatches(session, "$ffffffff")).toBe(false);
   });
   it("includes at most MAX_MESSAGES from the tail and states the scope", () => {
     const r = renderReference(ref(50));
@@ -56,11 +64,12 @@ describe("expandReferences", () => {
   it("leaves prompts without tokens untouched", () => {
     expect(expandReferences("hello $unknown", [ref(2)])).toEqual({ text: "hello $unknown", used: [] });
   });
-  it("labels the token inline and appends the visible block once", () => {
+  it("spells raw tokens in display form and appends the visible block once", () => {
     const r = ref(3);
-    const { text, used } = expandReferences(`compare with ${r.token} and ${r.token}`, [r]);
+    const { text, used } = expandReferences(`compare with ${r.token} and ${refDisplay(session)}`, [r]);
     expect(used).toHaveLength(1);
-    expect(text.split('("debug the cache")')).toHaveLength(3);
+    expect(text.split("$debug the cache(01a08eb2)")).toHaveLength(3);
+    expect(text).not.toContain(r.token.slice(0, 20) + " ");
     expect(text.match(/<session-reference /g)).toHaveLength(1);
     expect(text).toContain("explicitly attached by the user");
   });
