@@ -348,8 +348,8 @@ export function Timeline({ state }: { state: ConversationState }) {
   };
 
   return (
-    <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto pb-6">
-      <div className="max-w-[var(--pid-measure)] mx-auto">
+    <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overflow-x-hidden pb-6">
+      <div className="max-w-[var(--pid-measure)] mx-auto min-w-0">
         {hidden > 0 ? (
           <button
             type="button"
