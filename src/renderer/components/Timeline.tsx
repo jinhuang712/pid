@@ -4,13 +4,14 @@ import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "reac
 import { parseAttachments, parseReferences, type SentReference, segment } from "../attachments";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
+import { describeTurn, groupTurns, splitReply, type Turn } from "../state/turns";
 import { AttachmentChip, Chip, Glyph } from "./Chips";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
 
-/** Messages rendered at first; older ones mount as you scroll up. Long sessions run to thousands. */
-const WINDOW = 80;
-const WINDOW_STEP = 80;
+/** Turns rendered at first; older ones mount as you scroll up. Long sessions run to hundreds. */
+const WINDOW = 40;
+const WINDOW_STEP = 40;
 
 function userText(m: UserMessage): string {
   return typeof m.content === "string"
@@ -210,8 +211,7 @@ const Assistant = memo(function Assistant({
   );
 });
 
-const Item = memo(function Item({ m, toolRuns }: { m: AgentMessage; toolRuns: Record<string, ToolRun> }) {
-  if (m.role === "user") return <User m={m} />;
+const Reply = memo(function Reply({ m, toolRuns }: { m: AgentMessage; toolRuns: Record<string, ToolRun> }) {
   if (m.role === "assistant") return <Assistant m={m} live={false} toolRuns={toolRuns} />;
   if (m.role === "toolResult") return null; // shown inside the tool line
   return (
@@ -219,22 +219,80 @@ const Item = memo(function Item({ m, toolRuns }: { m: AgentMessage; toolRuns: Re
   );
 });
 
-function MarkerRow({ kind, text, detail, live }: Omit<Marker, "afterIndex"> & { live?: boolean }) {
-  if (kind === "turn") {
-    return (
-      <div className="px-6 pt-0.5 pb-3 flex justify-end">
-        <span
-          className="font-mono tabular-nums text-[11px] text-ink-3/70 hover:text-ink-3 transition-colors select-none"
-          title={detail}
-        >
-          {text}
-        </span>
-      </div>
-    );
-  }
+function MarkerRow({ kind, text, live }: Pick<Marker, "kind" | "text"> & { live?: boolean }) {
   const tone = kind === "retry" ? "text-warn" : "text-ink-3";
   return <div className={`px-6 py-2 text-[12.5px] ${tone} ${live ? "animate-pulse" : ""}`}>{text}</div>;
 }
+
+/**
+ * The step line of a settled turn: chevron · "Worked for 12s · 4 tool calls · …". Hover shows the
+ * token breakdown. Without steps there is nothing to unfold and the chevron is omitted.
+ */
+function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?: () => void }) {
+  return (
+    <div className="px-6 pt-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!onToggle}
+        className={`group flex items-center gap-2 h-6 text-[12.5px] text-ink-3 ${onToggle ? "hover:text-ink-2" : "cursor-default"}`}
+        title={turn.summary?.detail}
+      >
+        {onToggle && (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          >
+            <title>{open ? "collapse" : "expand"}</title>
+            <path d="m6 4 4 4-4 4" />
+          </svg>
+        )}
+        <span className="tabular-nums">{describeTurn(turn)}</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * One exchange. While Pi is still working every step stays open so output can be read as it
+ * arrives; once the turn settles the steps fold behind the step line and only the answer remains.
+ */
+const TurnBlock = memo(function TurnBlock({
+  turn,
+  toolRuns,
+  streaming,
+}: {
+  turn: Turn;
+  toolRuns: Record<string, ToolRun>;
+  /** The in-flight assistant message when this is the open turn. */
+  streaming?: AssistantMessage;
+}) {
+  const { settings } = useSettings();
+  const [open, setOpen] = useState(!settings.appearance.stepsCollapsed);
+  const settled = turn.summary !== undefined;
+  const { steps, answer } = useMemo(() => splitReply(turn.replies), [turn.replies]);
+  const unfolded = !settled || open;
+  const replies = settled ? steps : turn.replies;
+  return (
+    <div>
+      {turn.user && <User m={turn.user.m} />}
+      {settled && (
+        <Steps turn={turn} open={open} onToggle={steps.length > 0 ? () => setOpen(!open) : undefined} />
+      )}
+      {unfolded && replies.map(({ index, m }) => <Reply key={index} m={m} toolRuns={toolRuns} />)}
+      {settled && answer && <Assistant m={answer} live={false} toolRuns={toolRuns} />}
+      {streaming && <Assistant m={streaming} live toolRuns={toolRuns} />}
+      {turn.markers.map((k) => (
+        <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />
+      ))}
+    </div>
+  );
+});
 
 export function Timeline({ state }: { state: ConversationState }) {
   const bottom = useRef<HTMLDivElement>(null);
@@ -245,9 +303,13 @@ export function Timeline({ state }: { state: ConversationState }) {
   const { settings } = useSettings();
   const follow = stick && settings.conversation.autoScroll;
 
-  const total = state.messages.length;
-  const from = Math.max(0, total - shown);
-  const hidden = from;
+  const turns = useMemo(() => groupTurns(state.messages, state.markers), [state.messages, state.markers]);
+  const from = Math.max(0, turns.length - shown);
+  /** Messages above the window, for the "earlier messages" row. */
+  const hidden = from > 0 ? turns[from].start : 0;
+  const last = turns[turns.length - 1];
+  /** The streaming message belongs to the last turn unless that turn has already settled. */
+  const tailOpen = last !== undefined && last.summary === undefined;
 
   // Follow the stream: the tail grows on every event, so this runs per event by design.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on every state change to follow the stream
@@ -275,7 +337,7 @@ export function Timeline({ state }: { state: ConversationState }) {
         {hidden > 0 ? (
           <button
             type="button"
-            onClick={() => setShown(total)}
+            onClick={() => setShown(turns.length)}
             className="w-full px-6 py-3 text-[12.5px] text-ink-3 hover:text-ink-2 text-center"
           >
             {hidden} earlier message{hidden === 1 ? "" : "s"} · show all
@@ -283,36 +345,19 @@ export function Timeline({ state }: { state: ConversationState }) {
         ) : (
           state.markers
             .filter((k) => k.afterIndex < 0)
-            .map((k) => (
-              <MarkerRow
-                key={`${k.kind}-${k.afterIndex}-${k.text}`}
-                kind={k.kind}
-                text={k.text}
-                detail={k.detail}
-              />
-            ))
+            .map((k) => <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />)
         )}
-        {state.messages.slice(from).map((m, j) => {
-          const i = from + j;
-          return (
-            // messages are append-only, so the absolute index is a stable key
-            <div key={i}>
-              <Item m={m} toolRuns={state.toolRuns} />
-              {state.markers
-                .filter((k) => k.afterIndex === i)
-                .map((k) => (
-                  <MarkerRow
-                    key={`${k.kind}-${k.afterIndex}-${k.text}`}
-                    kind={k.kind}
-                    text={k.text}
-                    detail={k.detail}
-                  />
-                ))}
-            </div>
-          );
-        })}
+        {turns.slice(from).map((t) => (
+          // messages are append-only, so a turn's first index is a stable key
+          <TurnBlock
+            key={t.start}
+            turn={t}
+            toolRuns={state.toolRuns}
+            streaming={t === last && tailOpen ? state.streaming : undefined}
+          />
+        ))}
         {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
-        {state.streaming && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
+        {state.streaming && !tailOpen && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
         {state.isStreaming && !state.streaming && (
           <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />

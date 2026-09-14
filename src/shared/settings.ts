@@ -35,6 +35,8 @@ export interface PidSettings {
     reduceMotion: boolean;
     toolCardsCollapsed: boolean;
     thinkingCollapsed: boolean;
+    /** Fold a finished turn's thinking and tool calls behind one "Worked for …" line. */
+    stepsCollapsed: boolean;
     sidebarWidth: number;
   };
   conversation: {
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: PidSettings = {
     reduceMotion: false,
     toolCardsCollapsed: true,
     thinkingCollapsed: true,
+    stepsCollapsed: true,
     sidebarWidth: 272,
   },
   conversation: {
