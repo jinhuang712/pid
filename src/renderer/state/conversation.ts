@@ -15,7 +15,7 @@ export interface ToolRun {
 export interface Marker {
   /** Rendered after messages[afterIndex] (−1 = before the first message). */
   afterIndex: number;
-  kind: "compaction" | "retry" | "turn";
+  kind: "compaction" | "retry" | "turn" | "command" | "command-failed";
   text: string;
   /** Hover detail, used by turn markers for the token breakdown. */
   detail?: string;
@@ -24,9 +24,19 @@ export interface Marker {
   durationMs?: number;
 }
 
+/**
+ * A `#` action or slash command PID issued itself (reload, compact, abort…) that has not settled yet.
+ * Shown as a live row at the tail; on completion it becomes a `command` / `command-failed` marker.
+ */
+export interface CommandRun {
+  id: number;
+  text: string;
+}
+
 export interface ConversationState {
   messages: AgentMessage[];
   markers: Marker[];
+  commands: CommandRun[];
   /** Usage of the last assistant message; drives the context gauge. */
   lastUsage?: AssistantMessage["usage"];
   compacting: boolean;
@@ -45,6 +55,7 @@ export interface ConversationState {
 export const emptyConversation = (): ConversationState => ({
   messages: [],
   markers: [],
+  commands: [],
   compacting: false,
   isStreaming: false,
   toolRuns: {},
@@ -88,6 +99,36 @@ export function fromMessages(messages: AgentMessage[]): ConversationState {
   }
   closeTurn(messages.length - 1);
   return s;
+}
+
+/** A PID-issued command started: show it live at the tail until `commandEnd` settles it. */
+export function commandStart(state: ConversationState, id: number, text: string): ConversationState {
+  return { ...state, commands: [...state.commands, { id, text }] };
+}
+
+/**
+ * A PID-issued command settled. `text` undefined keeps nothing in the timeline — for commands whose
+ * outcome pi already reports through its own events (compaction_end).
+ */
+export function commandEnd(
+  state: ConversationState,
+  id: number,
+  outcome: { ok: true; text?: string } | { ok: false; text: string },
+): ConversationState {
+  const commands = state.commands.filter((c) => c.id !== id);
+  if (outcome.text === undefined) return { ...state, commands };
+  return {
+    ...state,
+    commands,
+    markers: [
+      ...state.markers,
+      {
+        afterIndex: state.messages.length - 1,
+        kind: outcome.ok ? "command" : "command-failed",
+        text: outcome.text,
+      },
+    ],
+  };
 }
 
 export function reduce(

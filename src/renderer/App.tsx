@@ -47,6 +47,8 @@ export function App() {
   const [ws, dispatch] = useReducer(workspaceReducer, undefined, emptyWorkspace);
   const [status, setStatus] = useState<string>();
   const [toasts, setToasts] = useState<Toast[]>([]);
+  /** Bumped after `/reload` so the `/` menu re-reads pi's command list instead of its cached one. */
+  const [commandsEpoch, setCommandsEpoch] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [forkKey, setForkKey] = useState<string>();
   const [renameKey, setRenameKey] = useState<string>();
@@ -406,7 +408,6 @@ export function App() {
     if (!liveKey) return;
     void run(deliver(liveKey, raw, conv.isStreaming ? "follow_up" : "prompt"));
   };
-  const abort = () => liveKey && void run(bridge.pi.command(liveKey, { type: "abort" }));
 
   /** From the palette: a fresh session in the current folder, prompted with the typed text. */
   const askInFolder = (text: string) => {
@@ -502,24 +503,111 @@ export function App() {
   };
 
   // ---- composer completion ----
+  /**
+   * A command PID issues on the user's behalf (reload, abort, …) is acknowledged in the timeline:
+   * a live row while it runs (when `running` is given), then one settled row with the outcome.
+   * `done` returning undefined leaves no row — for commands pi already reports through its events.
+   */
+  const command = async <T,>(
+    k: string,
+    running: string | undefined,
+    p: Promise<T>,
+    done: (r: T) => string | undefined,
+    failed: (reason: string) => string,
+  ) => {
+    const id = Date.now() + Math.random();
+    if (running !== undefined) dispatch({ type: "command-start", key: k, id, text: running });
+    try {
+      const r = await p;
+      dispatch({ type: "command-end", key: k, id, outcome: { ok: true, text: done(r) } });
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      dispatch({ type: "command-end", key: k, id, outcome: { ok: false, text: failed(reason) } });
+    }
+  };
+  /** Runs `/reload` and reports what the session has afterwards, naming commands that are new. */
+  const reload = async (k: string) => {
+    const names = async () => (await bridge.pi.command(k, { type: "get_commands" })).commands;
+    const before = new Set((await names()).map((c) => c.name));
+    await bridge.pi.command(k, { type: "prompt", message: "/reload" });
+    const after = await names();
+    setCommandsEpoch((n) => n + 1);
+    const count = (source: string) => after.filter((c) => c.source === source).length;
+    const added = after.filter((c) => !before.has(c.name)).map((c) => c.name.replace(/^skill:/, ""));
+    const parts = [
+      "reloaded",
+      `${count("skill")} skills`,
+      `${count("extension")} extension commands`,
+      ...(count("prompt") > 0 ? [`${count("prompt")} prompts`] : []),
+      ...(added.length > 0 ? [`${added.length} new: ${added.join(", ")}`] : []),
+    ];
+    return parts.join(" · ");
+  };
   const actions: PiActions = {
-    compact: () => liveKey && void run(bridge.pi.command(liveKey, { type: "compact" })),
+    compact: () =>
+      liveKey &&
+      void command(
+        liveKey,
+        undefined,
+        bridge.pi.command(liveKey, { type: "compact" }),
+        () => undefined, // compaction_end draws its own row
+        (r) => `compact failed · ${r}`,
+      ),
     newSession: () => folder && void start(folder),
-    abort,
-    clearQueue: () => liveKey && void run(bridge.pi.command(liveKey, { type: "clear_queue" })),
+    abort: () =>
+      liveKey &&
+      void command(
+        liveKey,
+        "aborting…",
+        bridge.pi.command(liveKey, { type: "abort" }),
+        () => "aborted",
+        (r) => `abort failed · ${r}`,
+      ),
+    clearQueue: () =>
+      liveKey &&
+      void command(
+        liveKey,
+        undefined,
+        bridge.pi.command(liveKey, { type: "clear_queue" }),
+        (r) => {
+          const n = r.steering.length + r.followUp.length;
+          return n === 0 ? "queue was already empty" : `queue cleared · ${n} dropped`;
+        },
+        (r) => `clear queue failed · ${r}`,
+      ),
     exportHtml: () =>
       liveKey &&
-      void run(bridge.pi.command(liveKey, { type: "export_html" }).then((r) => toast(`exported ${r.path}`))),
-    reload: () => liveKey && void run(bridge.pi.command(liveKey, { type: "prompt", message: "/reload" })),
+      void command(
+        liveKey,
+        "exporting…",
+        bridge.pi.command(liveKey, { type: "export_html" }),
+        (r) => `exported ${r.path}`,
+        (r) => `export failed · ${r}`,
+      ),
+    reload: () =>
+      liveKey &&
+      void command(
+        liveKey,
+        "reloading…",
+        reload(liveKey),
+        (t) => t,
+        (r) => `reload failed · ${r}`,
+      ),
     setThinking: (level) =>
       liveKey &&
-      void run(
+      void command(
+        liveKey,
+        undefined,
         bridge.pi
           .command(liveKey, { type: "set_thinking_level", level: level as never })
           .then(() => refreshState(liveKey)),
+        () => `thinking: ${level}`,
+        (r) => `thinking: ${level} failed · ${r}`,
       ),
     fork: () => key && setForkKey(key),
   };
+  /** The composer's stop button and the palette abort the same way the `#abort` action does. */
+  const abort = actions.abort;
   const recentSessions = useMemo(
     () =>
       folder
@@ -534,6 +622,7 @@ export function App() {
     folder,
     sessions: allSessions,
     actions,
+    commandsEpoch,
     onReference: composer.addRef,
   });
   const loadModels = useCallback(

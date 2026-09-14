@@ -10,7 +10,14 @@ import {
 } from "@shared/mcp-status";
 import type { PiEvent, PiHandle, RpcSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
-import { type ConversationState, emptyConversation, fromMessages, reduce } from "./conversation";
+import {
+  type ConversationState,
+  commandEnd,
+  commandStart,
+  emptyConversation,
+  fromMessages,
+  reduce,
+} from "./conversation";
 
 /**
  * Every open pi process the window owns. Pi owns the sessions; this is only the
@@ -63,6 +70,13 @@ export type WorkspaceAction =
   | { type: "event"; key: string; event: PiEvent }
   | { type: "state"; key: string; piState: RpcSessionState }
   | { type: "messages"; key: string; conv: ConversationState }
+  | { type: "command-start"; key: string; id: number; text: string }
+  | {
+      type: "command-end";
+      key: string;
+      id: number;
+      outcome: { ok: true; text?: string } | { ok: false; text: string };
+    }
   | { type: "dialog-done"; key: string; id: string }
   | { type: "exit"; key: string; message: string };
 
@@ -123,6 +137,10 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       return patch(ws, a.key, (p) => ({ ...p, piState: a.piState }));
     case "messages":
       return patch(ws, a.key, (p) => ({ ...p, conv: a.conv }));
+    case "command-start":
+      return patch(ws, a.key, (p) => ({ ...p, conv: commandStart(p.conv, a.id, a.text) }));
+    case "command-end":
+      return patch(ws, a.key, (p) => ({ ...p, conv: commandEnd(p.conv, a.id, a.outcome) }));
     case "dialog-done":
       return patch(ws, a.key, (p) => ({ ...p, dialogs: p.dialogs.filter((d) => d.id !== a.id) }));
     case "exit":
