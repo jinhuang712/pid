@@ -1,16 +1,19 @@
 import { useCallback, useMemo, useReducer } from "react";
 import type { Attachment } from "../attachments";
+import type { LinkRef } from "../links";
 import type { SessionReference } from "../session-reference";
 
 /**
  * What the user has typed but not yet sent, per session. Each open session (and the entry view,
- * under HOME_SCOPE) keeps its own draft, `$session` references, and attachments, so switching
- * sessions never carries context from one conversation into another.
+ * under HOME_SCOPE) keeps its own draft, `$session` references, folded links, and attachments, so
+ * switching sessions never carries context from one conversation into another.
  */
 export interface ComposerDraft {
   draft: string;
   refs: SessionReference[];
   attachments: Attachment[];
+  /** Full hrefs behind the "🔗host/…" tokens in the draft. */
+  links: LinkRef[];
 }
 
 export type ComposerScopes = Record<string, ComposerDraft>;
@@ -18,7 +21,7 @@ export type ComposerScopes = Record<string, ComposerDraft>;
 /** Scope used when no session is active: the entry view's composer. */
 export const HOME_SCOPE = "home";
 
-export const emptyDraft = (): ComposerDraft => ({ draft: "", refs: [], attachments: [] });
+export const emptyDraft = (): ComposerDraft => ({ draft: "", refs: [], attachments: [], links: [] });
 
 export type ComposerAction =
   | { type: "draft"; scope: string; text: string | ((d: string) => string) }
@@ -26,8 +29,15 @@ export type ComposerAction =
   | { type: "remove-ref"; scope: string; token: string }
   | { type: "add-attachments"; scope: string; attachments: Attachment[] }
   | { type: "remove-attachment"; scope: string; path: string }
+  | { type: "add-links"; scope: string; links: LinkRef[] }
   /** After a successful send: drop what went out, keep anything added meanwhile. */
-  | { type: "consume"; scope: string; refs: SessionReference[]; attachments: Attachment[] }
+  | {
+      type: "consume";
+      scope: string;
+      refs: SessionReference[];
+      attachments: Attachment[];
+      links: LinkRef[];
+    }
   /** Restore the draft after a failed send without clobbering text typed since. */
   | { type: "restore-draft"; scope: string; text: string }
   /** A pending placeholder became a live process: its draft follows the new key. */
@@ -65,13 +75,19 @@ function reduceDraft(d: ComposerDraft, a: ComposerAction): ComposerDraft {
     }
     case "remove-attachment":
       return { ...d, attachments: d.attachments.filter((x) => x.path !== a.path) };
+    case "add-links": {
+      const have = new Set(d.links.map((l) => l.display));
+      return { ...d, links: [...d.links, ...a.links.filter((l) => !have.has(l.display))] };
+    }
     case "consume": {
       const refs = new Set(a.refs.map((r) => r.token));
       const paths = new Set(a.attachments.map((x) => x.path));
+      const links = new Set(a.links.map((l) => l.display));
       return {
         ...d,
         refs: d.refs.filter((r) => !refs.has(r.token)),
         attachments: d.attachments.filter((x) => !paths.has(x.path)),
+        links: d.links.filter((l) => !links.has(l.display)),
       };
     }
     case "restore-draft":
@@ -96,8 +112,9 @@ export function useComposer(scope: string) {
       addAttachments: (attachments: Attachment[]) =>
         dispatch({ type: "add-attachments", scope, attachments }),
       removeAttachment: (path: string) => dispatch({ type: "remove-attachment", scope, path }),
-      consume: (refs: SessionReference[], attachments: Attachment[]) =>
-        dispatch({ type: "consume", scope, refs, attachments }),
+      addLinks: (links: LinkRef[]) => dispatch({ type: "add-links", scope, links }),
+      consume: (refs: SessionReference[], attachments: Attachment[], links: LinkRef[]) =>
+        dispatch({ type: "consume", scope, refs, attachments, links }),
       restoreDraft: (text: string) => dispatch({ type: "restore-draft", scope, text }),
     }),
     [scope],

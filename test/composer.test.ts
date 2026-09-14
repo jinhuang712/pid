@@ -27,8 +27,13 @@ describe("composer scopes", () => {
       { type: "add-attachments", scope: "A", attachments: [file("/x/foo.go")] },
       { type: "draft", scope: "B", text: "unrelated" },
     ]);
-    expect(s.A).toEqual({ draft: "fix the bug", refs: [ref("$aaa")], attachments: [file("/x/foo.go")] });
-    expect(s.B).toEqual({ draft: "unrelated", refs: [], attachments: [] });
+    expect(s.A).toEqual({
+      draft: "fix the bug",
+      refs: [ref("$aaa")],
+      attachments: [file("/x/foo.go")],
+      links: [],
+    });
+    expect(s.B).toEqual({ draft: "unrelated", refs: [], attachments: [], links: [] });
     expect(s[HOME_SCOPE]).toBeUndefined();
   });
 
@@ -48,7 +53,7 @@ describe("composer scopes", () => {
       { type: "add-ref", scope: "A", ref: ref("$aaa") },
       { type: "add-ref", scope: "A", ref: ref("$bbb") },
       { type: "add-attachments", scope: "A", attachments: [file("/a"), file("/late")] },
-      { type: "consume", scope: "A", refs: [ref("$aaa")], attachments: [file("/a")] },
+      { type: "consume", scope: "A", refs: [ref("$aaa")], attachments: [file("/a")], links: [] },
     ]);
     expect(s.A.refs.map((r) => r.token)).toEqual(["$bbb"]);
     expect(s.A.attachments.map((a) => a.path)).toEqual(["/late"]);

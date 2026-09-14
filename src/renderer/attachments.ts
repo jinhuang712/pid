@@ -1,5 +1,6 @@
 import type { PathInfo } from "@shared/files";
 import { SKILL_BLOCK_RE } from "@shared/prompt-blocks";
+import { LINK_DISPLAY_RE, URL_RE } from "./links";
 import { DISPLAY_RE, TOKEN_RE as SESSION_TOKEN_RE } from "./session-reference";
 
 /**
@@ -90,16 +91,18 @@ export function parseAttachments(text: string): { body: string; attachments: Att
 export type Segment =
   | { type: "text"; text: string }
   | { type: "url"; text: string; href: string }
+  /** A folded link in the composer, "🔗host/…/page"; its href lives in the draft's links. */
+  | { type: "link"; text: string; display: string }
   | { type: "session"; text: string; token: string; label?: string }
   | { type: "mention"; text: string; path: string };
 
 /**
- * URL, then a session reference, then @path. Order matters: first match wins. A reference is its
- * display form "$label(shortid)", a raw full "$token", or the legacy 8-hex "$token ("label")"
- * that older sent messages carry.
+ * URL, then a folded link, then a session reference, then @path. Order matters: first match wins.
+ * A reference is its display form "$label(shortid)", a raw full "$token", or the legacy 8-hex
+ * "$token ("label")" that older sent messages carry.
  */
 const TOKEN_RE = new RegExp(
-  `(https?:\\/\\/[^\\s<>()"']+[^\\s<>()"'.,;:!?])|(?<=^|\\s)(${DISPLAY_RE.source.replace("([0-9a-f]{8})", "[0-9a-f]{8}")}|${SESSION_TOKEN_RE.source}|\\$[0-9a-f]{8}\\b)(?: \\("((?:[^"\\\\]|\\\\.)*)"\\))?|(?<=^|\\s)(@\\/?[^\\s@]*[^\\s@.,;:!?])`,
+  `(${URL_RE.source})|(?<=^|\\s)(${LINK_DISPLAY_RE.source})|(?<=^|\\s)(${DISPLAY_RE.source.replace("([0-9a-f]{8})", "[0-9a-f]{8}")}|${SESSION_TOKEN_RE.source}|\\$[0-9a-f]{8}\\b)(?: \\("((?:[^"\\\\]|\\\\.)*)"\\))?|(?<=^|\\s)(@\\/?[^\\s@]*[^\\s@.,;:!?])`,
   "g",
 );
 
@@ -110,18 +113,13 @@ export function segment(text: string): Segment[] {
     const at = m.index ?? 0;
     if (at > last) out.push({ type: "text", text: text.slice(last, at) });
     if (m[1]) out.push({ type: "url", text: m[1], href: m[1] });
-    else if (m[2]) out.push({ type: "session", text: m[0], token: m[2], label: m[3] });
-    else if (m[4]) out.push({ type: "mention", text: m[4], path: m[4].slice(1) });
+    else if (m[2]) out.push({ type: "link", text: m[2], display: m[2] });
+    else if (m[3]) out.push({ type: "session", text: m[0], token: m[3], label: m[4] });
+    else if (m[5]) out.push({ type: "mention", text: m[5], path: m[5].slice(1) });
     last = at + m[0].length;
   }
   if (last < text.length) out.push({ type: "text", text: text.slice(last) });
   return out;
-}
-
-export function urlsIn(text: string): string[] {
-  const seen = new Set<string>();
-  for (const s of segment(text)) if (s.type === "url") seen.add(s.href);
-  return [...seen];
 }
 
 export function hostOf(url: string): string {

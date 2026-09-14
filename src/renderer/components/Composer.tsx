@@ -10,7 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { type Attachment, segment, urlsIn } from "../attachments";
+import { type Attachment, segment } from "../attachments";
+import { collapseLinks, type LinkRef } from "../links";
 import type { SessionReference } from "../session-reference";
 import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
@@ -54,6 +55,9 @@ export interface ComposerProps {
   onPasteImage: (file: File) => void;
   refs: SessionReference[];
   onRemoveRef: (token: string) => void;
+  /** Full hrefs behind the folded "🔗host/…" tokens in the text. */
+  links: LinkRef[];
+  onAddLinks: (links: LinkRef[]) => void;
 }
 
 const TITLES: Record<Sigil, string> = {
@@ -71,7 +75,6 @@ export function Composer(p: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
   const [attachMenu, setAttachMenu] = useState(false);
-  const urls = useMemo(() => urlsIn(text), [text]);
   const [token, setToken] = useState<ActiveToken>();
   const [items, setItems] = useState<AutocompleteItem[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -234,9 +237,27 @@ export function Composer(p: ComposerProps) {
 
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(e.clipboardData.files);
-    if (files.length === 0) return; // plain text paste: let the textarea handle it
+    if (files.length > 0) {
+      e.preventDefault();
+      takeFiles(files);
+      return;
+    }
+    // Pasted text: every URL in it arrives already folded. Other text goes in as-is.
+    const pasted = e.clipboardData.getData("text/plain");
+    const folded = collapseLinks(pasted, p.links, { all: true });
+    if (folded.text === pasted) return; // no links: let the textarea handle it
     e.preventDefault();
-    takeFiles(files);
+    const el = e.currentTarget;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = `${text.slice(0, start)}${folded.text}${text.slice(end)}`;
+    const caret = start + folded.text.length;
+    setText(next);
+    if (folded.added.length > 0) p.onAddLinks(folded.added);
+    requestAnimationFrame(() => {
+      el.setSelectionRange(caret, caret);
+      refreshToken();
+    });
   };
 
   const pickAttachments = (kind: "file" | "folder") => {
@@ -313,7 +334,6 @@ export function Composer(p: ComposerProps) {
         <ContextTray
           attachments={attachments}
           refs={p.refs}
-          urls={urls}
           onRemoveAttachment={p.onRemoveAttachment}
           onRemoveRef={p.onRemoveRef}
         />
@@ -331,7 +351,15 @@ export function Composer(p: ComposerProps) {
             value={text}
             disabled={p.disabled}
             onChange={(e) => {
-              setText(e.target.value);
+              const el = e.target;
+              // A URL the user just left (whitespace after it) folds into its "🔗host/…" token.
+              const folded = collapseLinks(el.value, p.links, { caret: el.selectionStart });
+              setText(folded.text);
+              if (folded.added.length > 0) p.onAddLinks(folded.added);
+              if (folded.text !== el.value && folded.caret !== undefined) {
+                const caret = folded.caret;
+                requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+              }
               requestAnimationFrame(refreshToken);
             }}
             onKeyDown={onKey}
@@ -485,6 +513,12 @@ function Highlights({ text }: { text: string }) {
           case "url":
             return (
               <span key={key} className="text-accent underline decoration-accent/45 underline-offset-2">
+                {s.text}
+              </span>
+            );
+          case "link":
+            return (
+              <span key={key} className="text-accent rounded-[5px] bg-accent-soft">
                 {s.text}
               </span>
             );

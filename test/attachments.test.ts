@@ -10,7 +10,6 @@ import {
   parseSkillBlock,
   segment,
   toAttachment,
-  urlsIn,
 } from "../src/renderer/attachments";
 
 const a = (path: string, kind: Attachment["kind"]): Attachment => ({
@@ -75,8 +74,11 @@ describe("segment", () => {
   it("does not treat emails or mid-word $ as tokens", () => {
     expect(segment("mail me@host.com about cost$12345678").every((x) => x.type === "text")).toBe(true);
   });
-  it("dedupes urls", () => {
-    expect(urlsIn("https://a.dev https://a.dev http://b.dev/x")).toEqual(["https://a.dev", "http://b.dev/x"]);
+  it("recognises a folded link token as its own segment", () => {
+    const s = segment("read 🔗project.larksuite.com/…/homepage then reply");
+    expect(s.map((x) => x.type)).toEqual(["text", "link", "text"]);
+    expect(s[1]).toMatchObject({ display: "🔗project.larksuite.com/…/homepage" });
+    expect(segment("a🔗b.dev").every((x) => x.type === "text")).toBe(true);
   });
 });
 
