@@ -278,8 +278,8 @@ export function App() {
   const copySessionReference = (s: SessionSummary) => {
     const token = refToken(s);
     void navigator.clipboard.writeText(token).then(
-      () => setStatus(`Copied ${token}`),
-      (e) => setStatus(String(e)),
+      () => toast(`Copied ${token}`),
+      (e) => toast(String(e), "error"),
     );
   };
 
