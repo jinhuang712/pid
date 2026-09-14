@@ -185,7 +185,7 @@ export function Palette({
         </div>
         <div className="px-4 h-8 flex items-center gap-4 text-[12px] text-ink-3 border-t border-line">
           <Keys keys={["⏎"]} label="open" />
-          <Keys keys={["⌘", "⏎"]} label="reference in composer" />
+          <Keys keys={["⌘", "⏎"]} label="copy session reference" />
           <Keys keys={["esc"]} label="close" />
         </div>
       </dialog>

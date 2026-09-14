@@ -39,7 +39,7 @@ export interface SessionActions {
   newSession: (dir: string) => void;
   openSession: (s: SessionSummary) => void;
   fork: (s: SessionSummary) => void;
-  reference: (s: SessionSummary) => void;
+  copyReference: (s: SessionSummary) => void;
   rename: (s: SessionSummary) => void;
   exportHtml: (s: SessionSummary) => void;
   closeProcess: (s: SessionSummary) => void;
@@ -112,7 +112,7 @@ export function SessionTree({
 
   const sessionMenu = (s: SessionSummary, live?: Proc): (MenuItem | "sep")[] => [
     { label: "Fork from…", hint: "⌘⇧F", onClick: () => actions.fork(s) },
-    { label: "Reference in composer", hint: "$", onClick: () => actions.reference(s) },
+    { label: "Copy session reference", hint: "$", onClick: () => actions.copyReference(s) },
     { label: "Rename", onClick: () => actions.rename(s) },
     { label: "Export HTML", onClick: () => actions.exportHtml(s) },
     "sep",
