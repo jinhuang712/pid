@@ -12,6 +12,16 @@ export type McpServerRuntimeStatus =
   | "disabled"
   | (string & {});
 
+/**
+ * Where a runtime-registered server is started from, as reported by the adapter.
+ * Mirrors McpRuntimeDefinition in resources/pid-bridge/index.ts.
+ */
+export interface McpRuntimeDefinition {
+  command?: string;
+  args?: string[];
+  url?: string;
+}
+
 export interface McpServerStatus {
   name: string;
   status: McpServerRuntimeStatus;
@@ -21,6 +31,11 @@ export interface McpServerStatus {
   disabled: boolean;
   /** Only present while a failure is current. */
   failedAgoSeconds?: number;
+  /**
+   * Present only for servers an extension registered at runtime: no mcp.json defines them, so
+   * nothing on disk plays back where they come from. Absent for configured servers.
+   */
+  runtime?: McpRuntimeDefinition;
 }
 
 export interface McpStatusSnapshot {
@@ -38,6 +53,19 @@ export const WIDGET_MCP_STATUS = "pid:mcp-status";
 export const WIDGET_MCP_OAUTH = "pid:mcp-oauth";
 
 export const isPidWidget = (key: string) => key.startsWith(PID_WIDGET_PREFIX);
+
+/**
+ * Servers the adapter is running that no config layer defines — the runtime registrations.
+ * The MCP page merges these into its list; without them a package-registered server (ACME's
+ * engine/flashcat/grafana, say) is invisible even though Pi is calling it.
+ */
+export function runtimeOnly(
+  servers: McpServerStatus[] | undefined,
+  configured: Iterable<string>,
+): McpServerStatus[] {
+  const known = new Set(configured);
+  return (servers ?? []).filter((s) => !known.has(s.name));
+}
 
 /** Parse the bridge's one-line JSON payload; undefined when the widget was cleared or malformed. */
 export function parseMcpStatus(lines: string[] | undefined): McpStatusSnapshot | undefined {

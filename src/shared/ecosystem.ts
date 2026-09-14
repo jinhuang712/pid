@@ -51,6 +51,12 @@ export interface ExtensionView {
   projectState?: ProjectState;
 }
 
+/** One entry of pi-mcp-adapter's discovered-tool cache. */
+export interface McpToolSummary {
+  name: string;
+  description?: string;
+}
+
 export interface McpServerView {
   name: string;
   /** The file that defines the server (lowest layer that has a command or url). */
@@ -70,7 +76,7 @@ export interface McpServerView {
   /** `disabled` as written in the project's .pi/mcp.json override, if any. */
   projectDisabled?: boolean;
   /** From pi-mcp-adapter's tool cache; undefined when the server has never been connected. */
-  cachedTools?: { name: string; description?: string }[];
+  cachedTools?: McpToolSummary[];
 }
 
 export interface McpView {
@@ -83,6 +89,11 @@ export interface McpView {
   adapterVersion?: string;
   configPaths: string[];
   cachePath?: string;
+  /**
+   * The whole tool cache by server name. Runtime-registered servers appear here too — they have no
+   * config entry, so this is the only place the page can learn their tools.
+   */
+  cacheTools?: Record<string, McpToolSummary[]>;
   servers: McpServerView[];
 }
 

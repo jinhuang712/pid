@@ -1,6 +1,7 @@
-import { parseMcpStatus, WIDGET_MCP_STATUS } from "@shared/mcp-status";
+import { parseMcpStatus, runtimeOnly, WIDGET_MCP_STATUS } from "@shared/mcp-status";
 import type { PiHandle, RpcSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
+import { withRuntimeDefinitions } from "../resources/pid-bridge/index";
 import { locateBundled, adapterSource, bundledExtensionArgs } from "../src/main/pi/bundled";
 import { emptyWorkspace, workspaceReducer } from "../src/renderer/state/workspace";
 
@@ -20,6 +21,50 @@ describe("parseMcpStatus", () => {
     expect(parseMcpStatus([])).toBeUndefined();
     expect(parseMcpStatus(["not json"])).toBeUndefined();
     expect(parseMcpStatus(['{"servers":"nope"}'])).toBeUndefined();
+  });
+});
+
+describe("runtime-registered servers", () => {
+  const live = (name: string) => ({
+    name,
+    status: "cached",
+    toolCount: 3,
+    disabled: false,
+  });
+  const STATUS =
+    '{"version":1,"servers":[{"name":"serena","status":"cached","toolCount":17,"disabled":false},' +
+    '{"name":"acme-engine","status":"connected","toolCount":65,"disabled":false,"runtime":{"command":"node","args":["/pkg/dist/server.js","--no-flashcat"]}}],' +
+    '"totalTools":82,"totalResources":0,"connectedCount":1,"disabledCount":0}';
+
+  it("keeps the adapter's definition through parsing", () => {
+    const s = parseMcpStatus([STATUS]);
+    expect(s?.servers[1].runtime).toEqual({ command: "node", args: ["/pkg/dist/server.js", "--no-flashcat"] });
+    expect(s?.servers[0].runtime).toBeUndefined();
+  });
+
+  it("lists only servers no config layer defines", () => {
+    const s = parseMcpStatus([STATUS]);
+    expect(runtimeOnly(s?.servers, ["serena", "Meegle"]).map((x) => x.name)).toEqual(["acme-engine"]);
+    expect(runtimeOnly(s?.servers, ["serena", "Meegle", "acme-engine"])).toEqual([]);
+    expect(runtimeOnly(undefined, ["serena"])).toEqual([]);
+  });
+
+  it("marks only the servers the adapter answers a snapshot for", () => {
+    const definition = (name: string) =>
+      name === "acme-engine" ? { command: "node", args: ["/pkg/dist/server.js"] } : undefined;
+    const snapshot = { version: 1, servers: [live("serena"), live("acme-engine")], totalTools: 6 };
+    const enriched = withRuntimeDefinitions(snapshot, definition) as typeof snapshot & {
+      servers: { name: string; runtime?: unknown }[];
+    };
+    expect(enriched.servers[0]).toEqual(live("serena"));
+    expect(enriched.servers[1].runtime).toEqual({ command: "node", args: ["/pkg/dist/server.js"] });
+    // Totals and version are the adapter's; only the server array is touched.
+    expect({ ...enriched, servers: undefined }).toEqual({ ...snapshot, servers: undefined });
+  });
+
+  it("passes anything that is not a snapshot through untouched", () => {
+    expect(withRuntimeDefinitions(undefined, () => undefined)).toBeUndefined();
+    expect(withRuntimeDefinitions({ servers: "nope" }, () => undefined)).toEqual({ servers: "nope" });
   });
 });
 

@@ -38,6 +38,18 @@ beforeAll(() => {
     join(agent, "mcp.json"),
     JSON.stringify({ mcpServers: { srv: { command: "echo", args: ["hi"] }, off: { command: "x", disabled: true } } }),
   );
+  // pkg-engine stands in for a server an extension registered at runtime: Pi discovered its tools,
+  // no mcp.json mentions it. The page can only learn about it from this cache.
+  writeFileSync(
+    join(agent, "mcp-cache.json"),
+    JSON.stringify({
+      version: 1,
+      servers: {
+        srv: { tools: [{ name: "srv_ping", description: "ping" }] },
+        "pkg-engine": { tools: [{ name: "pkg_a" }, { name: "pkg_b" }] },
+      },
+    }),
+  );
   process.env.PI_CODING_AGENT_DIR = agent;
 });
 afterAll(() => {
@@ -122,6 +134,15 @@ describe("skills and extensions", () => {
 });
 
 describe("mcp", () => {
+  it("exposes cached tools for a server no config defines", async () => {
+    const { readMcp } = await import("../src/main/pi/ecosystem");
+    const v = readMcp(project);
+    expect(v.servers.find((s) => s.name === "srv")?.cachedTools?.map((t) => t.name)).toEqual(["srv_ping"]);
+    // No row: it is not configured. The cache is the only thing that knows its tools.
+    expect(v.servers.some((s) => s.name === "pkg-engine")).toBe(false);
+    expect(v.cacheTools?.["pkg-engine"]?.map((t) => t.name)).toEqual(["pkg_a", "pkg_b"]);
+  });
+
   it("reads the disabled flag and merges layers by name", async () => {
     const { readMcp } = await import("../src/main/pi/ecosystem");
     const v = readMcp(project);
