@@ -452,6 +452,7 @@ export function App() {
     exportHtml: () =>
       key &&
       void run(bridge.pi.command(key, { type: "export_html" }).then((r) => toast(`exported ${r.path}`))),
+    reload: () => key && void run(bridge.pi.command(key, { type: "prompt", message: "/reload" })),
     setThinking: (level) =>
       key &&
       void run(
