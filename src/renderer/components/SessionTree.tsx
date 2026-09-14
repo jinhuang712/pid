@@ -197,7 +197,7 @@ export function SessionTree({
             <div key={f}>
               <section
                 aria-label={`Folder ${base(f)}`}
-                className={`group h-[30px] rounded-lg flex items-center gap-2 px-2 ${
+                className={`group h-[30px] rounded-lg flex items-center gap-2 pr-1 pl-2 ${
                   isActive ? "text-ink" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
                 }`}
                 onContextMenu={(e) => openMenu(e, folderMenu(f), f)}
@@ -222,15 +222,31 @@ export function SessionTree({
                 >
                   {displayName(f, orderedFolders)}
                 </button>
-                {!open && liveStatus.includes("running") && <Dot status="running" />}
-                {!open && liveStatus.includes("needs-you") && <Dot status="needs-you" />}
-                {!open && <span className="text-xs text-ink-3 tabular-nums">{total}</span>}
+                {/* Trailing column mirrors SessionRow: resting meta swaps in place for actions on hover,
+                    so nothing invisible reserves width and the right edge lines up with the rows below. */}
+                {!open && (
+                  <span className="flex items-center gap-2 group-hover:hidden">
+                    {liveStatus.includes("running") && <Dot status="running" />}
+                    {liveStatus.includes("needs-you") && <Dot status="needs-you" />}
+                    <span className="text-xs text-ink-3 tabular-nums">{total}</span>
+                  </span>
+                )}
+                <span className="hidden group-hover:flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={(e) => openMenu(e, folderMenu(f), f)}
+                    className="w-5 h-5 rounded text-ink-3 hover:text-ink flex items-center justify-center"
+                    title="Folder actions"
+                  >
+                    <Dots />
+                  </button>
+                </span>
                 {open && (
                   <button
                     type="button"
                     onClick={() => actions.newSession(f)}
                     title="New session"
-                    className="shrink-0 text-ink-3 hover:text-ink"
+                    className="w-5 h-5 rounded text-ink-3 hover:text-ink flex items-center justify-center"
                   >
                     <svg
                       width="14"
@@ -245,14 +261,6 @@ export function SessionTree({
                     </svg>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => openMenu(e, folderMenu(f), f)}
-                  className="shrink-0 text-ink-3 hover:text-ink opacity-0 group-hover:opacity-100"
-                  title="Folder actions"
-                >
-                  <Dots />
-                </button>
               </section>
 
               {open && (
