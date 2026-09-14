@@ -150,6 +150,10 @@ export function Composer(p: ComposerProps) {
   };
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !p.disabled && !p.blocked;
+  const hasDraft = text.trim().length > 0 || attachments.length > 0;
+  // While Pi runs the round button is Stop; it turns into Queue only once the user starts a follow-up.
+  const stopMode = streaming && !hasDraft;
+  const sendChord = enterSends ? "⏎" : "⌘⏎";
   const send = () => {
     if (!canSend) return;
     onSend(text.trim());
@@ -389,31 +393,10 @@ export function Composer(p: ComposerProps) {
           )}
           <span className={p.model ? "ml-1" : ""}>{sigils}</span>
           <span className="flex-1" />
-          {streaming ? (
-            <span className="flex items-center gap-2 text-[12.5px] text-ink-3 pr-2">
-              <Keys keys={["⏎"]} label="queue" className="ml-1" />
-              <button
-                type="button"
-                onClick={p.onAbort}
-                title="Stop the current run (⌘.)"
-                className="w-4 h-4 rounded flex items-center justify-center text-ink-3 hover:text-danger"
-              >
-                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                  <title>stop</title>
-                  <rect x="3" y="3" width="10" height="10" rx="2.5" />
-                </svg>
-              </button>
-            </span>
-          ) : (
-            <span className="flex items-center gap-3 pr-2">
-              {enterSends ? (
-                <>
-                  <Keys keys={["⏎"]} label="send" />
-                  <Keys keys={["⇧", "⏎"]} label="newline" />
-                </>
-              ) : (
-                <Keys keys={["⌘", "⏎"]} label="send" />
-              )}
+          {/* The send button already says how to send; only the newline chord needs a hint, and only when Enter sends. */}
+          {enterSends && !streaming && (
+            <span className="flex items-center pr-2">
+              <Keys keys={["⇧", "⏎"]} label="newline" />
             </span>
           )}
           <button
@@ -425,25 +408,46 @@ export function Composer(p: ComposerProps) {
           >
             <ExpandIcon expanded={expanded} />
           </button>
-          <button
-            type="button"
-            onClick={send}
-            disabled={!canSend}
-            title={streaming ? "Queue as follow-up" : "Send"}
-            className="w-[30px] h-[30px] rounded-full bg-accent text-paper flex items-center justify-center disabled:opacity-30 transition-opacity"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
+          {stopMode ? (
+            <button
+              type="button"
+              onClick={p.onAbort}
+              title="Stop the current run (⌘.)"
+              className="w-[30px] h-[30px] rounded-full bg-paper-4 text-ink flex items-center justify-center hover:bg-danger hover:text-paper transition-colors"
             >
-              <title>send</title>
-              <path d="M8 13V3M4 7l4-4 4 4" />
-            </svg>
-          </button>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <title>stop</title>
+                <rect x="3" y="3" width="10" height="10" rx="2.5" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={send}
+              disabled={!canSend}
+              title={streaming ? `Queue as follow-up (${sendChord})` : `Send (${sendChord})`}
+              className={`w-[30px] h-[30px] rounded-full flex items-center justify-center disabled:opacity-30 transition-colors ${
+                streaming ? "bg-paper-4 text-ink border border-line-2" : "bg-accent text-paper"
+              }`}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <title>{streaming ? "queue" : "send"}</title>
+                {streaming ? (
+                  // Queue: an arrow with a base line — "goes after what is running".
+                  <path d="M8 12V3M4 7l4-4 4 4M3 13.5h10" />
+                ) : (
+                  <path d="M8 13V3M4 7l4-4 4 4" />
+                )}
+              </svg>
+            </button>
+          )}
         </div>
       </section>
     </div>

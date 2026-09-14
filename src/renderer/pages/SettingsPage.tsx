@@ -259,7 +259,10 @@ export function SettingsPage({ initialSection }: { initialSection?: string }) {
 
           {section === "conversation" && (
             <Group title="Composer and timeline">
-              <Row label="Enter sends" hint="Off: Enter inserts a newline and ⌘Enter sends.">
+              <Row
+                label="Enter sends"
+                hint="Off (default): ⌘Enter sends and Enter inserts a newline. On: Enter sends and ⇧Enter inserts a newline."
+              >
                 <Toggle
                   value={settings.conversation.enterSends}
                   onChange={(enterSends) => update("conversation", { enterSends })}
