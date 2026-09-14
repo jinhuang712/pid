@@ -28,6 +28,16 @@ let written: string | undefined;
 let timer: NodeJS.Timeout | undefined;
 const DEBOUNCE_MS = 400;
 
+/** One entry per session file: a session has at most one live process, so a repeat is a stale save. */
+export function dedupeSessions(open: OpenSession[]): OpenSession[] {
+  const seen = new Set<string>();
+  return open.filter((o) => {
+    if (seen.has(o.path)) return false;
+    seen.add(o.path);
+    return true;
+  });
+}
+
 function readState(): PidState {
   try {
     const raw = JSON.parse(readFileSync(file(), "utf8")) as Partial<PidState>;
@@ -35,9 +45,11 @@ function readState(): PidState {
       recentFolders: Array.isArray(raw.recentFolders)
         ? raw.recentFolders.filter((x) => typeof x === "string")
         : [],
-      openSessions: Array.isArray(raw.openSessions)
-        ? raw.openSessions.filter((x) => x && typeof x.cwd === "string" && typeof x.path === "string")
-        : [],
+      openSessions: dedupeSessions(
+        Array.isArray(raw.openSessions)
+          ? raw.openSessions.filter((x) => x && typeof x.cwd === "string" && typeof x.path === "string")
+          : [],
+      ),
       activeSession: typeof raw.activeSession === "string" ? raw.activeSession : undefined,
     };
   } catch {
@@ -47,8 +59,9 @@ function readState(): PidState {
 
 export function loadState(): PidState {
   if (!cached) {
+    // `written` stays unset: the loaded form may differ from the file (duplicates dropped on read),
+    // so the first save after launch always lands.
     cached = readState();
-    written = JSON.stringify(cached, null, 2);
   }
   return cached;
 }
@@ -109,5 +122,5 @@ export function rememberFolder(dir: string): string[] {
 }
 
 export function saveOpenSessions(openSessions: OpenSession[], activeSession?: string) {
-  saveState({ ...loadState(), openSessions, activeSession });
+  saveState({ ...loadState(), openSessions: dedupeSessions(openSessions), activeSession });
 }

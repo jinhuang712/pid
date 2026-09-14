@@ -11,6 +11,28 @@ const handle = (key: string, sessionFile: string | null = null): PiHandle => ({
 });
 
 describe("workspace: session lifecycle", () => {
+  it("a background pending placeholder (launch restore) leaves the active tab alone", () => {
+    let ws = workspaceReducer(emptyWorkspace(), {
+      type: "pending",
+      key: "pending:1",
+      cwd: "/repo",
+      sessionPath: "/s/a.jsonl",
+      background: true,
+    });
+    // nothing was open yet: the first restored session becomes the tab
+    expect(ws.activeKey).toBe("pending:1");
+    ws = workspaceReducer(ws, {
+      type: "pending",
+      key: "pending:2",
+      cwd: "/repo",
+      sessionPath: "/s/b.jsonl",
+      background: true,
+    });
+    expect(ws.activeKey).toBe("pending:1");
+    ws = workspaceReducer(ws, { type: "add", handle: handle("live-b", "/s/b.jsonl"), replaces: "pending:2" });
+    expect(ws.activeKey).toBe("pending:1");
+  });
+
   it("pending placeholder shows first, then the live process takes its place and stays active", () => {
     let ws = workspaceReducer(emptyWorkspace(), {
       type: "pending",
