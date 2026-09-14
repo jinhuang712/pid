@@ -243,8 +243,13 @@ export function App() {
       return;
     }
     dispatch({ type: "event", key: k, event });
-    if (event.type === "thinking_level_changed" || event.type === "session_info_changed")
+    if (event.type === "thinking_level_changed") void refreshState(k);
+    if (event.type === "session_info_changed") {
+      // The name is already on disk by the time pi emits this; the sidebar reads
+      // its titles from the folder listing, so re-list or the row keeps the old one.
       void refreshState(k);
+      void loadFolder(cwd);
+    }
     if (event.type === "agent_end") {
       void refreshState(k);
       void loadFolder(cwd);
