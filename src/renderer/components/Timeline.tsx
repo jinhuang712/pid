@@ -426,11 +426,17 @@ export function Timeline({
   // so the user's own scroll toward the bottom does not snap the viewport on every wheel tick.
   const followRef = useRef(follow);
   followRef.current = follow;
+  /** True while a jump's programmatic scroll is in flight; the stream must not steer the viewport then. */
+  const jumping = useRef(false);
+  /** Detaches the in-flight jump's listeners so a newer jump can take over. */
+  const cancelJump = useRef<(() => void) | undefined>(undefined);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run on every state change to follow the stream
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (followRef.current && el) el.scrollTop = el.scrollHeight;
+    if (followRef.current && !jumping.current && el) el.scrollTop = el.scrollHeight;
   }, [state]);
+
+  const nearBottom = (el: HTMLDivElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 48;
 
   // Jump buttons: move one turn at a time. "Up" lands on the top of the nearest turn that starts
   // above the viewport; "down" lands on the bottom of the nearest turn that ends below it.
@@ -457,8 +463,28 @@ export function Timeline({
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure whenever the rows change
   useLayoutEffect(measureJump, [state, shown]);
 
+  // A smooth scroll passes through the "near bottom" band on its way up, so `stick` is frozen
+  // until the scroll ends and is then read from where the jump actually landed.
   const scrollTo = (el: HTMLDivElement, top: number) => {
     const reduced = document.documentElement.dataset.motion === "reduced";
+    jumping.current = true;
+    followRef.current = false;
+    let timer = 0;
+    const detach = () => {
+      window.clearTimeout(timer);
+      el.removeEventListener("scrollend", settle);
+      cancelJump.current = undefined;
+    };
+    const settle = () => {
+      detach();
+      jumping.current = false;
+      setStick(nearBottom(el));
+      measureJump();
+    };
+    cancelJump.current?.(); // a newer jump takes over the in-flight one
+    cancelJump.current = detach;
+    el.addEventListener("scrollend", settle);
+    timer = window.setTimeout(settle, 1000); // scrollend never fires when the position does not change
     el.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
   };
   const jumpUp = () => {
@@ -508,7 +534,7 @@ export function Timeline({
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
-    setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48);
+    if (!jumping.current) setStick(nearBottom(el));
     measureJump();
     if (hidden > 0 && el.scrollTop < 400) {
       // keep the viewport anchored while older rows mount above it
