@@ -45,6 +45,9 @@ export function App() {
 
   const active = ws.activeKey ? ws.procs[ws.activeKey] : undefined;
   const key = active?.key;
+  // An exited tab keeps its entry (so the exit reason stays visible) but its pi process is gone:
+  // any command sent there is an "unknown pi process" error in the main process.
+  const liveKey = active && !active.pending && !active.exit ? active.key : undefined;
   const conv = active?.conv ?? emptyConversation();
   // Draft, $session refs, and attachments live per session; the entry view has its own scope.
   const composer = useComposer(active?.key ?? HOME_SCOPE);
@@ -190,7 +193,13 @@ export function App() {
   );
 
   const refreshState = useCallback(async (k: string) => {
-    dispatch({ type: "state", key: k, piState: await bridge.pi.command(k, { type: "get_state" }) });
+    try {
+      dispatch({ type: "state", key: k, piState: await bridge.pi.command(k, { type: "get_state" }) });
+    } catch (e) {
+      // Fired off events (`agent_end`, `session_info_changed`) that can land right as the process
+      // exits; the exit banner already explains that, so only surface other failures.
+      if (!String(e).includes("unknown pi process")) setStatus(String(e));
+    }
   }, []);
 
   // Subscribe once; the handler reads the latest closure through a ref instead of
@@ -373,10 +382,10 @@ export function App() {
 
   // ---- sending, queue ----
   const send = (raw: string) => {
-    if (!key || active?.pending || active?.exit) return;
-    void run(deliver(key, raw, conv.isStreaming ? "follow_up" : "prompt"));
+    if (!liveKey) return;
+    void run(deliver(liveKey, raw, conv.isStreaming ? "follow_up" : "prompt"));
   };
-  const abort = () => key && void run(bridge.pi.command(key, { type: "abort" }));
+  const abort = () => liveKey && void run(bridge.pi.command(liveKey, { type: "abort" }));
 
   /** From the palette: a fresh session in the current folder, prompted with the typed text. */
   const askInFolder = (text: string) => {
@@ -473,20 +482,20 @@ export function App() {
 
   // ---- composer completion ----
   const actions: PiActions = {
-    compact: () => key && void run(bridge.pi.command(key, { type: "compact" })),
+    compact: () => liveKey && void run(bridge.pi.command(liveKey, { type: "compact" })),
     newSession: () => folder && void start(folder),
     abort,
-    clearQueue: () => key && void run(bridge.pi.command(key, { type: "clear_queue" })),
+    clearQueue: () => liveKey && void run(bridge.pi.command(liveKey, { type: "clear_queue" })),
     exportHtml: () =>
-      key &&
-      void run(bridge.pi.command(key, { type: "export_html" }).then((r) => toast(`exported ${r.path}`))),
-    reload: () => key && void run(bridge.pi.command(key, { type: "prompt", message: "/reload" })),
+      liveKey &&
+      void run(bridge.pi.command(liveKey, { type: "export_html" }).then((r) => toast(`exported ${r.path}`))),
+    reload: () => liveKey && void run(bridge.pi.command(liveKey, { type: "prompt", message: "/reload" })),
     setThinking: (level) =>
-      key &&
+      liveKey &&
       void run(
         bridge.pi
-          .command(key, { type: "set_thinking_level", level: level as never })
-          .then(() => refreshState(key)),
+          .command(liveKey, { type: "set_thinking_level", level: level as never })
+          .then(() => refreshState(liveKey)),
       ),
     fork: () => key && setForkKey(key),
   };
@@ -500,19 +509,20 @@ export function App() {
     [sessionsByFolder, folder],
   );
   const { complete, pick } = useCompletion({
-    key,
+    key: liveKey,
     folder,
     sessions: allSessions,
     actions,
     onReference: composer.addRef,
   });
   const loadModels = useCallback(
-    async () => (key ? (await bridge.pi.command(key, { type: "get_available_models" })).models : []),
-    [key],
+    async () => (liveKey ? (await bridge.pi.command(liveKey, { type: "get_available_models" })).models : []),
+    [liveKey],
   );
   const loadLevels = useCallback(
-    async () => (key ? (await bridge.pi.command(key, { type: "get_available_thinking_levels" })).levels : []),
-    [key],
+    async () =>
+      liveKey ? (await bridge.pi.command(liveKey, { type: "get_available_thinking_levels" })).levels : [],
+    [liveKey],
   );
 
   // ---- restore last open sessions (sequentially: each pi start is a few seconds) ----
