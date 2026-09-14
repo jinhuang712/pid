@@ -34,6 +34,7 @@ export function App() {
   const [folder, setFolder] = useState<string>();
   const [folders, setFolders] = useState<string[]>([]);
   const [sessionsByFolder, setSessionsByFolder] = useState<Record<string, SessionSummary[]>>({});
+  const allSessions = useMemo(() => Object.values(sessionsByFolder).flat(), [sessionsByFolder]);
   const [repos, setRepos] = useState<Record<string, RepoInfo | null>>({});
   const [ws, dispatch] = useReducer(workspaceReducer, undefined, emptyWorkspace);
   const [status, setStatus] = useState<string>();
@@ -264,11 +265,38 @@ export function App() {
     [ws, start],
   );
 
-  const referenceSession = (s: SessionSummary) => {
+  /** Put the session's $token on the clipboard; pasting it into any composer attaches the reference. */
+  const copySessionReference = (s: SessionSummary) => {
     const token = refToken(s);
-    const c = composer; // the scope the user was looking at when they clicked
-    c.setDraft((d) => (d.includes(token) ? d : `${d}${d && !d.endsWith(" ") ? " " : ""}${token} `));
-    void bridge.sessions.read(s.path).then((messages) => c.addRef({ token, session: s, messages }));
+    void navigator.clipboard.writeText(token).then(
+      () => setStatus(`Copied ${token}`),
+      (e) => setStatus(String(e)),
+    );
+  };
+
+  // A $token that appears in the draft (pasted, typed, or restored) and names a known session is
+  // attached automatically, so the reference is visible in the tray before it is sent.
+  const resolving = useRef(new Set<string>());
+  useEffect(() => {
+    const scope = active?.key ?? HOME_SCOPE;
+    for (const token of new Set(draft.match(/\$[0-9a-f]{8}\b/g) ?? [])) {
+      const pending = `${scope}:${token}`;
+      if (refs.some((r) => r.token === token) || resolving.current.has(pending)) continue;
+      const s = allSessions.find((x) => refToken(x) === token);
+      if (!s) continue;
+      resolving.current.add(pending);
+      void bridge.sessions
+        .read(s.path)
+        .then((messages) => composerRef.current.addRef({ token, session: s, messages }))
+        .catch((e) => setStatus(String(e)))
+        .finally(() => resolving.current.delete(pending));
+    }
+  }, [draft, refs, allSessions, active?.key]);
+
+  /** Dropping a reference from the tray also drops its $token from the draft, so it does not come back. */
+  const removeRef = (token: string) => {
+    composer.removeRef(token);
+    setDraft((d) => d.replace(new RegExp(`\\${token}\\b ?`, "g"), ""));
   };
 
   const sessionActions: SessionActions = {
@@ -288,7 +316,7 @@ export function App() {
     openSession: (s) => void run(openSession(s)),
     fork: (s) =>
       void run(ensureLive(s).then((k) => k && (dispatch({ type: "activate", key: k }), setForkKey(k)))),
-    reference: referenceSession,
+    copyReference: copySessionReference,
     rename: (s) => void run(ensureLive(s).then((k) => k && setRenameKey(k))),
     exportHtml: (s) =>
       void run(
@@ -462,7 +490,6 @@ export function App() {
       ),
     fork: () => key && setForkKey(key),
   };
-  const allSessions = useMemo(() => Object.values(sessionsByFolder).flat(), [sessionsByFolder]);
   const recentSessions = useMemo(
     () =>
       folder
@@ -677,7 +704,7 @@ export function App() {
           onClose={() => setPaletteOpen(false)}
           onOpenFolder={(dir) => void selectFolder(dir)}
           onOpenSession={(s) => void run(openSession(s))}
-          onReference={referenceSession}
+          onReference={copySessionReference}
           onAsk={askInFolder}
         />
       )}
@@ -799,7 +826,7 @@ export function App() {
                   onRemoveAttachment={removeAttachment}
                   onPasteImage={pasteImage}
                   refs={refs}
-                  onRemoveRef={composer.removeRef}
+                  onRemoveRef={removeRef}
                   model={
                     active?.piState.model
                       ? {
@@ -860,7 +887,7 @@ export function App() {
                       onRemoveAttachment={removeAttachment}
                       onPasteImage={pasteImage}
                       refs={refs}
-                      onRemoveRef={composer.removeRef}
+                      onRemoveRef={removeRef}
                       loadModels={loadModels}
                       loadLevels={loadLevels}
                       onModel={() => {}}

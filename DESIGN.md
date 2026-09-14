@@ -51,7 +51,7 @@ closed     only the session file on disk
 
 Several sessions can be open at once, each with its own Pi process; switching rows never stops a run.
 
-Row actions live on the row: hover shows Fork and a menu with Fork from…, Reference in composer,
+Row actions live on the row: hover shows Fork and a menu with Fork from…, Copy session reference,
 Rename, Export HTML, Reveal session file, Close process. Folder rows offer New session, New worktree…,
 Remove this worktree, Forget folder.
 
