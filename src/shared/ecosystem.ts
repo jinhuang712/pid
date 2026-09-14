@@ -96,6 +96,14 @@ export interface PiHome {
   defaultThinkingLevel?: string;
 }
 
+/** Contents of ~/.pi/agent/APPEND_SYSTEM.md, the rules Pi appends to its system prompt. */
+export interface AppendSystemPrompt {
+  path: string;
+  text: string;
+  /** False when the file is absent: Pi then runs on its default prompt plus AGENTS.md. */
+  exists: boolean;
+}
+
 export interface ResourceToggle {
   kind: "skills" | "extensions";
   /** Resource file paths as Pi resolves them (SKILL.md files, extension entry files). */

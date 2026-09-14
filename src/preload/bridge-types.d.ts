@@ -1,6 +1,14 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { PiDiagnostics } from "@shared/diagnostics";
-import type { ExtensionView, McpToggle, McpView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
+import type {
+  AppendSystemPrompt,
+  ExtensionView,
+  McpToggle,
+  McpView,
+  PiHome,
+  ResourceToggle,
+  SkillView,
+} from "@shared/ecosystem";
 import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
 import type {
@@ -80,6 +88,10 @@ export interface Bridge {
     setResource(req: ResourceToggle): Promise<void>;
     /** Write an MCP server's `disabled` flag into mcp.json, as `/mcp` would. */
     setMcp(req: McpToggle): Promise<void>;
+    /** ~/.pi/agent/APPEND_SYSTEM.md, the file Pi appends to its system prompt. */
+    appendSystemPrompt(): Promise<AppendSystemPrompt>;
+    /** Write the file in place; empty text removes it. Applies to new sessions. */
+    setAppendSystemPrompt(text: string): Promise<AppendSystemPrompt>;
   };
   shell: {
     reveal(path: string): Promise<void>;

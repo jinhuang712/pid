@@ -30,6 +30,7 @@ const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 export function App() {
   const { settings } = useSettings();
   const [page, setPage] = useState<Page>("sessions");
+  const [settingsSection, setSettingsSection] = useState<string | undefined>();
   const [folder, setFolder] = useState<string>();
   const [folders, setFolders] = useState<string[]>([]);
   const [sessionsByFolder, setSessionsByFolder] = useState<Record<string, SessionSummary[]>>({});
@@ -573,7 +574,12 @@ export function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
     void bridge.appInfo().then(async (info) => {
-      if (info.devPage) setPage(info.devPage as Page);
+      if (info.devPage) {
+        // PID_PAGE=settings/prompt lands on one Settings section.
+        const [pg, sub] = info.devPage.split("/");
+        setPage(pg as Page);
+        if (sub) setSettingsSection(sub);
+      }
       if (info.devSearch !== undefined) setPaletteOpen(true);
       if (!info.devOpenFolder) return;
       await selectFolder(info.devOpenFolder);
@@ -717,7 +723,7 @@ export function App() {
           />
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
-        {page === "settings" && <SettingsPage />}
+        {page === "settings" && <SettingsPage initialSection={settingsSection} />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <main className="flex-1 flex flex-col min-w-0">
             {/* two tiers: the title owns line one; folder and branch share line two */}
