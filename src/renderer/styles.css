@@ -246,3 +246,66 @@ code {
 .prose hr {
   border-color: var(--color-line);
 }
+
+/* syntax highlighting (highlight.js spans). A narrow palette that stays inside the paper/ink
+   system: keys and strings carry most of the reading, punctuation stays ink, numbers lean accent. */
+.prose pre code.hljs {
+  color: var(--color-ink);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-ink-3);
+  font-style: italic;
+}
+.hljs-attr,
+.hljs-property,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-name,
+.hljs-selector-tag,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: light-dark(#4d6a8f, #8fb0d0);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta .hljs-string {
+  color: light-dark(#4f7d5b, #96bf9a);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--color-accent);
+}
+.hljs-keyword,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-built_in,
+.hljs-type,
+.hljs-doctag,
+.hljs-section {
+  color: light-dark(#8a5a7a, #c39ab5);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_ {
+  color: light-dark(#8f6a1c, #d6c08a);
+}
+.hljs-meta,
+.hljs-tag,
+.hljs-punctuation,
+.hljs-operator {
+  color: var(--color-ink-2);
+}
+.hljs-deletion {
+  color: var(--color-danger);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
