@@ -137,15 +137,25 @@ export function App() {
   // ---- pi processes ----
   /** Placeholders the user closed before their process came up; the process is stopped on arrival. */
   const cancelledPending = useRef(new Set<string>());
+  /** Latest workspace for callbacks that must not re-create on every streamed token. */
+  const wsRef = useRef(ws);
+  wsRef.current = ws;
   const start = useCallback(
-    async (cwd: string, sessionPath?: string) => {
+    async (cwd: string, sessionPath?: string, opts: { background?: boolean } = {}) => {
+      // A session has one process. Opening it again (a second click, a duplicated restore list)
+      // switches to the one that is already running instead of spawning a twin.
+      const live = sessionPath ? procForSession(wsRef.current, sessionPath) : undefined;
+      if (live && !live.exit) {
+        if (!opts.background) dispatch({ type: "activate", key: live.key });
+        return live.pending ? undefined : live.key;
+      }
       setStatus(sessionPath ? "resuming session…" : "starting pi…");
       // Resuming: show the file's messages now, while pi spawns and loads its extensions.
       // Reading the file and starting the process run side by side; the snapshot wins the race by seconds.
       let pendingKey: string | undefined;
       if (sessionPath) {
         pendingKey = `pending:${crypto.randomUUID()}`;
-        dispatch({ type: "pending", key: pendingKey, cwd, sessionPath });
+        dispatch({ type: "pending", key: pendingKey, cwd, sessionPath, background: opts.background });
         const k = pendingKey;
         void bridge.sessions
           .readBranch(sessionPath)
@@ -477,25 +487,33 @@ export function App() {
   );
 
   // ---- restore last open sessions (sequentially: each pi start is a few seconds) ----
+  const restoring = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
+    // StrictMode mounts twice in dev; a second pass would start every session again and, once
+    // saved, double the list on every launch.
+    if (restoring.current) return;
+    restoring.current = true;
     void (async () => {
-      const { openSessions, activeSession } = await bridge.openSessions.get();
+      const saved = await bridge.openSessions.get();
+      const { activeSession } = saved;
+      // A state file written before entries were unique may list one session many times.
+      const openSessions = saved.openSessions.filter(
+        (o, i, all) => all.findIndex((x) => x.path === o.path) === i,
+      );
       if (!settings.sessions.restoreOnLaunch || openSessions.length === 0) {
         restored.current = true;
         return;
       }
-      // A state file written before entries were unique may list one session many times.
-      const unique = openSessions.filter((o, i) => openSessions.findIndex((x) => x.path === o.path) === i);
-      setStatus(`reopening ${unique.length} session${unique.length === 1 ? "" : "s"}…`);
+      setStatus(`reopening ${openSessions.length} session${openSessions.length === 1 ? "" : "s"}…`);
       // Every reopened session needs its folder row, or the tab has nowhere to appear.
-      for (const cwd of new Set(unique.map((o) => o.cwd))) {
+      for (const cwd of new Set(openSessions.map((o) => o.cwd))) {
         setFolders((cur) => (cur.includes(cwd) ? cur : [...cur, cwd]));
         if (!loaded.current.has(cwd)) void loadFolder(cwd);
       }
       let activeKey: string | undefined;
-      for (const o of unique) {
-        const k = await start(o.cwd, o.path);
+      for (const o of openSessions) {
+        const k = await start(o.cwd, o.path, { background: true });
         if (k && o.path === activeSession) activeKey = k;
       }
       if (activeKey) dispatch({ type: "activate", key: activeKey });

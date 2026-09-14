@@ -39,7 +39,15 @@ export type WorkspaceAction =
   /** `replaces` names the pending placeholder this live process takes over from. */
   | { type: "add"; handle: PiHandle; replaces?: string }
   /** A session being resumed: shows the file's snapshot at once, ahead of its process. */
-  | { type: "pending"; key: string; cwd: string; sessionPath: string; messages?: AgentMessage[] }
+  | {
+      type: "pending";
+      key: string;
+      cwd: string;
+      sessionPath: string;
+      messages?: AgentMessage[];
+      /** Restoring several sessions at launch: keep the current tab instead of jumping to each one. */
+      background?: boolean;
+    }
   | { type: "remove"; key: string }
   | { type: "activate"; key?: string }
   | { type: "event"; key: string; event: PiEvent }
@@ -88,7 +96,11 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         dialogs: [],
         pending: true,
       };
-      return { ...ws, procs: { ...ws.procs, [proc.key]: proc }, activeKey: proc.key };
+      return {
+        ...ws,
+        procs: { ...ws.procs, [proc.key]: proc },
+        activeKey: a.background && ws.activeKey ? ws.activeKey : proc.key,
+      };
     }
     case "remove": {
       const { [a.key]: _gone, ...procs } = ws.procs;
