@@ -40,7 +40,7 @@ export interface PidSettings {
     sidebarWidth: number;
   };
   conversation: {
-    enterSends: boolean; // false → Enter inserts newline, Cmd+Enter sends
+    enterSends: boolean; // default false: Enter inserts a newline and ⌘Enter sends
     autoScroll: boolean;
     referencePreviewOpen: boolean; // expand $reference inspector by default
   };
@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS: PidSettings = {
     sidebarWidth: 272,
   },
   conversation: {
-    enterSends: true,
+    enterSends: false,
     autoScroll: true,
     referencePreviewOpen: false,
   },
