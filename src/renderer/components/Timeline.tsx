@@ -187,6 +187,19 @@ function SentSkillChip({ s }: { s: SentSkill }) {
   );
 }
 
+const LARGE_PROMPT_LINES = 12;
+const LARGE_PROMPT_CHARS = 800;
+
+/** Whether a prompt is big enough that the compact bubble would turn into a tall, narrow column. */
+function isLargePrompt(body: string): boolean {
+  if (body.length >= LARGE_PROMPT_CHARS) return true;
+  let lines = 1;
+  for (let i = body.indexOf("\n"); i !== -1; i = body.indexOf("\n", i + 1)) {
+    if (++lines >= LARGE_PROMPT_LINES) return true;
+  }
+  return false;
+}
+
 function User({ m }: { m: UserMessage }) {
   const raw = userText(m);
   const { body, attachments, references, skill, images } = useMemo(() => {
@@ -202,15 +215,20 @@ function User({ m }: { m: UserMessage }) {
     };
   }, [raw, m]);
   const extras = attachments.length + references.length + images.length > 0 || skill !== undefined;
+  // A short prompt reads best as a compact bubble; a large paste (a log, a table, a long spec)
+  // gets most of the column so its lines wrap less and the block stays scannable.
+  const width = isLargePrompt(body) ? "max-w-[94%]" : "max-w-[78%]";
   return (
     <div className="timeline-item px-6 py-3 flex flex-col items-end gap-1.5">
       {body.trim() && (
-        <div className="msg-text max-w-[78%] rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap leading-[1.6] text-ink">
+        <div
+          className={`msg-text ${width} rounded-2xl bg-paper-3 px-3.5 py-2.5 whitespace-pre-wrap leading-[1.6] text-ink`}
+        >
           <Inline text={body} />
         </div>
       )}
       {extras && (
-        <div className="max-w-[78%] flex flex-wrap justify-end gap-1.5">
+        <div className={`${width} flex flex-wrap justify-end gap-1.5`}>
           {images.map((im, i) => (
             <img
               // biome-ignore lint/suspicious/noArrayIndexKey: images have no identity beyond position
