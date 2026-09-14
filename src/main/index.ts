@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { McpToggle, ResourceToggle } from "@shared/ecosystem";
 import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
@@ -45,6 +46,9 @@ let mainWindow: BrowserWindow | undefined;
 // Extensions PID ships (pid-bridge, and pid-mcp when the user has no MCP extension) are located once.
 configureBundled(app.getAppPath());
 const pi = new PiRegistry(() => mainWindow);
+
+/** File tokens in the timeline may carry "~/…"; Electron's shell wants a real absolute path. */
+const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir());
 
 function createWindow(): BrowserWindow {
   const state = windowStateKeeper({ defaultWidth: 1440, defaultHeight: 900 });
@@ -151,8 +155,8 @@ ipcMain.handle("eco:setResource", (_e, req: ResourceToggle) => setResourceState(
 ipcMain.handle("eco:setMcp", (_e, req: McpToggle) => setMcpDisabled(req));
 ipcMain.handle("eco:appendSystemPrompt", () => readAppendSystemPrompt());
 ipcMain.handle("eco:setAppendSystemPrompt", (_e, text: string) => writeAppendSystemPrompt(text));
-ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(path));
-ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(path));
+ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(expandHome(path)));
+ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(expandHome(path)));
 ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
 ipcMain.handle("files:stat", (_e, paths: string[]) => statPaths(paths));
 ipcMain.handle("files:thumbnail", (_e, path: string) => thumbnail(path));

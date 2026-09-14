@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import { FILE_PATH_RE, FILE_PATH_START_RE, filePathHtml, isFilePath, TRAILING_PUNCT_RE } from "./file-paths";
 import { highlight, resolveLanguage } from "./highlight";
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -31,6 +32,42 @@ marked.use({
       const cls = language ? ` class="language-${language} hljs"` : "";
       const body = language ? highlight(text, language) : escapeHtml(text);
       return `<pre><code${cls}>${body}\n</code></pre>\n`;
+    },
+  },
+});
+
+/**
+ * Local file paths become clickable tokens in three places: bare in prose, as a whole inline
+ * code span, and as the target of a markdown link. Fenced blocks are left alone — code is code.
+ */
+marked.use({
+  extensions: [
+    {
+      name: "filepath",
+      level: "inline",
+      start(src: string) {
+        const m = FILE_PATH_START_RE.exec(src);
+        return m ? m.index + m[0].length : undefined;
+      },
+      tokenizer(src: string) {
+        const m = FILE_PATH_RE.exec(src);
+        if (!m) return undefined;
+        const raw = m[0].replace(TRAILING_PUNCT_RE, "");
+        if (!isFilePath(raw)) return undefined;
+        return { type: "filepath", raw, text: raw };
+      },
+      renderer(token) {
+        return filePathHtml(token.text as string);
+      },
+    },
+  ],
+  renderer: {
+    codespan({ text }) {
+      return isFilePath(text) ? filePathHtml(text) : false;
+    },
+    link({ href, tokens }) {
+      if (!isFilePath(href)) return false;
+      return filePathHtml(href, this.parser.parseInline(tokens));
     },
   },
 });
