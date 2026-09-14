@@ -330,8 +330,38 @@ const Reply = memo(function Reply({ m, toolRuns }: { m: AgentMessage; toolRuns: 
 });
 
 function MarkerRow({ kind, text, live }: Pick<Marker, "kind" | "text"> & { live?: boolean }) {
-  const tone = kind === "retry" ? "text-warn" : "text-ink-3";
-  return <div className={`px-6 py-2 text-[12.5px] ${tone} ${live ? "animate-pulse" : ""}`}>{text}</div>;
+  const failed = kind === "command-failed";
+  const tone = kind === "retry" || failed ? "text-warn" : "text-ink-3";
+  // command rows carry a glyph: a check once settled, a pulsing dot while running, "!" on failure
+  const glyph =
+    kind === "command" || failed ? (
+      live ? (
+        <span className="w-1.5 h-1.5 mx-[3px] rounded-full bg-accent animate-pulse" />
+      ) : (
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0"
+        >
+          <title>{failed ? "failed" : "done"}</title>
+          {failed ? <path d="M8 4v5M8 12v.5" /> : <path d="M3 8.5l3 3 7-7" />}
+        </svg>
+      )
+    ) : null;
+  return (
+    <div
+      className={`px-6 py-2 text-[12.5px] flex items-center gap-2 ${tone} ${live && !glyph ? "animate-pulse" : ""}`}
+    >
+      {glyph}
+      <span className="min-w-0 [overflow-wrap:anywhere]">{text}</span>
+    </div>
+  );
 }
 
 /**
@@ -594,6 +624,9 @@ export function Timeline({
               />
             ))}
             {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
+            {state.commands.map((c) => (
+              <MarkerRow key={c.id} kind="command" text={c.text} live />
+            ))}
             {state.streaming && !tailOpen && <Assistant m={state.streaming} live toolRuns={state.toolRuns} />}
             {state.isStreaming && (
               <div className="px-6 py-2 text-[12.5px] text-ink-3 flex items-center gap-2">

@@ -1,5 +1,5 @@
 import type { SessionSummary } from "@shared/sessions";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { bridge } from "./bridge";
 import type { AutocompleteItem } from "./components/Autocomplete";
 import { fuzzyFilter } from "./fuzzy";
@@ -29,13 +29,19 @@ export function useCompletion(opts: {
   folder?: string;
   sessions: SessionSummary[];
   actions: PiActions;
+  /** Changes whenever pi's command list may have changed (after `/reload`); drops the `/` cache. */
+  commandsEpoch?: number;
   onReference: (ref: SessionReference) => void;
 }) {
-  const { key, folder, sessions, actions, onReference } = opts;
+  const { key, folder, sessions, actions, commandsEpoch, onReference } = opts;
   const files = useRef<{ folder: string; list: string[] } | undefined>(undefined);
   const [allSessions, setAllSessions] = useState<SessionSummary[]>([]);
   const commands = useRef<{ key: string; list: AutocompleteItem[] } | undefined>(undefined);
   const levels = useRef<{ key: string; list: string[] } | undefined>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the epoch is the signal, not a value read here
+  useEffect(() => {
+    commands.current = undefined;
+  }, [commandsEpoch]);
 
   const complete = useCallback(
     async (sigil: Sigil, query: string): Promise<AutocompleteItem[]> => {
