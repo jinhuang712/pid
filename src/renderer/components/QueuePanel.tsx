@@ -1,5 +1,9 @@
+import { stripPromptBlocks } from "@shared/prompt-blocks";
+
 /**
- * Pi's steer / follow-up queue, as Pi reports it via queue_update.
+ * Pi's steer / follow-up queue, as Pi reports it via queue_update. Pi has already expanded a
+ * `/skill` into its SKILL.md by then, so the row shows the folded command and keeps the full
+ * text on hover.
  * A follow-up can be promoted: "Steer after tool" is Pi's native steer (delivered before the
  * next model call); "Steer now" aborts the current turn and sends it immediately.
  */
@@ -31,7 +35,7 @@ export function QueuePanel({
           <div key={`s-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
             <span className="shrink-0 text-warn">Steer</span>
             <span className="flex-1 text-ink truncate" title={t}>
-              {t}
+              {stripPromptBlocks(t) || t}
             </span>
             <span className="text-ink-3">after current tool</span>
             <button
@@ -48,7 +52,7 @@ export function QueuePanel({
           <div key={`f-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
             <span className="shrink-0 text-ink-3">Queued</span>
             <span className="flex-1 text-ink truncate" title={t}>
-              {t}
+              {stripPromptBlocks(t) || t}
             </span>
             <button
               type="button"
