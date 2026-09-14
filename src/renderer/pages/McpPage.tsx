@@ -1,5 +1,5 @@
-import type { McpServerView, McpView } from "@shared/ecosystem";
-import type { McpServerStatus, McpStatusSnapshot } from "@shared/mcp-status";
+import type { McpServerView, McpToolSummary, McpView } from "@shared/ecosystem";
+import { type McpServerStatus, type McpStatusSnapshot, runtimeOnly } from "@shared/mcp-status";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
 import { Badge, PageShell, PathLink, ScopeBar, Toggle, tilde } from "./PageShell";
@@ -14,6 +14,10 @@ import { useEcoScope } from "./scope";
  * - config + the adapter's tool cache (what is *configured*, what was *once* discovered), from disk;
  * - live status (what is *connected right now*), from the adapter running inside the active
  *   session's Pi, relayed by pid-bridge. Absent when no session is open.
+ *
+ * Servers a Pi extension registered at runtime are the third case: Pi is running them, no config
+ * file mentions them, so there is nothing to switch and nothing on disk to read. They come from the
+ * live snapshot alone and render in a read-only section of their own.
  */
 /** A running session that has reported MCP status. */
 export interface McpLiveSource {
@@ -73,6 +77,11 @@ export function McpPage({
   const offCount = view?.servers.filter((s) => s.disabled).length ?? 0;
   const globalPath = view?.configPaths[0];
   const liveByName = new Map((live?.servers ?? []).map((s) => [s.name, s]));
+  const runtimeRows = runtimeOnly(
+    live?.servers,
+    (view?.servers ?? []).map((s) => s.name),
+  );
+  const runtimeToolCount = runtimeRows.reduce((n, s) => n + (view?.cacheTools?.[s.name]?.length ?? 0), 0);
 
   return (
     <PageShell
@@ -87,7 +96,8 @@ export function McpPage({
             </>
           ) : (
             <>
-              {view.servers.length} servers · {toolCount} cached tools
+              {view.servers.length + runtimeRows.length} servers · {toolCount + runtimeToolCount} cached tools
+              {runtimeRows.length > 0 ? ` · ${runtimeRows.length} registered at runtime` : ""}
               {offCount > 0 ? ` · ${offCount} off` : ""} · via{" "}
               {view.adapterSource === "user"
                 ? "pi-mcp-adapter from your Pi packages"
@@ -260,9 +270,101 @@ export function McpPage({
               );
             })}
           </div>
+          {runtimeRows.length > 0 && (
+            <section className="mt-6">
+              <div className="mb-2 text-xs text-ink-3">
+                A Pi extension registered these in the active session. Nothing on disk defines them, so there
+                is no switch to flip and no config path to show — they are listed from the live snapshot
+                alone.
+              </div>
+              <div className="flex flex-col gap-2">
+                {runtimeRows.map((s) => (
+                  <RuntimeServerCard
+                    key={s.name}
+                    s={s}
+                    tools={view.cacheTools?.[s.name]}
+                    open={open === s.name}
+                    onOpen={() => setOpen(open === s.name ? undefined : s.name)}
+                    onReconnect={source && runCommand ? () => act(`/mcp reconnect ${s.name}`) : undefined}
+                    session={liveSession}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </PageShell>
+  );
+}
+
+/**
+ * A server an extension registered at runtime: live status, its definition as the adapter reports
+ * it, and the tools the adapter once discovered. Read-only by nature — there is no config entry to
+ * flip, only Pi's own `/mcp reconnect` to fall back on.
+ */
+function RuntimeServerCard({
+  s,
+  tools,
+  open,
+  onOpen,
+  onReconnect,
+  session,
+}: {
+  s: McpServerStatus;
+  tools?: McpToolSummary[];
+  open: boolean;
+  onOpen: () => void;
+  onReconnect?: () => void;
+  session?: string;
+}) {
+  const startedFrom =
+    s.runtime?.url ?? [s.runtime?.command, ...(s.runtime?.args ?? [])].filter(Boolean).join(" ");
+  return (
+    <article className="rounded-lg border border-line bg-paper-2">
+      <div className="w-full px-3 py-2 flex items-center gap-2">
+        <button type="button" onClick={onOpen} className="flex-1 min-w-0 text-left flex items-center gap-2">
+          <span className="font-medium text-ink">{s.name}</span>
+          <Badge tone="muted">runtime</Badge>
+          <span className="flex-1" />
+          <LiveBadge s={s} />
+          {tools ? (
+            <Badge tone="muted">{tools.length} tools cached</Badge>
+          ) : (
+            <Badge tone="muted">no tool cache</Badge>
+          )}
+          <span className="text-ink-3 text-xs">{open ? "▾" : "▸"}</span>
+        </button>
+        {onReconnect && (
+          <button
+            type="button"
+            className="h-6 px-1.5 rounded-md text-xs text-ink-3 hover:bg-paper-3 hover:text-ink"
+            title={`/mcp reconnect ${s.name} in the ${session ?? "session"}`}
+            onClick={onReconnect}
+          >
+            Reconnect
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="px-3 pb-3 text-xs flex flex-col gap-1.5 border-t border-line pt-2">
+          <div className="font-mono text-ink-2 break-all">
+            {startedFrom || "the adapter reported no definition for this server"}
+          </div>
+          <div className="text-ink-3">registered by an extension at session start · no mcp.json</div>
+          {tools && tools.length > 0 && (
+            <ul className="mt-1 grid gap-1 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+              {tools.map((t) => (
+                <li key={t.name} className="rounded-md bg-paper-3 px-2 py-1 min-w-0" title={t.description}>
+                  <div className="font-mono text-ink truncate">{t.name}</div>
+                  {t.description && <div className="text-ink-3 line-clamp-2">{t.description}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 

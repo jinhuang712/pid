@@ -2,7 +2,15 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "n
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { ResolvedResource } from "@earendil-works/pi-coding-agent";
-import type { Compat, ExtensionView, McpServerView, McpView, PiHome, SkillView } from "@shared/ecosystem";
+import type {
+  Compat,
+  ExtensionView,
+  McpServerView,
+  McpToolSummary,
+  McpView,
+  PiHome,
+  SkillView,
+} from "@shared/ecosystem";
 import { adapterSource, currentBundled } from "./bundled";
 import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
 
@@ -332,14 +340,20 @@ export function readMcp(cwd?: string): McpView {
     .filter((s) => s.command || s.url)
     .map(({ raw: _raw, ...s }) => s);
   const cachePath = join(agentDir(), "mcp-cache.json");
+  let cacheTools: Record<string, McpToolSummary[]> | undefined;
   if (existsSync(cachePath)) {
     try {
       const cache = JSON.parse(readFileSync(cachePath, "utf8")) as {
-        servers?: Record<string, { tools?: { name: string; description?: string }[] }>;
+        servers?: Record<string, { tools?: McpToolSummary[] }>;
       };
+      cacheTools = {};
+      for (const [name, entry] of Object.entries(cache.servers ?? {})) {
+        if (entry?.tools)
+          cacheTools[name] = entry.tools.map((t) => ({ name: t.name, description: t.description }));
+      }
       for (const s of servers) {
-        const c = cache.servers?.[s.name];
-        if (c?.tools) s.cachedTools = c.tools.map((t) => ({ name: t.name, description: t.description }));
+        const tools = cacheTools[s.name];
+        if (tools) s.cachedTools = tools;
       }
     } catch {
       // unreadable cache: show servers without tools
@@ -350,6 +364,7 @@ export function readMcp(cwd?: string): McpView {
     adapterVersion: source === "bundled" ? bundled.adapterVersion : undefined,
     configPaths,
     cachePath: existsSync(cachePath) ? cachePath : undefined,
+    ...(cacheTools && Object.keys(cacheTools).length > 0 ? { cacheTools } : {}),
     servers,
   };
 }
