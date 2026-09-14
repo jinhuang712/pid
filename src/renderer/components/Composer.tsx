@@ -92,7 +92,8 @@ export function Composer(p: ComposerProps) {
       setExpanded(true);
       return;
     }
-    el.style.height = `${Math.min(h, cap)}px`;
+    // Expanded pins the box to the cap so the editor grows tall even for a short draft.
+    el.style.height = `${expanded ? cap : Math.min(h, cap)}px`;
     el.style.overflowY = h > cap ? "auto" : "hidden";
   }, [text, expanded]);
 
@@ -296,7 +297,7 @@ export function Composer(p: ComposerProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`relative mx-auto rounded-[18px] ${expanded ? "max-w-[calc(var(--pid-measure)+12rem)]" : "max-w-[var(--pid-measure)]"} border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
+        className={`relative mx-auto rounded-[18px] max-w-[var(--pid-measure)] border bg-paper-2 shadow-[0_10px_40px_rgba(0,0,0,0.28)] transition-colors ${
           dragging ? "border-accent bg-accent-soft" : "border-line-2"
         }`}
       >
