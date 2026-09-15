@@ -65,6 +65,33 @@ const diagnostics: string[] = [];
 const PID_EXTENSION_HOST_MODE = "rpc";
 const PID_PROMPT_SOURCE = "rpc";
 
+/**
+ * Re-read the model catalog — `models.json` plus the provider catalog cached on disk — and re-apply
+ * the current model when its declared capabilities changed.
+ *
+ * Pi reads the catalog once, when the session starts: a hand-written `models.json` entry, a
+ * corrected `input` list, or a provider that started offering image input would otherwise need a
+ * whole new session, and the model picker would keep offering the old list meanwhile. `refresh`
+ * without the network only re-reads local files, so this is cheap enough to do on demand.
+ */
+async function refreshModelCatalog(): Promise<void> {
+  try {
+    await session.modelRuntime.refresh({ allowNetwork: false });
+    const current = session.model;
+    if (!current) return;
+    const fresh = session.modelRuntime
+      .getModels()
+      .find((m) => m.provider === current.provider && m.id === current.id);
+    // Only when the capability actually changed: `setModel` appends a model_change to the session
+    // file and emits model_select, and a cosmetic catalog re-read must not fill the transcript.
+    if (fresh && JSON.stringify(fresh.input) !== JSON.stringify(current.input)) {
+      await session.setModel(fresh);
+    }
+  } catch {
+    // A catalog that cannot be re-read must not break the picker: the old snapshot still works.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Extension UI: the dialogs an extension opens are PID's dialogs.
 // A dialog request goes out, the window answers it, and the extension's await resolves.
@@ -377,6 +404,9 @@ async function handleCommand(id: string, command: PiCommand): Promise<PiResponse
       return ok(id, "set_model", model);
     }
     case "get_available_models":
+      // The picker is the moment a user expects the list to be current, and the moment a stale
+      // capability (a model that can see images but is declared text-only) would be chosen.
+      await refreshModelCatalog();
       return ok(id, "get_available_models", { models: [...session.modelRuntime.getAvailableSnapshot()] });
 
     case "set_thinking_level":
@@ -440,6 +470,9 @@ async function handleCommand(id: string, command: PiCommand): Promise<PiResponse
       // a prompt. The session exposes the operation directly, so PID runs it rather than shipping
       // an extension to register the command.
       await session.reload();
+      // `reload` re-reads settings, resources and extensions but not the model catalog, and
+      // "reload" is the gesture people reach for when something on disk changed.
+      await refreshModelCatalog();
       return ok(id, "reload");
     }
 
