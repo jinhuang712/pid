@@ -78,9 +78,10 @@ export function Composer(p: ComposerProps) {
   const { text, setText, streaming, onSend, complete, pick, attachments } = p;
   const { settings } = useSettings();
   const { enterSends } = settings.conversation;
-  // The usage row carries the context gauge when it is showing session stats; running both would
-  // put the same number on the card twice.
-  const usageRow = settings.usageBar.enabled;
+  // The usage row exists only while an extension is filling it, and carries the context gauge when
+  // it does; running both would put the same number on the card twice. Unfilled, the gauge stays in
+  // the toolbar, where it was before any extension published anything.
+  const usageRow = settings.usageBar.enabled && p.providerUsage !== undefined;
   const contextInRow = usageRow && settings.usageBar.sessionStats;
   const ref = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);

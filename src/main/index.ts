@@ -38,19 +38,17 @@ import {
   saveSettings,
 } from "./settings";
 import { warmShellEnv } from "./shell-env";
-import { toActiveModel, UsageService } from "./usage";
 
 const PAPER_LIGHT = "#f4f3ef";
 const PAPER_DARK = "#121211";
 const paperColor = () => (nativeTheme.shouldUseDarkColors ? PAPER_DARK : PAPER_LIGHT);
 
 let mainWindow: BrowserWindow | undefined;
-// Extensions PID ships (pid-bridge, and pid-mcp when the user has no MCP extension) are located once.
+// PID's own bridge extension is located once; PID ships no others.
 configureBundled(app.getAppPath());
 const pi = new PiRegistry(() => mainWindow);
 // Plan quota belongs to the account, not to a session: one reading for whichever model is in front
 // of the user, published to the window that asked for it.
-const usage = new UsageService(() => mainWindow);
 
 /** File tokens in the timeline may carry "~/…"; Electron's shell wants a real absolute path. */
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir());
@@ -152,15 +150,8 @@ ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:set", (_e, s: PidSettings) => {
   const saved = saveSettings(s);
   applyAppearance(mainWindow, saved);
-  usage.settingsChanged();
   return saved;
 });
-ipcMain.handle("usage:watch", (_e, model: unknown) => {
-  usage.setModel(toActiveModel(model));
-  return usage.snapshot();
-});
-ipcMain.handle("usage:turnEnded", () => usage.turnEnded());
-ipcMain.handle("usage:refresh", () => usage.refresh());
 ipcMain.handle("pi:home", () => readPiHome());
 ipcMain.handle("eco:skills", (_e, cwd?: string) => listSkills(cwd));
 ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
@@ -267,7 +258,6 @@ app.on("will-quit", () => {
   flushState(); // debounced writes must land before the process ends
   flushSettings();
   stopSearchWorker();
-  usage.dispose();
 });
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

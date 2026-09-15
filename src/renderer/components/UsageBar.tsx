@@ -4,11 +4,9 @@ import {
   formatResetAt,
   formatResetIn,
   formatUsedPercent,
-  PROVIDER_LABEL,
   type ProviderUsage,
   type UsageTone,
   type UsageWindow,
-  WINDOW_LABEL,
   windowTone,
 } from "@shared/usage";
 import type { ReactNode } from "react";
@@ -42,6 +40,9 @@ export function UsageBar({
   const s = useSettings().settings.usageBar;
   if (!s.enabled) return null;
 
+  // Nothing published, no row: the context gauge goes back inline in the toolbar rather than taking
+  // a line of its own. Composer decides that from the same fact.
+  if (!usage) return null;
   const quota = renderQuota(usage, s);
   const session = s.sessionStats ? renderSession(lastUsage, sessionUsage, contextWindow, compacting) : null;
   if (!quota && !session) return null;
@@ -60,22 +61,22 @@ function renderQuota(usage: ProviderUsage | undefined, s: Prefs): ReactNode {
   if (!usage || usage.state === "unavailable") return null;
   const loading = usage.state === "loading";
   const stale = usage.state === "stale";
-  // Follow the configured order, and only show windows this provider actually reports.
-  const windows = s.windows
-    .map((id) => usage.windows.find((w) => w.id === id))
-    .filter((w): w is UsageWindow => w !== undefined);
+  // Which windows exist, in what order and under what name, is the publisher's to decide.
+  const windows = usage.windows;
   if (windows.length === 0 && !loading) return null;
 
   return (
     <>
       <span className="inline-flex items-center gap-[7px] text-ink-2 shrink-0">
         <span className={`w-[5px] h-[5px] rounded-full shrink-0 ${stale ? "bg-warn" : "bg-accent"}`} />
-        {PROVIDER_LABEL[usage.provider]}
+        {usage.providerLabel ?? usage.provider}
         {stale && <span className="text-ink-3">stale</span>}
       </span>
-      {loading
-        ? s.windows.map((id) => <Pending key={id} label={WINDOW_LABEL[id]} meters={s.meters} />)
-        : windows.map((w) => <Window key={w.id} window={w} usage={usage} prefs={s} />)}
+      {loading && windows.length === 0 ? (
+        <Pending label="—" meters={s.meters} />
+      ) : (
+        windows.map((w) => <Window key={w.id} window={w} usage={usage} prefs={s} />)
+      )}
     </>
   );
 }
@@ -108,9 +109,9 @@ function Window({
   return (
     <span
       className="inline-flex items-center gap-1.5 shrink-0"
-      title={`${PROVIDER_LABEL[usage.provider]} ${WINDOW_LABEL[w.id]}: ${formatUsedPercent(w.usedPercent)} used${detail}`}
+      title={`${usage.providerLabel ?? usage.provider} ${w.label}: ${formatUsedPercent(w.usedPercent)} used${detail}`}
     >
-      <Label>{WINDOW_LABEL[w.id]}</Label>
+      <Label>{w.label}</Label>
       {prefs.meters && <Meter percent={w.usedPercent} tone={tone} />}
       <span className={`font-mono tabular-nums ${TEXT[tone]}`}>{formatUsedPercent(w.usedPercent)}</span>
       {reset && <span className="text-[11px] font-mono tabular-nums text-ink-3">{reset}</span>}

@@ -9,6 +9,7 @@ import {
   type SessionStatus,
   type Workspace,
 } from "../state/workspace";
+import type { PageSurface } from "../surfaces";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { Keys } from "./Key";
 import { Logo } from "./Logo";
@@ -60,9 +61,12 @@ export function SessionTree({
   onSearch,
   actions,
   page,
+  pages,
   onPage,
 }: {
   page: Page;
+  /** Ecosystem pages that exist right now; see src/renderer/surfaces.ts. */
+  pages: PageSurface[];
   onPage: (p: Page) => void;
   folders: string[];
   sessionsByFolder: Record<string, SessionSummary[]>;
@@ -324,15 +328,9 @@ export function SessionTree({
       </div>
 
       <div className="shrink-0 mx-3 mt-2 pt-2 pb-2 border-t border-line flex flex-col text-[12.5px]">
-        {/* Pi's ecosystem: pages */}
+        {/* Pi's ecosystem: pages. A page nothing fills is not a page. */}
         <div className="flex flex-col gap-px">
-          {(
-            [
-              ["skills", "Skills"],
-              ["mcp", "MCP"],
-              ["extensions", "Extensions"],
-            ] as [Page, string][]
-          ).map(([id, label]) => (
+          {pages.map(({ id, label }) => (
             <button
               type="button"
               key={id}

@@ -394,6 +394,17 @@ An extension that wants graphical presentation rather than a line of text names 
 payload; the terminal shows the same extension's plain widget. One extension, both hosts, no PID
 code loaded. `[Extension]`
 
+Kinds PID renders today:
+
+```text
+usage     provider quota      → the bar under the composer
+binding   worktree binding    → the branch line in the session header
+```
+
+Both are published by extensions that also serve the Pi terminal: pi-x-footer draws the same
+numbers as a footer, pi-worktree as a status line. Neither ships inside PID — they are installed
+into Pi, and then both interfaces have them. `[Extension]` `[Pi]`
+
 Terminal implementation details without a meaningful graphical mapping degrade to nothing, and the
 Extensions page names which ones for each extension.
 

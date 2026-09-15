@@ -116,6 +116,10 @@ Pi Coding Agent SDK
 - **Discovery**: session lists (`SessionManager.list/listAll`), skills (`loadSkillsFromDir`),
   and skill/extension enablement resolved by Pi's `DefaultPackageManager` so it matches `pi config`.
   MCP config is parsed from the `mcp.json` layers pid-mcp and pi-mcp-adapter both read.
+- **PID ships one extension**: `resources/pid-bridge`, its own relay. Nothing else. MCP, the footer
+  and the rest are installed into Pi by the user, after which the terminal and PID both have them.
+  PID must never bundle, vendor or fall back to an ecosystem extension — that would make it a Pi
+  distribution, which GOALS lists as a non-goal.
 - **On/off switches** (`src/main/pi/toggles.ts`): the only writes PID makes under `~/.pi/agent` or
   `<cwd>/.pi`, and they are Pi's own formats through Pi's own code paths. Skills and extensions go
   through `SettingsManager` as the same `+pattern` / `-pattern` entries `pi config` writes (global
@@ -137,6 +141,16 @@ Pi Coding Agent SDK
   claimed kinds to their renderer and shows the rest as their payload. PID's own bridge
   (`resources/pid-bridge`) publishes MCP status through that contract, not a private channel, so the
   core has no shortcut an extension author cannot take.
+- **Kinds and surfaces, as tables**: `@shared/extension-kinds` maps a widget kind to how PID reads
+  it; `src/renderer/surfaces.ts` maps it to the page it fills. Those two files are the whole of
+  PID's knowledge about extension presentation. Nowhere else names an extension or asks whether one
+  is installed — `if (hasMcp)` is the same mistake as `widgets["pi-worktree"]` was, and
+  `test/protocol-boundary.test.ts` fails on either. A surface exists because something filled it.
+  Every parser is defensive: the payload crosses from code PID does not own, so a bad reading reads
+  as nothing rather than painting nonsense.
+- **Quota is not PID's**: PID fetches no usage. An extension that already computes it for the
+  terminal — pi-x-footer does — publishes the same numbers as a `usage` widget, and PID draws them.
+  PID owns the thresholds and the shape of the row, nothing else.
 - **Fork**: Pi stamps a forked session with its parent. PID leaves that alone — the lineage is
   Pi's, and the file does not even exist until the next turn appends to it.
 - **Concurrency**: Pi has no session-file lock. PID owns one worker per session file it opens and

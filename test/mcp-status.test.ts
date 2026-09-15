@@ -2,7 +2,7 @@ import { parseMcpStatus, runtimeOnly, WIDGET_MCP_STATUS } from "@shared/mcp-stat
 import type { PiHandle, PiSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { withRuntimeDefinitions } from "../resources/pid-bridge/index";
-import { locateBundled, adapterSource, bundledExtensionPaths, userMcpExtension } from "../src/main/pi/bundled";
+import { bundledExtensionPaths, locateBundled } from "../src/main/pi/bundled";
 import { emptyWorkspace, workspaceReducer } from "../src/renderer/state/workspace";
 
 // Real snapshot captured from pi-mcp-adapter 2.33.0 via pid-bridge (see resources/pid-bridge).
@@ -97,7 +97,7 @@ describe("workspace widget channel", () => {
         widgetLines: [SNAPSHOT],
       },
     });
-    expect(ws.procs.k.mcp?.servers[0].name).toBe("fs");
+    expect(ws.procs.k.published["mcp-status"]?.servers[0].name).toBe("fs");
     expect(ws.procs.k.widgets[WIDGET_MCP_STATUS]).toBeUndefined();
   });
   it("keeps any other extension's widget, whatever it is named", () => {
@@ -113,7 +113,7 @@ describe("workspace widget channel", () => {
       },
     });
     expect(ws.procs.k.widgets["pi-worktree"]).toEqual(["🌲 main", "↑2"]);
-    expect(ws.procs.k.mcp).toBeUndefined();
+    expect(ws.procs.k.published["mcp-status"]).toBeUndefined();
   });
 
   it("drops a widget the extension clears", () => {
@@ -131,31 +131,20 @@ describe("workspace widget channel", () => {
   });
 });
 
-describe("bundled extensions", () => {
-  const bundled = { bridge: "/app/resources/pid-bridge/index.ts", adapter: "/app/node_modules/pid-mcp/src/index.ts" };
-  it("prefers the user's MCP extension, whichever it is, and never loads a second one", () => {
-    expect(adapterSource(["npm:pi-mcp-adapter"], bundled)).toBe("user");
-    expect(userMcpExtension(["npm:pi-mcp-adapter"])).toBe("pi-mcp-adapter");
-    expect(bundledExtensionPaths(["npm:pi-mcp-adapter"], bundled)).toEqual([bundled.bridge]);
-    expect(adapterSource(["../../dev/pi/pid-mcp"], bundled)).toBe("user");
-    expect(userMcpExtension(["../../dev/pi/pid-mcp"])).toBe("pid-mcp");
-    expect(bundledExtensionPaths(["../../dev/pi/pid-mcp"], bundled)).toEqual([bundled.bridge]);
-  });
-  it("loads the bundled pid-mcp when the user has no MCP extension", () => {
-    expect(adapterSource(["npm:pi-view"], bundled)).toBe("bundled");
-    expect(bundledExtensionPaths([], bundled)).toEqual([bundled.adapter, bundled.bridge]);
-  });
-  it("resolves the pid-mcp dependency in this repo and reads its version", () => {
-    const b = locateBundled(process.cwd(), {});
-    expect(b.adapter).toMatch(/node_modules\/pid-mcp\/src\/index\.ts$/);
-    expect(b.adapterVersion).toMatch(/^\d+\.\d+\.\d+/);
-  });
-  it("reports none when nothing is available", () => {
-    expect(adapterSource([], {})).toBe("none");
-    expect(bundledExtensionPaths([], {})).toEqual([]);
+describe("PID's bridge extension", () => {
+  it("is the only thing PID loads on top of the user's own Pi setup", () => {
+    // Every other extension — MCP, the footer, anything else — is installed into Pi by the user.
+    // There is one PID; it ships no ecosystem.
+    expect(bundledExtensionPaths({ bridge: "/app/resources/pid-bridge/index.ts" })).toEqual([
+      "/app/resources/pid-bridge/index.ts",
+    ]);
+    expect(bundledExtensionPaths({})).toEqual([]);
   });
   it("finds the bridge shipped in this repo", () => {
-    const b = locateBundled(process.cwd(), {});
-    expect(b.bridge).toMatch(/resources\/pid-bridge\/index\.ts$/);
+    expect(locateBundled(process.cwd(), {}).bridge).toMatch(/resources\/pid-bridge\/index\.ts$/);
+  });
+  it("takes an override for it", () => {
+    const b = locateBundled("/nowhere", { PID_BRIDGE_PATH: process.cwd() });
+    expect(b.bridge).toBe(process.cwd());
   });
 });

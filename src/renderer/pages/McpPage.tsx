@@ -121,19 +121,14 @@ export function McpPage({
       title="MCP"
       note={
         view ? (
-          view.adapterSource === "none" ? (
-            <>
-              No MCP extension available. This PID build does not bundle pid-mcp; install it into Pi with{" "}
-              <span className="font-mono">pi install npm:pid-mcp</span>, or run PID from a build that bundles
-              it.
-            </>
-          ) : live ? (
+          live ? (
             <>
               live from session <span className="font-mono">{liveSession}</span>
-              {live.pidMcpVersion ? ` · pid-mcp ${live.pidMcpVersion}` : ""}
+              {/* The snapshot names its own publisher; PID does not keep a list of them. */}
+              {live.source ? ` · ${live.source}${live.pidMcpVersion ? ` ${live.pidMcpVersion}` : ""}` : ""}
             </>
           ) : (
-            "Open a session to see what the model can call; the list below is what is configured."
+            "The list below is what is configured. Open a session to see what the model can actually call — MCP reaches Pi through an extension, and the running one reports it."
           )
         ) : (
           "Loading…"

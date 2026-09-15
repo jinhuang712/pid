@@ -17,7 +17,6 @@ import {
   type UiSupport,
   type UiUsage,
 } from "@shared/extension-ui";
-import { adapterSource, currentBundled, userMcpExtension } from "./bundled";
 import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
 
 /**
@@ -300,9 +299,6 @@ export async function listExtensions(cwd?: string): Promise<ExtensionView[]> {
 
 /** MCP as configured for the MCP extension: layers merged by server name, project files winning. */
 export function readMcp(cwd?: string): McpView {
-  const home = readPiHome();
-  const bundled = currentBundled();
-  const source = adapterSource(home.packages, bundled);
   const globalPath = mcpGlobalPath();
   const layers: { path: string; scope: "global" | "shared" | "pi" }[] = [
     { path: globalPath, scope: "global" },
@@ -380,10 +376,6 @@ export function readMcp(cwd?: string): McpView {
     }
   }
   return {
-    adapterSource: source,
-    adapterName:
-      source === "user" ? userMcpExtension(home.packages) : source === "bundled" ? "pid-mcp" : undefined,
-    adapterVersion: source === "bundled" ? bundled.adapterVersion : undefined,
     configPaths,
     cachePath: existsSync(cachePath) ? cachePath : undefined,
     ...(cacheTools && Object.keys(cacheTools).length > 0 ? { cacheTools } : {}),

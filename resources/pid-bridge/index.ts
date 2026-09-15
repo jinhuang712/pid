@@ -11,9 +11,10 @@
  * extension, or read from an mcp.json? The MCP page needs the answer to show servers that have no
  * config entry — they are exactly the ones no page could list before.
  *
- * Contract: pid-mcp (bundled with PID) publishes on "pid-mcp/status/v1" and answers
- * "pid-mcp:runtime-snapshot:v1"; it also mirrors both on pi-mcp-adapter's channel names, and the
- * bridge listens on both sets so a user-installed pi-mcp-adapter ≥ 2.33 works unchanged.
+ * Contract: pid-mcp publishes on "pid-mcp/status/v1" and answers "pid-mcp:runtime-snapshot:v1"; it
+ * also mirrors both on pi-mcp-adapter's channel names, and the bridge listens on both sets so
+ * either extension works unchanged. PID ships neither — the user installs one into Pi, and then the
+ * terminal and PID both have it.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
