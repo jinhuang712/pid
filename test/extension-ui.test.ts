@@ -101,3 +101,20 @@ describe("widget keys", () => {
     expect(parseWidgetKey(widgetKey(k))).toEqual(k);
   });
 });
+
+describe("the source scan", () => {
+  // The scanner lives in the main process and reads files; this exercises the pattern it uses, so
+  // a call shape that slips past it fails here rather than on the Extensions page.
+  const UI_CALL = /\bui\b(?:\s+as\s+[\w.<>\[\]|\s]+?)?\s*\)?\s*\??\.\s*([A-Za-z_$][\w$]*)/g;
+  const members = (text: string) => [...text.matchAll(UI_CALL)].map((m) => m[1]);
+
+  it("finds every way an extension reaches ctx.ui", () => {
+    expect(members("ctx.ui.setFooter(x)")).toEqual(["setFooter"]);
+    expect(members("ctx.ui?.getToolsExpanded()")).toEqual(["getToolsExpanded"]);
+    expect(members('const { ui } = ctx;\nui.notify("x")')).toEqual(["notify"]);
+    // Casting away the type is how an extension reaches past the published surface — which is
+    // exactly the case the page must not report as compatible.
+    expect(members("(ctx.ui as any).custom((tui: any) => {})")).toEqual(["custom"]);
+    expect(members("(ctx.ui as ExtensionUIContext).custom(f)")).toEqual(["custom"]);
+  });
+});

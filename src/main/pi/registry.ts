@@ -10,7 +10,6 @@ import type {
 } from "@shared/protocol";
 import type { BrowserWindow } from "electron";
 import { warmShellEnv } from "../shell-env";
-import { bundledExtensionPaths, currentBundled } from "./bundled";
 import { SessionProcess } from "./session-process";
 
 /** How long a fresh worker gets to build its runtime before we call the start failed. */
@@ -29,8 +28,6 @@ export class PiRegistry {
     const proc = new SessionProcess({
       cwd: opts.cwd,
       sessionPath: opts.sessionPath,
-      // PID's own bridge. Everything else a session loads is the user's Pi setup, unchanged.
-      extensionPaths: bundledExtensionPaths(currentBundled()),
       onEvent: (event) => {
         if (early) early.push(event);
         else this.send("pi:event", { key, event } satisfies PiEventEnvelope);

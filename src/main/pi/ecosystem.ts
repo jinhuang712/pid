@@ -161,11 +161,15 @@ export async function listSkills(cwd?: string): Promise<SkillView[]> {
 }
 
 /**
- * Every `ctx.ui.<member>` an extension's source mentions. Extensions reach the UI through `ctx.ui`,
- * a destructured `ui`, or `ctx.ui?.` — all three read as `ui.<member>` in the text, so one pattern
- * finds them without a hand-written list of API names to fall behind.
+ * Every `ctx.ui.<member>` an extension's source mentions.
+ *
+ * Extensions reach the UI as `ctx.ui.x`, a destructured `ui.x`, `ctx.ui?.x`, or — when the member
+ * is not in the published types, or the author is working around them — `(ctx.ui as any).x`. All
+ * four read as `ui`, optional noise, `.member`, so one pattern finds them without a hand-written
+ * list of API names to fall behind. Missing the cast form would under-report exactly the extensions
+ * that reach furthest into the terminal.
  */
-const UI_CALL = /\bui\s*\??\s*\.\s*([A-Za-z_$][\w$]*)/g;
+const UI_CALL = /\bui\b(?:\s+as\s+[\w.<>[\]|\s]+?)?\s*\)?\s*\??\.\s*([A-Za-z_$][\w$]*)/g;
 /**
  * A test against `ctx.mode` for the terminal — the only check that stands an extension down here.
  *

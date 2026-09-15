@@ -57,7 +57,7 @@ export class SessionProcess {
 
     this.post({
       kind: "start",
-      options: { cwd: opts.cwd, sessionPath: opts.sessionPath, extensionPaths: opts.extensionPaths },
+      options: { cwd: opts.cwd, sessionPath: opts.sessionPath },
     });
   }
 

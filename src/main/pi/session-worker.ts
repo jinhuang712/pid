@@ -198,14 +198,11 @@ function runtimeThemes() {
 // Runtime
 // ---------------------------------------------------------------------------
 
-function makeCreateRuntime(extensionPaths: string[]): CreateAgentSessionRuntimeFactory {
+function makeCreateRuntime(): CreateAgentSessionRuntimeFactory {
   return async ({ cwd, agentDir, sessionManager, sessionStartEvent }) => {
-    const services = await createAgentSessionServices({
-      cwd,
-      agentDir,
-      // What `-e <path>` did on the command line when PID spawned pi.
-      resourceLoaderOptions: { additionalExtensionPaths: extensionPaths },
-    });
+    // No extension paths: PID adds none of its own. A session loads exactly what Pi resolves for
+    // this directory, which is what the terminal loads too.
+    const services = await createAgentSessionServices({ cwd, agentDir });
     const httpWarning = await applyPiHttpSettings(services.settingsManager);
     if (httpWarning) diagnostics.push(httpWarning);
     return {
@@ -262,11 +259,11 @@ async function bindSession() {
 }
 
 async function start(options: WorkerStartOptions) {
-  const { cwd, sessionPath, extensionPaths } = options;
+  const { cwd, sessionPath } = options;
   // Pi's defaults decide where sessions live: open the file PID was asked to resume, or let
   // SessionManager create a new one in the directory the Pi terminal would have used.
   const sessionManager = sessionPath ? SessionManager.open(sessionPath) : SessionManager.create(cwd);
-  runtime = await createAgentSessionRuntime(makeCreateRuntime(extensionPaths), {
+  runtime = await createAgentSessionRuntime(makeCreateRuntime(), {
     cwd: sessionManager.getCwd(),
     agentDir: getAgentDir(),
     sessionManager,
@@ -423,6 +420,13 @@ async function handleCommand(id: string, command: PiCommand): Promise<PiResponse
         });
       }
       return ok(id, "get_commands", { commands });
+    }
+    case "reload": {
+      // Pi routes `/reload` only in its own TUI: typed anywhere else the text reaches the model as
+      // a prompt. The session exposes the operation directly, so PID runs it rather than shipping
+      // an extension to register the command.
+      await session.reload();
+      return ok(id, "reload");
     }
 
     default:

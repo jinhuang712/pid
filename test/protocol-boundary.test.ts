@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -73,16 +73,22 @@ describe("protocol boundary", () => {
    * in `@shared/extension-kinds` and `src/renderer/surfaces.ts` say which — so no other file needs
    * to name an extension to decide what to draw.
    */
-  it("names no extension where it decides what to show", () => {
-    const TABLES = [join("src", "shared", "extension-kinds.ts"), join("src", "renderer", "surfaces.ts")];
-    const NAMES = /\b(pid-mcp|pi-mcp-adapter|pi-x-footer|pi-worktree|pi-view|pi-briefly|pi-elapsed)\b/;
-    const offenders = files
-      .filter((f) => /^src[/\\]renderer[/\\]/.test(f.rel) || /^src[/\\]shared[/\\]/.test(f.rel))
-      .filter((f) => !TABLES.includes(f.rel))
-      // A name in prose explains where a shape came from; a name in code is a special case.
-      .filter((f) => stripComments(f.text).match(NAMES))
-      .map((f) => f.rel);
+  it("names no extension anywhere in its own code", () => {
+    const NAMES =
+      /\b(pid-mcp|pi-mcp-adapter|pi-x-footer|x-footer|pi-worktree|pi-view|pi-briefly|pi-elapsed|pi-lite-web|pid-bridge)\b/;
+    // A name in prose explains where a shape came from; a name in code is a special case.
+    const offenders = files.filter((f) => stripComments(f.text).match(NAMES)).map((f) => f.rel);
     expect(offenders).toEqual([]);
+  });
+
+  /** PID adds no extension of its own to a session: what Pi resolves is what runs. */
+  it("ships no extension", () => {
+    expect(existsSync(join(SRC, "..", "resources"))).toBe(false);
+    const adds = files
+      .filter((f) => !f.rel.endsWith("protocol-boundary.test.ts"))
+      .filter((f) => /additionalExtensionPaths|extensionFactories/.test(f.text))
+      .map((f) => f.rel);
+    expect(adds).toEqual([]);
   });
 
   /** Discovery and settings read the agent package too; only the worker may run a session on it. */

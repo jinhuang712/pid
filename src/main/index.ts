@@ -12,7 +12,6 @@ import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
 import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
-import { configureBundled } from "./pi/bundled";
 import { runDiagnostics } from "./pi/diagnostics";
 import { configureAgentDir, listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
@@ -44,8 +43,6 @@ const PAPER_DARK = "#121211";
 const paperColor = () => (nativeTheme.shouldUseDarkColors ? PAPER_DARK : PAPER_LIGHT);
 
 let mainWindow: BrowserWindow | undefined;
-// PID's own bridge extension is located once; PID ships no others.
-configureBundled(app.getAppPath());
 const pi = new PiRegistry(() => mainWindow);
 // Plan quota belongs to the account, not to a session: one reading for whichever model is in front
 // of the user, published to the window that asked for it.

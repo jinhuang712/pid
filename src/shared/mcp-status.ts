@@ -77,8 +77,6 @@ export interface McpOAuthOutcome {
   message: string;
 }
 
-export { WIDGET_MCP_OAUTH, WIDGET_MCP_STATUS } from "./extension-widgets";
-
 /**
  * Servers the MCP extension is running that no config layer defines — the runtime registrations.
  * The MCP page merges these into its list; without them a package-registered server (KLOOK's

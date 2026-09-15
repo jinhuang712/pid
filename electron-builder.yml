@@ -5,10 +5,8 @@ directories:
 files:
   - out/**
   - package.json
-  # PID's own bridge extension, loaded into every session worker (src/main/pi/bundled.ts).
-  - resources/pid-bridge/**
-# No asar: a session worker reads pid-bridge off disk as a plain file, and it cannot look inside an
-# archive.
+# No asar: a session worker loads the user's own extensions off disk through jiti, and it cannot
+# look inside an archive.
 asar: false
 mac:
   category: public.app-category.developer-tools

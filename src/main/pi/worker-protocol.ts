@@ -10,8 +10,6 @@ export interface WorkerStartOptions {
   cwd: string;
   /** Resume an existing Pi session file. Omit for a fresh session. */
   sessionPath?: string;
-  /** Extensions PID loads on top of the user's own, by absolute path. */
-  extensionPaths: string[];
 }
 
 export type MainToWorker =
