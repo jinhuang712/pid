@@ -856,7 +856,6 @@ export function App() {
         <SessionTree
           folders={folders}
           sessionsByFolder={sessionsByFolder}
-          repos={repos}
           ws={ws}
           activeFolder={folder}
           onSearch={() => setPaletteOpen(true)}

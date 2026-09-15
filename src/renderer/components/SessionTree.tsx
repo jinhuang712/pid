@@ -1,4 +1,3 @@
-import type { RepoInfo } from "@shared/git";
 import type { SessionSummary } from "@shared/sessions";
 import { type MouseEvent, useEffect, useState } from "react";
 import { ContextMenu, Dot, IconButton, Keys, Logo, type MenuItem } from "@/ui";
@@ -53,7 +52,6 @@ export interface SessionActions {
 export function SessionTree({
   folders,
   sessionsByFolder,
-  repos,
   ws,
   activeFolder,
   onSearch,
@@ -68,7 +66,6 @@ export function SessionTree({
   onPage: (p: Page) => void;
   folders: string[];
   sessionsByFolder: Record<string, SessionSummary[]>;
-  repos: Record<string, RepoInfo | null>;
   ws: Workspace;
   activeFolder?: string;
   onSearch: () => void;
