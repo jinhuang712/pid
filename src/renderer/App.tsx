@@ -278,6 +278,9 @@ export function App() {
   // ---- session actions ----
   const openSession = useCallback(
     async (s: SessionSummary) => {
+      // A session opened from anywhere — including the sidebar behind settings,
+      // skills or extensions — takes the window back to the session view.
+      setPage("sessions");
       if (s.path.startsWith("proc:")) return dispatch({ type: "activate", key: s.path.slice(5) });
       const live = procForSession(ws, s.path);
       if (live) return dispatch({ type: "activate", key: live.key });
@@ -867,6 +870,7 @@ export function App() {
         {page === "skills" && (
           <SkillsPage
             folder={folder}
+            onClose={() => setPage("sessions")}
             onUse={(name) => {
               setDraft((d) => `${d}${d && !d.endsWith(" ") ? " " : ""}/${name} `);
               setPage("sessions");
@@ -889,8 +893,10 @@ export function App() {
               />
             ),
         )}
-        {page === "extensions" && <ExtensionsPage folder={folder} />}
-        {page === "settings" && <SettingsPage initialSection={settingsSection} />}
+        {page === "extensions" && <ExtensionsPage folder={folder} onClose={() => setPage("sessions")} />}
+        {page === "settings" && (
+          <SettingsPage initialSection={settingsSection} onClose={() => setPage("sessions")} />
+        )}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <main className="flex-1 flex flex-col min-w-0">
             {/* two tiers: the title owns line one; folder and branch share line two */}

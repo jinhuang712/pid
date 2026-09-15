@@ -51,7 +51,7 @@ function members(e: ExtensionView): { name: string; support: UiSupport }[] {
   ].sort((a, b) => order.indexOf(a.support) - order.indexOf(b.support) || a.name.localeCompare(b.name));
 }
 
-export function ExtensionsPage({ folder }: { folder?: string }) {
+export function ExtensionsPage({ folder, onClose }: { folder?: string; onClose?: () => void }) {
   const [list, setList] = useState<ExtensionView[]>([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string>();
@@ -115,6 +115,7 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
       }
       search={q}
       onSearch={setQ}
+      onClose={onClose}
       actions={
         <button
           type="button"

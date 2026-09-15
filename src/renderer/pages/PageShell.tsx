@@ -9,6 +9,7 @@ export function PageShell({
   search,
   onSearch,
   actions,
+  onClose,
   toolbar,
   children,
 }: {
@@ -17,6 +18,8 @@ export function PageShell({
   search?: string;
   onSearch?: (q: string) => void;
   actions?: ReactNode;
+  /** Circular close button at the right of the header. Escape already does the same. */
+  onClose?: () => void;
   /** A row under the note, for scope selection and similar controls. */
   toolbar?: ReactNode;
   children: ReactNode;
@@ -28,6 +31,28 @@ export function PageShell({
           <h1 className="text-xl font-semibold text-ink">{title}</h1>
           <span className="flex-1" />
           {actions}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close (esc)"
+              aria-label="Close"
+              className="w-7 h-7 shrink-0 rounded-full border border-line bg-paper-2 text-ink-3 hover:text-ink hover:border-ink-3 transition-colors flex items-center justify-center"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <title>Close</title>
+                <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
         {note && <div className="mt-1 text-xs text-ink-3">{note}</div>}
         {toolbar && <div className="mt-3">{toolbar}</div>}
