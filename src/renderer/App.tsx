@@ -1,6 +1,6 @@
 import type { RepoInfo } from "@shared/git";
 import { stripPromptBlocks } from "@shared/prompt-blocks";
-import type { PiEvent, RpcExtensionUIRequest, RpcExtensionUIResponse } from "@shared/protocol";
+import type { PiDialogRequest, PiDialogResponse, PiEvent } from "@shared/protocol";
 import type { SessionSummary } from "@shared/sessions";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { appendAttachments, parseAttachments, toAttachment } from "./attachments";
@@ -192,7 +192,7 @@ export function App() {
         dispatch({ type: "add", handle, replaces: pendingKey });
         if (pendingKey) composerRef.current.move(pendingKey, handle.key);
         for (const ev of handle.earlyEvents)
-          if (ev.type === "extension_ui_request" && ev.method === "notify") toast(ev.message, ev.notifyType);
+          if (ev.type === "dialog" && ev.method === "notify") toast(ev.message, ev.notifyType);
         if (sessionPath) {
           const { messages } = await bridge.pi.command(handle.key, { type: "get_messages" });
           dispatch({ type: "messages", key: handle.key, conv: fromMessages(messages) });
@@ -241,13 +241,18 @@ export function App() {
   };
 
   const handleEvent = (k: string, cwd: string, event: PiEvent) => {
-    if (event.type === "extension_ui_request") {
+    if (event.type === "dialog") {
       if (event.method === "notify") return toast(event.message, event.notifyType);
       dispatch({ type: "event", key: k, event });
       if (["select", "confirm", "input", "editor"].includes(event.method)) {
         notify("inputRequired", (event as DialogRequest).title, "An extension is waiting for your input");
       }
       return;
+    }
+    // An extension threw. The session keeps running, so this is a toast rather than a banner —
+    // but it is never silent: a broken extension used to look like a feature quietly not working.
+    if (event.type === "extension_error") {
+      return toast(`${base(event.extensionPath)}: ${event.error}`, "error");
     }
     dispatch({ type: "event", key: k, event });
     if (event.type === "thinking_level_changed") void refreshState(k);
@@ -771,7 +776,7 @@ export function App() {
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
 
-  const respondDialog = (r: RpcExtensionUIResponse) => {
+  const respondDialog = (r: PiDialogResponse) => {
     if (!key) return;
     if (renameKey && r.id === "pid-rename") {
       setRenameKey(undefined);
@@ -788,7 +793,7 @@ export function App() {
   };
   const renameReq: DialogRequest | undefined = renameKey
     ? {
-        type: "extension_ui_request",
+        type: "dialog",
         id: "pid-rename",
         method: "input",
         title: "Rename session",
@@ -1047,7 +1052,7 @@ function firstUserText(messages: ReturnType<typeof emptyConversation>["messages"
   return stripPromptBlocks(raw) || (parseAttachments(raw).attachments[0]?.name ?? "New session");
 }
 
-export type { RpcExtensionUIRequest };
+export type { PiDialogRequest };
 
 function FolderGlyph() {
   return (

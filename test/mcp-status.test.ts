@@ -1,5 +1,5 @@
 import { parseMcpStatus, runtimeOnly, WIDGET_MCP_STATUS } from "@shared/mcp-status";
-import type { PiHandle, RpcSessionState } from "@shared/protocol";
+import type { PiHandle, PiSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { withRuntimeDefinitions } from "../resources/pid-bridge/index";
 import { locateBundled, adapterSource, bundledExtensionPaths, userMcpExtension } from "../src/main/pi/bundled";
@@ -81,7 +81,7 @@ describe("workspace pid:* widgets", () => {
   const handle: PiHandle = {
     key: "k",
     cwd: "/repo",
-    state: { sessionFile: null } as unknown as RpcSessionState,
+    state: { sessionFile: null } as unknown as PiSessionState,
     earlyEvents: [],
   };
   const ws0 = workspaceReducer(emptyWorkspace(), { type: "add", handle });
@@ -90,7 +90,7 @@ describe("workspace pid:* widgets", () => {
       type: "event",
       key: "k",
       event: {
-        type: "extension_ui_request",
+        type: "dialog",
         id: "1",
         method: "setWidget",
         widgetKey: WIDGET_MCP_STATUS,
@@ -105,7 +105,7 @@ describe("workspace pid:* widgets", () => {
       type: "event",
       key: "k",
       event: {
-        type: "extension_ui_request",
+        type: "dialog",
         id: "2",
         method: "setWidget",
         widgetKey: "pi-worktree",

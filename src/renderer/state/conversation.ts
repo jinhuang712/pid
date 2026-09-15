@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { JsonAgentSessionEvent } from "@shared/protocol";
+import type { PiAgentEvent } from "@shared/protocol";
 import { addUsage, emptyUsage, summarizeTurn, type Usage } from "../turn-summary";
 
 export interface ToolRun {
@@ -139,7 +139,7 @@ export function commandEnd(
 
 export function reduce(
   state: ConversationState,
-  ev: JsonAgentSessionEvent,
+  ev: PiAgentEvent,
   now: () => number = Date.now,
 ): ConversationState {
   switch (ev.type) {
@@ -266,7 +266,7 @@ export function reduce(
   }
 }
 
-type Delta = Extract<JsonAgentSessionEvent, { type: "message_update" }>["assistantMessageEvent"];
+type Delta = Extract<PiAgentEvent, { type: "message_update" }>["assistantMessageEvent"];
 
 function applyDelta(msg: AssistantMessage, d: Delta): AssistantMessage {
   const content = [...msg.content];

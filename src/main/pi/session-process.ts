@@ -1,12 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import type {
-  PiCommand,
-  PiEvent,
-  ResponseDataOf,
-  RpcExtensionUIResponse,
-  RpcSessionState,
-} from "@shared/protocol";
+import type { PiCommand, PiDialogResponse, PiEvent, PiSessionState, ResponseDataOf } from "@shared/protocol";
 import { type UtilityProcess, utilityProcess } from "electron";
 import { shellEnv } from "../shell-env";
 import type { MainToWorker, WorkerStartOptions, WorkerToMain } from "./worker-protocol";
@@ -34,7 +28,7 @@ export class SessionProcess {
   /** True between agent_start and agent_end: a turn is in flight. */
   busy = false;
   /** Resolves with the session state once the runtime is up, or rejects with why it is not. */
-  readonly started: Promise<RpcSessionState>;
+  readonly started: Promise<PiSessionState>;
 
   constructor(private opts: SessionProcessOptions) {
     this.cwd = opts.cwd;
@@ -46,7 +40,7 @@ export class SessionProcess {
       env: shellEnv(),
     });
 
-    this.started = new Promise<RpcSessionState>((resolve, reject) => {
+    this.started = new Promise<PiSessionState>((resolve, reject) => {
       this.startResolve = resolve;
       this.startReject = reject;
     });
@@ -67,7 +61,7 @@ export class SessionProcess {
     });
   }
 
-  private startResolve!: (state: RpcSessionState) => void;
+  private startResolve!: (state: PiSessionState) => void;
   private startReject!: (err: Error) => void;
 
   private collectStderr(chunk: string) {
@@ -153,7 +147,7 @@ export class SessionProcess {
     });
   }
 
-  respondUI(response: RpcExtensionUIResponse) {
+  respondUI(response: PiDialogResponse) {
     this.post({ kind: "ui-response", response });
   }
 

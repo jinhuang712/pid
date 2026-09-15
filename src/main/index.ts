@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { McpToggle, ResourceToggle } from "@shared/ecosystem";
-import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
+import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
 import { isWebUrl } from "@shared/url";
@@ -195,9 +195,7 @@ ipcMain.handle("sessions:readBranch", (_e, path: string) => readSessionBranch(pa
 
 ipcMain.handle("pi:start", (_e, opts: StartPiOptions) => pi.start(opts));
 ipcMain.handle("pi:command", (_e, key: string, command: PiCommand) => pi.command(key, command));
-ipcMain.handle("pi:uiResponse", (_e, key: string, response: RpcExtensionUIResponse) =>
-  pi.respondUI(key, response),
-);
+ipcMain.handle("pi:uiResponse", (_e, key: string, response: PiDialogResponse) => pi.respondUI(key, response));
 ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
 ipcMain.handle("pi:diagnostics", () => runDiagnostics());
 

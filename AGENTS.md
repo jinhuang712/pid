@@ -92,10 +92,16 @@ Pi Coding Agent SDK
 
 ## How PID Talks to Pi
 
-- **Live agent**: one `pi --mode rpc` child process per open session (`src/main/pi/rpc-process.ts`).
-  Commands and events are Pi's RPC protocol types, imported from the pinned
-  `@earendil-works/pi-coding-agent` package. PID adds only a process key. This means PID runs the
-  user's installed `pi`, with their extensions, MCP extension, models, and auth, unchanged.
+- **Live agent**: one Electron utility process per open session, hosting Pi's own
+  `AgentSessionRuntime` — the layer the Pi terminal runs on (`src/main/pi/session-worker.ts`,
+  spawned by `src/main/pi/session-process.ts`). It reads the user's `~/.pi/agent`, so their
+  extensions, MCP servers, skills, models and auth apply unchanged. One session per process keeps
+  Pi's process-global state per session and contains a crashing extension.
+- **Protocol** (`src/shared/protocol.ts`): PID's own commands, events, dialogs and session state,
+  shaped from `AgentSession` and `AgentSessionEvent` so a field cannot drift from what the agent
+  returns. Pi's `modes/rpc` types are deliberately not used: that surface is second-class and
+  upstream has a replacement in development. `session-worker.ts` is the only file that touches
+  Pi's agent API; `test/protocol-boundary.test.ts` fails if anything else does.
 - **Discovery**: session lists (`SessionManager.list/listAll`), skills (`loadSkillsFromDir`),
   and skill/extension enablement resolved by Pi's `DefaultPackageManager` so it matches `pi config`.
   MCP config is parsed from the `mcp.json` layers pid-mcp and pi-mcp-adapter both read.
@@ -111,18 +117,24 @@ Pi Coding Agent SDK
   `SYSTEM.md` or a project's `.pi/APPEND_SYSTEM.md`.
 - **Renderer state**: the streaming assistant message is rebuilt from `message_update` deltas;
   `message_end` is authoritative. Everything else is a projection of Pi events.
-- **Extension UI**: the RPC `extension_ui_request` sub-protocol is answered with real dialogs;
-  fire-and-forget methods become toasts and a status strip. TUI-only APIs are not adapted.
-- **Concurrency**: Pi has no session-file lock. PID owns one process per session file it opens and
+- **Extension UI**: the worker implements Pi's `ExtensionUIContext` and forwards each call as a
+  dialog request; the window answers and the extension's await resolves. Fire-and-forget methods
+  become toasts and a status strip. TUI-only APIs are not adapted.
+- **Fork**: Pi stamps a forked session with its parent. PID leaves that alone — the lineage is
+  Pi's, and the file does not even exist until the next turn appends to it.
+- **Concurrency**: Pi has no session-file lock. PID owns one worker per session file it opens and
   never appends to a file another process is writing.
 
-Keep the pinned Pi dependency equal to the globally installed `pi` version.
+PID runs the Pi version it pins, so a `pi` on the user's PATH is not required. Keep the pinned
+version equal to the installed one anyway when there is one: both read the same `~/.pi/agent`, and
+the Settings page reports the drift.
 
 ## Repository Layout
 
 ```text
 src/main/           Electron main: window, menu, IPC, settings, git, ecosystem discovery
-src/main/pi/        Pi bridge: rpc-process, registry, sessions, search, session-read, ecosystem
+src/main/pi/        Pi bridge: session-worker (the only file that drives Pi), session-process,
+                    registry, sessions, search, session-read, ecosystem
 src/preload/        typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
 src/renderer/       React UI: components/, pages/, state/, settings, completion, sigils
 src/shared/         types shared by all three processes

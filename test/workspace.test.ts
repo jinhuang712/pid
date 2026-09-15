@@ -1,8 +1,8 @@
-import type { PiHandle, RpcSessionState } from "@shared/protocol";
+import type { PiHandle, PiSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { emptyWorkspace, procForSession, workspaceReducer } from "../src/renderer/state/workspace";
 
-const state = (sessionFile: string | null): RpcSessionState => ({ sessionFile }) as unknown as RpcSessionState;
+const state = (sessionFile: string | null): PiSessionState => ({ sessionFile }) as unknown as PiSessionState;
 const handle = (key: string, sessionFile: string | null = null): PiHandle => ({
   key,
   cwd: "/repo",
@@ -87,8 +87,8 @@ describe("workspace: session lifecycle", () => {
   it("early events are replayed into the new process in order", () => {
     const h = handle("a");
     h.earlyEvents = [
-      { type: "extension_ui_request", id: "1", method: "setStatus", statusKey: "mcp", statusText: "connecting" },
-      { type: "extension_ui_request", id: "2", method: "setStatus", statusKey: "mcp", statusText: "1 connected" },
+      { type: "dialog", id: "1", method: "setStatus", statusKey: "mcp", statusText: "connecting" },
+      { type: "dialog", id: "2", method: "setStatus", statusKey: "mcp", statusText: "1 connected" },
     ];
     const ws = workspaceReducer(emptyWorkspace(), { type: "add", handle: h });
     expect(ws.procs.a.statuses.mcp).toBe("1 connected");

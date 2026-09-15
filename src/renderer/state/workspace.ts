@@ -8,7 +8,7 @@ import {
   WIDGET_MCP_OAUTH,
   WIDGET_MCP_STATUS,
 } from "@shared/mcp-status";
-import type { PiEvent, PiHandle, RpcSessionState } from "@shared/protocol";
+import type { PiEvent, PiHandle, PiSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
 import {
   type ConversationState,
@@ -26,7 +26,7 @@ import {
 export interface Proc {
   key: string;
   cwd: string;
-  piState: RpcSessionState;
+  piState: PiSessionState;
   conv: ConversationState;
   statuses: Record<string, string>;
   /** setWidget lines by widget key, e.g. pi-worktree's "🌲 branch → main · ↑2 · 1 dirty". */
@@ -68,7 +68,7 @@ export type WorkspaceAction =
   | { type: "remove"; key: string }
   | { type: "activate"; key?: string }
   | { type: "event"; key: string; event: PiEvent }
-  | { type: "state"; key: string; piState: RpcSessionState }
+  | { type: "state"; key: string; piState: PiSessionState }
   | { type: "messages"; key: string; conv: ConversationState }
   | { type: "command-start"; key: string; id: number; text: string }
   | {
@@ -113,7 +113,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       const proc: Proc = {
         key: a.key,
         cwd: a.cwd,
-        piState: { sessionFile: a.sessionPath } as RpcSessionState,
+        piState: { sessionFile: a.sessionPath } as PiSessionState,
         conv: a.messages ? fromMessages(a.messages) : emptyConversation(),
         statuses: {},
         widgets: {},
@@ -148,7 +148,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     case "event": {
       const ev = a.event;
       return patch(ws, a.key, (p) => {
-        if (ev.type === "extension_ui_request") {
+        if (ev.type === "dialog") {
           switch (ev.method) {
             case "select":
             case "confirm":
@@ -170,6 +170,9 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
               return p;
           }
         }
+        // An extension throwing is about the extension, not about the conversation: App shows it
+        // as a toast and the timeline stays a record of what the model and the user did.
+        if (ev.type === "extension_error") return p;
         return { ...p, conv: reduce(p.conv, ev) };
       });
     }

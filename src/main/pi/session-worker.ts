@@ -1,10 +1,10 @@
 /**
  * One session, one Electron utility process, one AgentSessionRuntime.
  *
- * This is the layer `pi --mode rpc` occupies when PID spawns it: Pi's own runtime with a host
- * around it. The host here is a message port instead of stdin/stdout, so no JSON framing and no
- * external binary, but the command handling is ported from `dist/modes/rpc/rpc-mode.js` so PID
- * and the Pi terminal treat the same command the same way.
+ * This file is the whole of PID's contact with Pi's agent API. On one side it holds the runtime
+ * the Pi terminal is also built on; on the other it speaks PID's own commands, events and dialogs
+ * from `@shared/protocol`. Everything else in PID sees only that vocabulary, so a change in how
+ * Pi is driven stops here.
  *
  * One runtime per process is deliberate. AgentSessionRuntime holds a single session and replaces
  * it on switch/fork, which is exactly one PID session; keeping them in separate processes also
@@ -21,15 +21,18 @@ import {
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
+  type ExtensionUIContext,
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
   DistributiveOmit,
   PiCommand,
-  RpcExtensionUIRequest,
-  RpcExtensionUIResponse,
-  RpcResponse,
+  PiDialogRequest,
+  PiDialogResponse,
+  PiResponse,
+  PiSessionState,
+  ResponseDataOf,
 } from "@shared/protocol";
 import { applyPiHttpSettings } from "./http-config";
 import { toJsonEvent } from "./json-event";
@@ -42,7 +45,7 @@ type ParentPort = {
 
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
 const send = (message: WorkerToMain) => port.postMessage(message);
-const emit = (event: RpcExtensionUIRequest) => send({ kind: "event", event });
+const emit = (event: PiDialogRequest) => send({ kind: "event", event });
 
 let runtime: AgentSessionRuntime;
 let session: AgentSession;
@@ -51,10 +54,10 @@ const diagnostics: string[] = [];
 
 // ---------------------------------------------------------------------------
 // Extension UI: the dialogs an extension opens are PID's dialogs.
-// Ported from rpc-mode.js, with the message port in place of stdout/stdin.
+// A dialog request goes out, the window answers it, and the extension's await resolves.
 // ---------------------------------------------------------------------------
 
-type PendingDialog = (response: RpcExtensionUIResponse) => void;
+type PendingDialog = (response: PiDialogResponse) => void;
 const pendingDialogs = new Map<string, PendingDialog>();
 
 interface DialogOptions {
@@ -63,13 +66,13 @@ interface DialogOptions {
 }
 
 /** The request minus the envelope PID fills in, kept distributive so each method keeps its own fields. */
-type UIRequestBody = DistributiveOmit<RpcExtensionUIRequest, "type" | "id">;
+type UIRequestBody = DistributiveOmit<PiDialogRequest, "type" | "id">;
 
 function dialog<T>(
   opts: DialogOptions | undefined,
   defaultValue: T,
   request: UIRequestBody,
-  parse: (response: RpcExtensionUIResponse) => T,
+  parse: (response: PiDialogResponse) => T,
 ): Promise<T> {
   if (opts?.signal?.aborted) return Promise.resolve(defaultValue);
   const id = randomUUID();
@@ -95,19 +98,20 @@ function dialog<T>(
       cleanup();
       resolve(parse(response));
     });
-    emit({ type: "extension_ui_request", id, ...request } as RpcExtensionUIRequest);
+    emit({ type: "dialog", id, ...request } as PiDialogRequest);
   });
 }
 
-const cancelled = (r: RpcExtensionUIResponse) => "cancelled" in r && r.cancelled;
-const dialogValue = (r: RpcExtensionUIResponse) =>
-  cancelled(r) ? undefined : "value" in r ? r.value : undefined;
+const cancelled = (r: PiDialogResponse) => "cancelled" in r && r.cancelled;
+const dialogValue = (r: PiDialogResponse) => (cancelled(r) ? undefined : "value" in r ? r.value : undefined);
 
 /**
- * TUI-only members answer the way RPC mode answers them: do nothing, or report failure.
- * PID labels extensions that need terminal widgets unsupported rather than adapting them.
+ * The UI an extension gets when its host is a window rather than a terminal.
+ *
+ * Members that need a terminal do nothing, or report failure. PID labels extensions that depend
+ * on terminal widgets unsupported rather than adapting them.
  */
-function createExtensionUIContext() {
+function createExtensionUIContext(): ExtensionUIContext {
   const themes = runtimeThemes();
   return {
     select: (title: string, options: string[], opts?: DialogOptions) =>
@@ -122,11 +126,11 @@ function createExtensionUIContext() {
       dialog(undefined, undefined, { method: "editor", title, prefill }, dialogValue),
 
     notify(message: string, type?: "info" | "warning" | "error") {
-      emit({ type: "extension_ui_request", id: randomUUID(), method: "notify", message, notifyType: type });
+      emit({ type: "dialog", id: randomUUID(), method: "notify", message, notifyType: type });
     },
     setStatus(key: string, text: string | undefined) {
       emit({
-        type: "extension_ui_request",
+        type: "dialog",
         id: randomUUID(),
         method: "setStatus",
         statusKey: key,
@@ -137,7 +141,7 @@ function createExtensionUIContext() {
       // Component factories need a TUI; only line arrays can cross to the renderer.
       if (content === undefined || Array.isArray(content)) {
         emit({
-          type: "extension_ui_request",
+          type: "dialog",
           id: randomUUID(),
           method: "setWidget",
           widgetKey: key,
@@ -147,10 +151,10 @@ function createExtensionUIContext() {
       }
     },
     setTitle(title: string) {
-      emit({ type: "extension_ui_request", id: randomUUID(), method: "setTitle", title });
+      emit({ type: "dialog", id: randomUUID(), method: "setTitle", title });
     },
     setEditorText(text: string) {
-      emit({ type: "extension_ui_request", id: randomUUID(), method: "set_editor_text", text });
+      emit({ type: "dialog", id: randomUUID(), method: "setEditorText", text });
     },
     pasteToEditor(text: string) {
       this.setEditorText(text);
@@ -164,14 +168,18 @@ function createExtensionUIContext() {
     setHiddenThinkingLabel: () => {},
     setFooter: () => {},
     setHeader: () => {},
-    custom: async () => undefined,
+    // A component factory needs a TUI to mount into and a `done` callback that only the TUI calls,
+    // so the promise would never settle. Resolving undefined lets the extension carry on.
+    custom: <T>() => Promise.resolve(undefined as T),
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
     getEditorComponent: () => undefined,
+    // Themes are Pi's terminal palettes; PID paints its own. They stay readable so an extension
+    // that inspects a colour still gets Pi's answer, but PID never switches to one.
     get theme() {
       return themes[0];
     },
-    getAllThemes: () => themes,
+    getAllThemes: () => themes.map((t) => ({ name: t.name ?? "", path: t.sourcePath })),
     getTheme: (name: string) => themes.find((t) => t.name === name),
     setTheme: () => ({ success: false, error: "PID renders its own theme" }),
     getToolsExpanded: () => false,
@@ -212,7 +220,8 @@ function makeCreateRuntime(extensionPaths: string[]): CreateAgentSessionRuntimeF
 async function bindSession() {
   session = runtime.session;
   await session.bindExtensions({
-    uiContext: createExtensionUIContext() as never,
+    uiContext: createExtensionUIContext(),
+    // Pi's own label for a non-terminal host; it gates the TUI-only paths inside extensions.
     mode: "rpc",
     commandContextActions: {
       waitForIdle: () => session.waitForIdle(),
@@ -243,7 +252,8 @@ async function bindSession() {
           extensionPath: err.extensionPath,
           event: err.event,
           error: err.error,
-        } as never,
+          stack: err.stack,
+        },
       }),
   });
   unsubscribe?.();
@@ -270,7 +280,7 @@ async function start(options: WorkerStartOptions) {
   send({ kind: "started", state: getState(), diagnostics });
 }
 
-function getState() {
+function getState(): PiSessionState {
   return {
     model: session.model,
     thinkingLevel: session.thinkingLevel,
@@ -284,49 +294,52 @@ function getState() {
     autoCompactionEnabled: session.autoCompactionEnabled,
     messageCount: session.messages.length,
     pendingMessageCount: session.pendingMessageCount,
-  } as never;
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Commands. Ported from rpc-mode.js so behavior matches the Pi terminal.
+// Commands. Each case is PID's command translated into one AgentSession call.
 // ---------------------------------------------------------------------------
 
-const ok = (id: string, command: string, data?: unknown): RpcResponse =>
-  (data === undefined
-    ? { id, type: "response", command, success: true }
-    : { id, type: "response", command, success: true, data }) as RpcResponse;
-const fail = (id: string, command: string, error: string): RpcResponse =>
-  ({ id, type: "response", command, success: false, error }) as RpcResponse;
+/** `data` is checked against what PiCommandData says this command answers with. */
+const ok = <T extends PiCommand["type"]>(id: string, command: T, data?: ResponseDataOf<T>): PiResponse =>
+  data === undefined ? { id, command, success: true } : { id, command, success: true, data };
 
-async function handleCommand(id: string, command: PiCommand): Promise<RpcResponse | undefined> {
-  const c = command as PiCommand & Record<string, never>;
+const fail = (id: string, command: string, error: string): PiResponse => ({
+  id,
+  command,
+  success: false,
+  error,
+});
+
+async function handleCommand(id: string, command: PiCommand): Promise<PiResponse | undefined> {
   switch (command.type) {
     case "prompt": {
       // The authoritative response goes out once preflight accepts the prompt, not when the
       // turn finishes; the turn itself is reported through the event stream.
       let preflightSucceeded = false;
       void session
-        .prompt(c.message, {
-          images: c.images,
-          streamingBehavior: c.streamingBehavior,
-          source: "rpc",
+        .prompt(command.message, {
+          images: command.images,
+          streamingBehavior: command.streamingBehavior,
+          source: "rpc", // Pi's InputSource for a programmatic caller, as opposed to a typed prompt
           preflightResult: (didSucceed: boolean) => {
             if (didSucceed) {
               preflightSucceeded = true;
               send({ kind: "response", id, response: ok(id, "prompt") });
             }
           },
-        } as never)
+        })
         .catch((e: Error) => {
           if (!preflightSucceeded) send({ kind: "response", id, response: fail(id, "prompt", e.message) });
         });
       return undefined;
     }
     case "steer":
-      await session.steer(c.message, c.images);
+      await session.steer(command.message, command.images);
       return ok(id, "steer");
     case "follow_up":
-      await session.followUp(c.message, c.images);
+      await session.followUp(command.message, command.images);
       return ok(id, "follow_up");
     case "abort":
       await session.abort();
@@ -335,7 +348,7 @@ async function handleCommand(id: string, command: PiCommand): Promise<RpcRespons
       return ok(id, "clear_queue", session.clearQueue());
     case "new_session": {
       const result = await runtime.newSession(
-        c.parentSession ? { parentSession: c.parentSession } : undefined,
+        command.parentSession ? { parentSession: command.parentSession } : undefined,
       );
       return ok(id, "new_session", result);
     }
@@ -348,118 +361,48 @@ async function handleCommand(id: string, command: PiCommand): Promise<RpcRespons
     case "set_model": {
       const model = session.modelRuntime
         .getAvailableSnapshot()
-        .find((m) => m.provider === c.provider && m.id === c.modelId);
-      if (!model) return fail(id, "set_model", `Model not found: ${c.provider}/${c.modelId}`);
+        .find((m) => m.provider === command.provider && m.id === command.modelId);
+      if (!model) return fail(id, "set_model", `Model not found: ${command.provider}/${command.modelId}`);
       await session.setModel(model);
       return ok(id, "set_model", model);
     }
-    case "cycle_model": {
-      const result = await session.cycleModel();
-      return ok(id, "cycle_model", result ?? null);
-    }
     case "get_available_models":
-      return ok(id, "get_available_models", { models: session.modelRuntime.getAvailableSnapshot() });
+      return ok(id, "get_available_models", { models: [...session.modelRuntime.getAvailableSnapshot()] });
 
     case "set_thinking_level":
-      session.setThinkingLevel(c.level);
+      session.setThinkingLevel(command.level);
       return ok(id, "set_thinking_level");
-    case "cycle_thinking_level": {
-      const level = session.cycleThinkingLevel();
-      return ok(id, "cycle_thinking_level", level ? { level } : null);
-    }
     case "get_available_thinking_levels":
       return ok(id, "get_available_thinking_levels", { levels: session.getAvailableThinkingLevels() });
 
-    case "set_steering_mode":
-      session.setSteeringMode(c.mode);
-      return ok(id, "set_steering_mode");
-    case "set_follow_up_mode":
-      session.setFollowUpMode(c.mode);
-      return ok(id, "set_follow_up_mode");
-
     case "compact":
-      return ok(id, "compact", await session.compact(c.customInstructions));
-    case "set_auto_compaction":
-      session.setAutoCompactionEnabled(c.enabled);
-      return ok(id, "set_auto_compaction");
-    case "set_auto_retry":
-      session.setAutoRetryEnabled(c.enabled);
-      return ok(id, "set_auto_retry");
-    case "abort_retry":
-      session.abortRetry();
-      return ok(id, "abort_retry");
+      return ok(id, "compact", await session.compact(command.customInstructions));
 
-    case "bash": {
-      // Extensions that registered a user_bash handler get first refusal, exactly as in RPC mode.
-      const eventResult = await session.extensionRunner.emitUserBash({
-        type: "user_bash",
-        command: c.command,
-        excludeFromContext: c.excludeFromContext ?? false,
-        cwd: session.sessionManager.getCwd(),
-      } as never);
-      if (eventResult?.result) {
-        session.recordBashResult(c.command, eventResult.result, { excludeFromContext: c.excludeFromContext });
-        return ok(id, "bash", eventResult.result);
-      }
-      const result = await session.executeBash(c.command, undefined, {
-        excludeFromContext: c.excludeFromContext,
-        id,
-        operations: eventResult?.operations,
-      } as never);
-      return ok(id, "bash", result);
-    }
-    case "abort_bash":
-      session.abortBash();
-      return ok(id, "abort_bash");
-
-    case "get_session_stats":
-      return ok(id, "get_session_stats", session.getSessionStats());
     case "export_html":
-      return ok(id, "export_html", { path: await session.exportToHtml(c.outputPath) });
+      return ok(id, "export_html", { path: await session.exportToHtml(command.outputPath) });
     case "switch_session":
-      return ok(id, "switch_session", await runtime.switchSession(c.sessionPath));
+      return ok(id, "switch_session", await runtime.switchSession(command.sessionPath));
     case "fork": {
-      const result = await runtime.fork(c.entryId);
-      return ok(id, "fork", { text: result.selectedText, cancelled: result.cancelled });
-    }
-    case "clone": {
-      const leafId = session.sessionManager.getLeafId();
-      if (!leafId) return fail(id, "clone", "Cannot clone session: no current entry selected");
-      const result = await runtime.fork(leafId, { position: "at" });
-      return ok(id, "clone", { cancelled: result.cancelled });
+      const result = await runtime.fork(command.entryId);
+      return ok(id, "fork", { text: result.selectedText ?? "", cancelled: result.cancelled });
     }
     case "get_fork_messages":
       return ok(id, "get_fork_messages", { messages: session.getUserMessagesForForking() });
-    case "get_entries": {
-      const sm = session.sessionManager;
-      let entries = sm.getEntries();
-      if (c.since !== undefined) {
-        const sinceIndex = entries.findIndex((e) => e.id === c.since);
-        if (sinceIndex === -1) return fail(id, "get_entries", `Entry not found: ${c.since}`);
-        entries = entries.slice(sinceIndex + 1);
-      }
-      return ok(id, "get_entries", { entries, leafId: sm.getLeafId() });
-    }
-    case "get_tree":
-      return ok(id, "get_tree", {
-        tree: session.sessionManager.getTree(),
-        leafId: session.sessionManager.getLeafId(),
-      });
     case "get_last_assistant_text":
-      return ok(id, "get_last_assistant_text", { text: session.getLastAssistantText() });
+      return ok(id, "get_last_assistant_text", { text: session.getLastAssistantText() ?? null });
     case "set_session_name": {
-      const name = c.name.trim();
+      const name = command.name.trim();
       if (!name) return fail(id, "set_session_name", "Session name cannot be empty");
       session.setSessionName(name);
       return ok(id, "set_session_name");
     }
 
     case "get_commands": {
-      const commands: unknown[] = [];
+      const commands: ResponseDataOf<"get_commands">["commands"] = [];
       for (const cmd of session.extensionRunner.getRegisteredCommands()) {
         commands.push({
           name: cmd.invocationName,
-          description: cmd.description,
+          description: cmd.description ?? "",
           source: "extension",
           sourceInfo: cmd.sourceInfo,
         });
@@ -467,7 +410,7 @@ async function handleCommand(id: string, command: PiCommand): Promise<RpcRespons
       for (const template of session.promptTemplates) {
         commands.push({
           name: template.name,
-          description: template.description,
+          description: template.description ?? "",
           source: "prompt",
           sourceInfo: template.sourceInfo,
         });
@@ -475,7 +418,7 @@ async function handleCommand(id: string, command: PiCommand): Promise<RpcRespons
       for (const skill of session.resourceLoader.getSkills().skills) {
         commands.push({
           name: `skill:${skill.name}`,
-          description: skill.description,
+          description: skill.description ?? "",
           source: "skill",
           sourceInfo: skill.sourceInfo,
         });
