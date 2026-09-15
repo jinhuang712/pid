@@ -1,10 +1,10 @@
 /**
- * PID bridge: a tiny Pi extension that PID loads into its own `pi --mode rpc` children with `-e`.
+ * PID bridge: a tiny Pi extension PID loads into every session worker it starts.
  *
  * It exists to forward machine-readable state that other extensions publish on Pi's event bus
- * (today: the MCP extension's status snapshots and OAuth outcomes) to PID over the RPC stream. Pi's
- * RPC mode already turns `ctx.ui.setWidget` into an `extension_ui_request` line, so a widget whose
- * key starts with `pid:` is the channel: PID parses those and never renders them as widgets.
+ * (today: the MCP extension's status snapshots and OAuth outcomes) onto the widget channel, under
+ * `<ns>:<kind>/v<n>` keys — the same contract any third-party extension uses to reach PID, so the
+ * core has no private channel for its own bridge. See src/shared/extension-widgets.ts.
  *
  * Nothing here talks to MCP servers or reads config. It relays what the MCP extension emits, plus
  * one synchronous follow-up question per server: was this one registered at runtime by an
@@ -21,8 +21,8 @@ export const MCP_STATUS_EVENTS = ["pid-mcp/status/v1", "pi-mcp-adapter/status/v1
 export const MCP_RUNTIME_SNAPSHOT_EVENTS = ["pid-mcp:runtime-snapshot:v1", "pi-mcp-adapter:runtime-snapshot:v1"] as const;
 export const MCP_RUNTIME_SNAPSHOT_VERSION = 1;
 export const MCP_OAUTH_EVENT = "mcp-oauth-status";
-export const WIDGET_MCP_STATUS = "pid:mcp-status";
-export const WIDGET_MCP_OAUTH = "pid:mcp-oauth";
+export const WIDGET_MCP_STATUS = "pid:mcp-status/v1";
+export const WIDGET_MCP_OAUTH = "pid:mcp-oauth/v1";
 
 /** Where a runtime-registered server is started from. Mirrors McpRuntimeDefinition in shared/mcp-status.ts. */
 export interface McpRuntimeDefinition {

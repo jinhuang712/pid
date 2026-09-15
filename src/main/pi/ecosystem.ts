@@ -3,7 +3,6 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "n
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { ResolvedResource } from "@earendil-works/pi-coding-agent";
 import type {
-  Compat,
   ExtensionView,
   McpServerView,
   McpToolSummary,
@@ -11,6 +10,13 @@ import type {
   PiHome,
   SkillView,
 } from "@shared/ecosystem";
+import {
+  PID_UI_SUPPORT,
+  TERMINAL_RENDERER_APIS,
+  type UiMember,
+  type UiSupport,
+  type UiUsage,
+} from "@shared/extension-ui";
 import { adapterSource, currentBundled, userMcpExtension } from "./bundled";
 import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
 
@@ -155,38 +161,19 @@ export async function listSkills(cwd?: string): Promise<SkillView[]> {
   return out;
 }
 
-/** UI methods that only work in the terminal UI (no RPC equivalent) vs. ones PID can serve. */
-const TUI_ONLY = [
-  "ui.custom(",
-  "setFooter(",
-  "setHeader(",
-  "onTerminalInput(",
-  "setEditorComponent(",
-  "getEditorComponent(",
-  "addAutocompleteProvider(",
-  "setWorkingMessage(",
-  "setWorkingVisible(",
-  "setWorkingIndicator(",
-  "setHiddenThinkingLabel(",
-  "pasteToEditor(",
-  "getEditorText(",
-  "setTheme(",
-  "getAllThemes(",
-  "setToolsExpanded(",
-  "registerMessageRenderer(",
-  "registerEntryRenderer(",
-];
-const CROSS_MODE = [
-  "ui.select(",
-  "ui.confirm(",
-  "ui.input(",
-  "ui.editor(",
-  "ui.notify(",
-  "setStatus(",
-  "setWidget(",
-  "setTitle(",
-  "setEditorText(",
-];
+/**
+ * Every `ctx.ui.<member>` an extension's source mentions. Extensions reach the UI through `ctx.ui`,
+ * a destructured `ui`, or `ctx.ui?.` — all three read as `ui.<member>` in the text, so one pattern
+ * finds them without a hand-written list of API names to fall behind.
+ */
+const UI_CALL = /\bui\s*\??\s*\.\s*([A-Za-z_$][\w$]*)/g;
+/**
+ * A test against `ctx.mode` for the terminal — the only check that stands an extension down here.
+ *
+ * `ctx.hasUI` is not one: PID has a UI, so it is true in PID exactly as it is in the terminal. An
+ * extension guarding `setFooter` with `hasUI` still calls it here; the call just does nothing.
+ */
+const MODE_GUARD = /\bmode\s*[!=]==?\s*["']tui["']/;
 
 function sourceFiles(entry: string, acc: string[] = [], depth = 0): string[] {
   if (depth > 4 || !existsSync(entry)) return acc;
@@ -202,9 +189,17 @@ function sourceFiles(entry: string, acc: string[] = [], depth = 0): string[] {
   return acc;
 }
 
-function scanCompat(files: string[]): { compat: Compat; tuiApis: string[]; uiApis: string[] } {
-  const tui = new Set<string>();
-  const ui = new Set<string>();
+/**
+ * What of an extension PID can run, read off its source.
+ *
+ * A source scan, not a run: it reports which `ctx.ui` members the text mentions and looks each one
+ * up in `PID_UI_SUPPORT`, the same table `session-worker.ts` implements. So the answer can be wrong
+ * about whether a line is reached, and cannot be wrong about what PID does when it is.
+ */
+function scanUi(files: string[]): UiUsage {
+  const served = new Set<UiMember>();
+  const inert = new Set<UiMember>();
+  const terminal = new Set<string>();
   let guarded = false;
   for (const f of files.slice(0, 200)) {
     let text: string;
@@ -213,13 +208,16 @@ function scanCompat(files: string[]): { compat: Compat; tuiApis: string[]; uiApi
     } catch {
       continue;
     }
-    for (const api of TUI_ONLY) if (text.includes(api)) tui.add(api.replace(/\($/, ""));
-    for (const api of CROSS_MODE) if (text.includes(api)) ui.add(api.replace(/\($/, ""));
-    if (/mode\s*===?\s*["']tui["']|hasUI/.test(text)) guarded = true;
+    for (const [, member] of text.matchAll(UI_CALL)) {
+      const support = (PID_UI_SUPPORT as Record<string, UiSupport | undefined>)[member];
+      if (support === "served") served.add(member as UiMember);
+      else if (support === "inert") inert.add(member as UiMember);
+      else if (support === "terminal") terminal.add(member);
+    }
+    for (const api of TERMINAL_RENDERER_APIS) if (text.includes(`${api}(`)) terminal.add(api);
+    if (MODE_GUARD.test(text)) guarded = true;
   }
-  let compat: Compat = "compatible";
-  if (tui.size > 0) compat = guarded ? "partial" : "unsupported";
-  return { compat, tuiApis: [...tui], uiApis: [...ui] };
+  return { served: [...served], inert: [...inert], terminal: [...terminal], guarded };
 }
 
 function readManifest(baseDir: string): { version?: string; description?: string } {
@@ -285,7 +283,7 @@ export async function listExtensions(cwd?: string): Promise<ExtensionView[]> {
       baseDir,
       entries,
       files,
-      ...scanCompat(files),
+      ui: scanUi(files),
       version: manifest.version,
       description: manifest.description,
       enabled: items.every((r) => r.enabled),

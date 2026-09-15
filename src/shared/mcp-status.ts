@@ -1,7 +1,7 @@
 /**
  * Live MCP state as published by the MCP extension on Pi's event bus ("pid-mcp/status/v1", mirrored
- * on "pi-mcp-adapter/status/v1" for compatibility) and relayed into the RPC stream by
- * resources/pid-bridge as a `pid:mcp-status` widget.
+ * on "pi-mcp-adapter/status/v1" for compatibility) and relayed onto the widget channel by
+ * resources/pid-bridge under `pid:mcp-status/v1`, by the same rule any extension would use.
  *
  * The first block of fields is the snapshot shape both pid-mcp and pi-mcp-adapter publish; the
  * pid-mcp-only fields are optional so a user-installed adapter still parses. Unknown fields are
@@ -70,19 +70,14 @@ export interface McpStatusSnapshot {
   activeToolCount?: number;
 }
 
-/** The outcome of an OAuth flow, relayed as a `pid:mcp-oauth` widget. */
+/** The outcome of an OAuth flow, relayed under `pid:mcp-oauth/v1`. */
 export interface McpOAuthOutcome {
   server: string;
   status: "authenticated" | "failed";
   message: string;
 }
 
-/** Widget keys the bridge uses. Anything under this prefix is data for PID, never UI. */
-export const PID_WIDGET_PREFIX = "pid:";
-export const WIDGET_MCP_STATUS = "pid:mcp-status";
-export const WIDGET_MCP_OAUTH = "pid:mcp-oauth";
-
-export const isPidWidget = (key: string) => key.startsWith(PID_WIDGET_PREFIX);
+export { WIDGET_MCP_OAUTH, WIDGET_MCP_STATUS } from "./extension-widgets";
 
 /**
  * Servers the MCP extension is running that no config layer defines — the runtime registrations.

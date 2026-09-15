@@ -77,7 +77,7 @@ describe("runtime-registered servers", () => {
   });
 });
 
-describe("workspace pid:* widgets", () => {
+describe("workspace widget channel", () => {
   const handle: PiHandle = {
     key: "k",
     cwd: "/repo",
@@ -100,7 +100,7 @@ describe("workspace pid:* widgets", () => {
     expect(ws.procs.k.mcp?.servers[0].name).toBe("fs");
     expect(ws.procs.k.widgets[WIDGET_MCP_STATUS]).toBeUndefined();
   });
-  it("still renders other extensions' widgets", () => {
+  it("keeps any other extension's widget, whatever it is named", () => {
     const ws = workspaceReducer(ws0, {
       type: "event",
       key: "k",
@@ -109,11 +109,25 @@ describe("workspace pid:* widgets", () => {
         id: "2",
         method: "setWidget",
         widgetKey: "pi-worktree",
-        widgetLines: ["🌲 main"],
+        widgetLines: ["🌲 main", "↑2"],
       },
     });
-    expect(ws.procs.k.widgets["pi-worktree"]).toBe("🌲 main");
+    expect(ws.procs.k.widgets["pi-worktree"]).toEqual(["🌲 main", "↑2"]);
     expect(ws.procs.k.mcp).toBeUndefined();
+  });
+
+  it("drops a widget the extension clears", () => {
+    const set = workspaceReducer(ws0, {
+      type: "event",
+      key: "k",
+      event: { type: "dialog", id: "3", method: "setWidget", widgetKey: "x", widgetLines: ["hi"] },
+    });
+    const cleared = workspaceReducer(set, {
+      type: "event",
+      key: "k",
+      event: { type: "dialog", id: "4", method: "setWidget", widgetKey: "x", widgetLines: undefined },
+    });
+    expect("x" in cleared.procs.k.widgets).toBe(false);
   });
 });
 

@@ -108,8 +108,10 @@ const dialogValue = (r: PiDialogResponse) => (cancelled(r) ? undefined : "value"
 /**
  * The UI an extension gets when its host is a window rather than a terminal.
  *
- * Members that need a terminal do nothing, or report failure. PID labels extensions that depend
- * on terminal widgets unsupported rather than adapting them.
+ * `PID_UI_SUPPORT` in `@shared/extension-ui` says which members PID serves, which it accepts and
+ * ignores, and which need a terminal. This function implements that table and the Extensions page
+ * reports it, so what the page promises is what an extension gets. `test/extension-ui.test.ts`
+ * fails if the two stop agreeing.
  */
 function createExtensionUIContext(): ExtensionUIContext {
   const themes = runtimeThemes();
@@ -150,15 +152,12 @@ function createExtensionUIContext(): ExtensionUIContext {
         });
       }
     },
-    setTitle(title: string) {
-      emit({ type: "dialog", id: randomUUID(), method: "setTitle", title });
-    },
-    setEditorText(text: string) {
-      emit({ type: "dialog", id: randomUUID(), method: "setEditorText", text });
-    },
-    pasteToEditor(text: string) {
-      this.setEditorText(text);
-    },
+    // A window is not a terminal tab, and one window holds many sessions: a background session
+    // renaming the whole window would be wrong. The composer draft belongs to the window, and
+    // `getEditorText` is synchronous, so the worker cannot ask for it either.
+    setTitle: () => {},
+    setEditorText: () => {},
+    pasteToEditor: () => {},
     getEditorText: () => "",
 
     onTerminalInput: () => () => {},

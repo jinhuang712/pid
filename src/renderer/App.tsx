@@ -7,7 +7,8 @@ import { appendAttachments, parseAttachments, toAttachment } from "./attachments
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
-import { type DialogRequest, ExtensionDialog, stripAnsi, type Toast, Toasts } from "./components/ExtensionUI";
+import { ExtensionStrip } from "./components/ExtensionStrip";
+import { type DialogRequest, ExtensionDialog, type Toast, Toasts } from "./components/ExtensionUI";
 import { ForkDialog } from "./components/ForkDialog";
 import { Home } from "./components/Home";
 import type { Page } from "./components/NavRail";
@@ -766,12 +767,6 @@ export function App() {
       activeSummary?.firstMessage ||
       (active.conv.messages.length ? firstUserText(active.conv.messages) : undefined)
     : undefined;
-  // pi-worktree publishes the session's binding through Pi's widget channel; PID only shows it.
-  const worktreeLine = active
-    ? stripAnsi(active.widgets["pi-worktree"] ?? active.statuses["pi-worktree"] ?? "")
-        .replace(/^\s*🌲\s*/, "")
-        .trim() || undefined
-    : undefined;
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
@@ -896,21 +891,11 @@ export function App() {
                       <FolderGlyph />
                       {base(active.cwd)}
                     </span>
-                    {worktreeLine ? (
-                      <span
-                        className="inline-flex items-center gap-1 min-w-0 truncate text-warn"
-                        title="pi-worktree binding for this session"
-                      >
+                    {branch && (
+                      <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
                         <BranchGlyph />
-                        <span className="font-mono truncate">{worktreeLine}</span>
+                        <span className="font-mono truncate">{branch}</span>
                       </span>
-                    ) : (
-                      branch && (
-                        <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
-                          <BranchGlyph />
-                          <span className="font-mono truncate">{branch}</span>
-                        </span>
-                      )
                     )}
                     {active.exit && <span className="text-danger truncate">{active.exit}</span>}
                   </div>
@@ -936,6 +921,7 @@ export function App() {
                   onSteerNow={steerNow}
                   onRemove={removeQueued}
                 />
+                <ExtensionStrip widgets={active.widgets} statuses={active.statuses} />
                 <Composer
                   blocked={
                     active.pending

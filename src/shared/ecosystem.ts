@@ -3,6 +3,8 @@
  * by writing the same settings `pi config` and `/mcp` write; Pi owns everything else.
  */
 
+import type { UiUsage } from "./extension-ui";
+
 /** Where a toggle is written: Pi's global settings, or the project's `.pi/` overrides. */
 export type ToggleScope = "global" | "project";
 
@@ -26,8 +28,6 @@ export interface SkillView {
   projectState?: ProjectState;
 }
 
-export type Compat = "compatible" | "partial" | "unsupported";
-
 export interface ExtensionView {
   name: string;
   /** settings.json package source, or "user" / "project" for loose extension files. */
@@ -36,13 +36,13 @@ export interface ExtensionView {
   baseDir: string;
   /** Extension entry files as Pi resolves them; toggles apply to all of them. */
   entries: string[];
-  /** Source files scanned for compatibility. */
+  /** Source files scanned for UI usage. */
   files: string[];
-  compat: Compat;
-  /** TUI-only APIs found in the source, if any. */
-  tuiApis: string[];
-  /** Cross-mode UI APIs found (work in PID through the RPC UI sub-protocol). */
-  uiApis: string[];
+  /**
+   * Which `ctx.ui` members the source reaches for, grouped by what PID does with each. The Pi
+   * terminal serves all of them, so this is the difference between the two hosts.
+   */
+  ui: UiUsage;
   version?: string;
   description?: string;
   /** Effective state after global and project settings; true when every entry loads. */
