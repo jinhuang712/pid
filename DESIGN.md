@@ -108,25 +108,25 @@ It also preserves a clean boundary between graphical application lifecycle and a
 
 # 4. Runtime Version
 
-PID should prefer the user's installed compatible Pi runtime.
+PID runs the Pi version it pins (`@earendil-works/pi-coding-agent` in `package.json`).
 
-The desired relationship is:
+The relationship is:
 
 ```text
-              User-installed Pi
-                     │
-      @earendil-works/pi-coding-agent
-             /                \
-         Pi TUI              PID Host
+PID release
+    │
+    └── pinned compatible Pi runtime
+
+Pi terminal
+    │
+    └── its installed runtime
 ```
 
-This maximizes semantic compatibility between both interfaces.
+PID does not dynamically load an arbitrary globally-installed Pi package to chase exact version equality with the terminal; that would trade a visible, testable pairing for an unpredictable one. A `pi` binary on PATH is not required.
 
-PID should expose the resolved Pi runtime and version in diagnostics.
+If PID ever moves into the Pi monorepo, the pinned dependency naturally becomes the shared workspace runtime.
 
-A bundled compatible runtime may exist as a fallback, but PID should never silently make the user believe it is using the same Pi version when it is not.
-
-Runtime divergence must be visible.
+Runtime divergence must stay visible: Settings and Diagnostics show the PID runtime version, the terminal's version where one is installed, and whether they match. Divergence is allowed; silent divergence is not.
 
 ---
 
@@ -257,9 +257,9 @@ The main product structure is:
 ```text
 Sessions
 Skills
-MCP
 Extensions
 Settings
++ extension-contributed surfaces
 ```
 
 Sessions use:
@@ -276,7 +276,7 @@ Composer
 
 The conversation remains the primary workspace.
 
-Skills, MCP, and Extensions are ecosystem surfaces rather than settings categories.
+Skills and Extensions are ecosystem surfaces rather than settings categories. Anything else in the navigation — MCP or otherwise — arrives as a page an installed Pi extension contributes; PID core knows no product by name and keeps no entry for one that is not installed.
 
 ---
 
@@ -1012,51 +1012,29 @@ IPC should carry structured events and commands rather than duplicate agent sema
 
 ---
 
-# 36. Backend Abstraction
+# 36. Backend Boundary
 
-Migration away from the current RPC implementation should happen behind a narrow PID backend boundary.
+PID speaks to a live session behind a narrow backend boundary, not behind Pi's `pi --mode rpc` transport.
 
 Conceptually:
 
 ```text
-PiBackend
-
-prompt()
-steer()
-followUp()
-abort()
-
-newSession()
-openSession()
-fork()
-navigateTree()
-
-setModel()
-setThinkingLevel()
-
-subscribe()
-getState()
+PiCommand       prompt() steer() followUp() abort()
+                newSession() openSession() fork() navigateTree()
+                setModel() setThinkingLevel()
+PiEvent         subscribe()
+PiSessionState  getState()
 ```
 
-During migration:
+The contract lives in `src/shared/protocol.ts` — PID's own commands, events, dialogs and session state, shaped from `AgentSession` and `AgentSessionEvent` so a field cannot drift from what the agent returns. One Electron utility process per open session hosts Pi's own `AgentSessionRuntime` (`src/main/pi/session-worker.ts`, spawned by `src/main/pi/session-process.ts`); that file is the only place that drives Pi's agent API.
 
-```text
-PiBackend
-├── RpcPiBackend
-└── SdkPiBackend
-```
-
-The SDK-backed Pi Host becomes the target implementation.
-
-RPC can remain temporarily as a compatibility or migration backend.
-
-PID product behavior should not depend on which backend is active.
+There is exactly one runtime path. No second backend exists, and none should be added as a compatibility or migration shim: PID product behavior depends on this boundary alone.
 
 ---
 
-# 37. Migration Standard
+# 37. Round-Trip Invariant
 
-The SDK backend reaches parity when the same Pi session behaves equivalently across:
+The backend boundary holds when the same Pi session behaves equivalently across PID and the Pi TUI:
 
 * prompt
 * streaming
@@ -1075,7 +1053,7 @@ The SDK backend reaches parity when the same Pi session behaves equivalently acr
 * session persistence
 * TUI round-trip
 
-Once that invariant holds, the RPC-specific integration can be reduced or removed.
+This is an ongoing invariant, not a migration gate: there is no legacy backend left to remove, so the list exists to catch regressions in the one path PID has.
 
 ---
 
