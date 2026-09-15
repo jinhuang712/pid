@@ -51,6 +51,20 @@ let session: AgentSession;
 let unsubscribe: (() => void) | undefined;
 const diagnostics: string[] = [];
 
+/**
+ * Temporary upstream vocabulary, kept in exactly one place.
+ *
+ * Pi's `ExtensionMode` currently offers `"rpc"` as the only non-TUI host
+ * mode, and `InputSource` offers `"rpc"` as the programmatic-caller value.
+ * PID uses neither of Pi's RPC transports — it hosts `AgentSessionRuntime`
+ * directly and speaks its own protocol — so both values only mean "a
+ * non-terminal host that drives the session in code". Do not spread them:
+ * any new use must go through these constants, and a future upstream
+ * `"gui"` mode or capability object replaces them here, nowhere else.
+ */
+const PID_EXTENSION_HOST_MODE = "rpc";
+const PID_PROMPT_SOURCE = "rpc";
+
 // ---------------------------------------------------------------------------
 // Extension UI: the dialogs an extension opens are PID's dialogs.
 // A dialog request goes out, the window answers it, and the extension's await resolves.
@@ -217,7 +231,8 @@ async function bindSession() {
   await session.bindExtensions({
     uiContext: createExtensionUIContext(),
     // Pi's own label for a non-terminal host; it gates the TUI-only paths inside extensions.
-    mode: "rpc",
+    // See PID_EXTENSION_HOST_MODE: temporary upstream vocabulary, not PID's RPC transport.
+    mode: PID_EXTENSION_HOST_MODE,
     commandContextActions: {
       waitForIdle: () => session.waitForIdle(),
       newSession: async (options) => runtime.newSession(options),
@@ -317,7 +332,7 @@ async function handleCommand(id: string, command: PiCommand): Promise<PiResponse
         .prompt(command.message, {
           images: command.images,
           streamingBehavior: command.streamingBehavior,
-          source: "rpc", // Pi's InputSource for a programmatic caller, as opposed to a typed prompt
+          source: PID_PROMPT_SOURCE, // Pi's InputSource for a programmatic caller, as opposed to a typed prompt
           preflightResult: (didSucceed: boolean) => {
             if (didSucceed) {
               preflightSucceeded = true;
