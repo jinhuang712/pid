@@ -7,7 +7,48 @@ import { DiffBlock } from "./DiffBlock";
 
 function resultText(run?: ToolRun): string {
   if (!run?.result) return "";
-  return run.result.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n");
+  return run.result.content
+    .filter((c) => c.type === "text")
+    .map((c) => (c as { text: string }).text)
+    .join("\n");
+}
+
+/**
+ * Image blocks a tool returned: pi-view's `view`, or Pi's own `read` on a picture. The bytes are
+ * already in the message that crossed IPC, so the card can show the picture instead of a
+ * `[image]` placeholder — which is the whole point of asking a model to look at one.
+ */
+/**
+ * Image blocks a tool returned: pi-view's `view`, or Pi's own `read` on a picture. The bytes are
+ * already in the message that crossed IPC, so the card can show the picture instead of a
+ * `[image]` placeholder — which is the whole point of asking a model to look at one.
+ *
+ * A component of its own because the card's body only mounts when expanded: this is the part a
+ * test can render and assert without clicking.
+ */
+export function ResultImages({ run }: { run?: ToolRun }) {
+  const images = resultImageBlocks(run);
+  if (images.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {images.map((img, i) => (
+        <img
+          // biome-ignore lint/suspicious/noArrayIndexKey: blocks of one result; their order is the identity
+          key={i}
+          src={`data:${img.mimeType};base64,${img.data}`}
+          alt=""
+          className="max-h-56 max-w-full rounded-md border border-line-2 object-contain"
+        />
+      ))}
+    </div>
+  );
+}
+
+function resultImageBlocks(run?: ToolRun): { data: string; mimeType: string }[] {
+  if (!run?.result) return [];
+  return run.result.content.flatMap((c) =>
+    c.type === "image" ? [{ data: c.data, mimeType: c.mimeType }] : [],
+  );
 }
 
 /**
@@ -93,6 +134,7 @@ export function ToolCallFrame({
           ) : status === "running" ? (
             <div className="text-ink-3 text-xs animate-pulse">Running…</div>
           ) : null}
+          <ResultImages run={run} />
         </div>
       )}
     </div>

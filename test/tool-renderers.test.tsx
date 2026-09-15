@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 // default context carries DEFAULT_SETTINGS, which is all static markup needs.
 vi.mock("../src/renderer/bridge", () => ({ bridge: {} }));
 
-import { ToolCard } from "../src/renderer/components/ToolCard";
+import { ToolCard, ResultImages } from "../src/renderer/components/ToolCard";
 import { registerBuiltInToolRenderers } from "../src/renderer/contributions/builtin-tools";
 import { createToolRegistry, ToolRendererBoundary, type ToolRenderProps } from "../src/renderer/contributions/tools";
 
@@ -124,3 +124,32 @@ describe("tool renderer boundary", () => {
 function Boom(): React.ReactNode {
   throw new Error("renderer exploded");
 }
+
+/**
+ * A tool that returns an image — pi-view's `view`, or Pi's `read` on a picture — must reach the
+ * transcript as the picture, not as a `[image]` placeholder. The bytes are already in the message
+ * that crossed IPC; this is the part that shows them.
+ */
+describe("tool result images", () => {
+  const runWith = (content: unknown[]) =>
+    ({
+      toolCallId: "tc1",
+      toolName: "view",
+      args: {},
+      status: "done",
+      result: { content },
+    }) as never;
+
+  it("renders an image block as a data URI", () => {
+    const html = renderToStaticMarkup(
+      <ResultImages run={runWith([{ type: "image", data: "QUJD", mimeType: "image/png" }])} />,
+    );
+    expect(html).toContain('src="data:image/png;base64,QUJD"');
+  });
+
+  it("shows the text of the same result and no placeholder", () => {
+    const run = runWith([{ type: "text", text: "Viewed image [image/png] a.png" }]);
+    expect(renderToStaticMarkup(<ToolCard call={call("view")} run={run} />)).not.toContain("[image]");
+    expect(renderToStaticMarkup(<ResultImages run={run} />)).toBe("");
+  });
+});
