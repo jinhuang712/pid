@@ -34,3 +34,6 @@ Thumbs.db
 
 # git worktrees other Claude Code sessions park inside the repo
 .claude/worktrees/
+
+# Serena MCP project index
+.serena/
