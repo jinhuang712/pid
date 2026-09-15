@@ -1,8 +1,9 @@
 import type { SkillView } from "@shared/ecosystem";
 import { useEffect, useMemo, useState } from "react";
+import { Badge, Toggle } from "@/ui";
 import { bridge } from "../bridge";
 import { fuzzyFilter } from "../fuzzy";
-import { Badge, OverrideBadge, PageShell, PathLink, ScopeBar, Toggle } from "./PageShell";
+import { OverrideBadge, PageShell, PathLink, ScopeBar } from "./PageShell";
 import { useEcoScope } from "./scope";
 
 /**

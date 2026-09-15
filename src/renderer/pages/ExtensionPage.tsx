@@ -1,7 +1,8 @@
-import type { ExtensionPage as Page, PageAction, PageRow, Tone } from "@shared/extension-page";
+import type { ExtensionPage as Page, PageAction, PageRow } from "@shared/extension-page";
 import { useState } from "react";
+import { Badge, TEXT, Toggle } from "@/ui";
 import { fuzzyFilter } from "../fuzzy";
-import { Badge, PageShell, Toggle } from "./PageShell";
+import { PageShell } from "./PageShell";
 
 /**
  * A page an extension described.
@@ -156,14 +157,6 @@ function Row({
     </article>
   );
 }
-
-const TEXT: Record<Tone, string> = {
-  ok: "text-ok",
-  warn: "text-warn",
-  danger: "text-danger",
-  muted: "text-ink-3",
-  accent: "text-accent",
-};
 
 function Act({
   action,

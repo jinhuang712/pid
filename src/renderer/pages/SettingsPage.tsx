@@ -13,9 +13,10 @@ import {
 } from "@shared/settings";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { Badge, Eyebrow, Segmented, Toggle } from "@/ui";
 import { bridge } from "../bridge";
 import { useSettings } from "../settings";
-import { Badge, PageShell, PathLink, Toggle } from "./PageShell";
+import { PageShell, PathLink } from "./PageShell";
 
 /**
  * One per PID settings group, plus two pages that show Pi's own state: the appended system
@@ -591,52 +592,12 @@ function UsageSection() {
   );
 }
 
-const fmtSeconds = (s: number) => (s < 60 ? `${s}s` : `${s / 60}m`);
-
-/**
- * A Segmented where more than one pill can be lit. PID has no checkbox anywhere, and a row of
- * boxes for three fixed durations would read heavier than the thing it configures.
- */
-function MultiSegmented<T extends string>({
-  value,
-  options,
-  labels,
-  onChange,
-}: {
-  value: readonly T[];
-  options: readonly T[];
-  labels?: Partial<Record<T, string>>;
-  onChange: (v: T[]) => void;
-}) {
-  const toggle = (o: T) => {
-    const next = value.includes(o) ? value.filter((v) => v !== o) : [...value, o];
-    // Keep the declared order rather than the order they were clicked in, so the bar's windows
-    // always read short to long.
-    onChange(options.filter((x) => next.includes(x)));
-  };
-  return (
-    <div className="inline-flex rounded-md border border-line bg-paper p-0.5">
-      {options.map((o) => (
-        <button
-          type="button"
-          key={o}
-          aria-pressed={value.includes(o)}
-          onClick={() => toggle(o)}
-          className={`h-6 px-2.5 rounded text-xs ${
-            value.includes(o) ? "bg-paper-4 text-ink" : "text-ink-2 hover:text-ink"
-          }`}
-        >
-          {labels?.[o] ?? o}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Group({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="px-1 pb-1.5 text-2xs uppercase tracking-[0.08em] text-ink-3">{title}</h3>
+      <h3 className="px-1 pb-1.5">
+        <Eyebrow>{title}</Eyebrow>
+      </h3>
       <div className="rounded-xl border border-line bg-paper-2 divide-y divide-line overflow-hidden">
         {children}
       </div>
@@ -821,33 +782,6 @@ function WidthPicker({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function Segmented<T extends string>({
-  value,
-  options,
-  labels,
-  onChange,
-}: {
-  value: T;
-  options: readonly T[];
-  labels?: Partial<Record<T, string>>;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-md border border-line bg-paper p-0.5">
-      {options.map((o) => (
-        <button
-          type="button"
-          key={o}
-          onClick={() => onChange(o)}
-          className={`h-6 px-2.5 rounded text-xs ${o === value ? "bg-paper-4 text-ink" : "text-ink-2 hover:text-ink"}`}
-        >
-          {labels?.[o] ?? o}
-        </button>
-      ))}
     </div>
   );
 }

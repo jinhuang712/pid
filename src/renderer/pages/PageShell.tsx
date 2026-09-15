@@ -1,5 +1,6 @@
 import type { ProjectState, ToggleScope } from "@shared/ecosystem";
 import type { ReactNode } from "react";
+import { Badge, Segmented } from "@/ui";
 
 /** Common frame for the ecosystem pages: title, one-line note, search box, content. */
 export function PageShell({
@@ -44,29 +45,6 @@ export function PageShell({
   );
 }
 
-export function Badge({
-  tone,
-  title,
-  children,
-}: {
-  tone: "ok" | "warn" | "danger" | "muted" | "accent";
-  title?: string;
-  children: ReactNode;
-}) {
-  const cls = {
-    ok: "bg-ok-soft text-ok",
-    warn: "bg-warn-soft text-warn",
-    danger: "bg-danger-soft text-danger",
-    muted: "bg-paper-3 text-ink-2",
-    accent: "bg-accent-soft text-accent",
-  }[tone];
-  return (
-    <span title={title} className={`inline-flex items-center h-5 px-1.5 rounded text-xs ${cls}`}>
-      {children}
-    </span>
-  );
-}
-
 export function PathLink({ path, label }: { path: string; label?: string }) {
   return (
     <button
@@ -81,37 +59,6 @@ export function PathLink({ path, label }: { path: string; label?: string }) {
 }
 
 export const tilde = (path: string) => path.replace(/^\/Users\/[^/]+/, "~");
-
-export function Toggle({
-  value,
-  onChange,
-  disabled,
-  title,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={value}
-      disabled={disabled}
-      title={title}
-      onClick={(e) => {
-        e.stopPropagation();
-        onChange(!value);
-      }}
-      className={`relative shrink-0 w-9 h-5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${value ? "bg-accent" : "bg-paper-4"}`}
-    >
-      <span
-        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? "left-4.5" : "left-0.5"}`}
-      />
-    </button>
-  );
-}
 
 /**
  * Global / Project switch for the ecosystem pages, with the project directory shown and
@@ -139,18 +86,13 @@ export function ScopeBar({
   const pick = () => void window.bridge.pickFolder().then((d) => d && onProjectDir(d));
   return (
     <div className="flex items-center gap-3 text-xs min-w-0">
-      <div className="inline-flex rounded-md border border-line bg-paper-2 p-0.5">
-        {(["global", "project"] as const).map((o) => (
-          <button
-            type="button"
-            key={o}
-            onClick={() => onScope(o)}
-            className={`h-6 px-2.5 rounded ${o === scope ? "bg-paper-4 text-ink" : "text-ink-2 hover:text-ink"}`}
-          >
-            {o === "global" ? "Global" : "Project"}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="Where this writes"
+        value={scope}
+        onChange={onScope}
+        options={["global", "project"] as const}
+        labels={{ global: "Global", project: "Project" }}
+      />
       <span className="text-ink-3 shrink-0">
         {scope === "global" ? `writes ${globalFile}` : `writes ${projectFile} in`}
       </span>

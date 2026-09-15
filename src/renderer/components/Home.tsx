@@ -1,8 +1,7 @@
 import type { RepoInfo } from "@shared/git";
 import type { SessionSummary } from "@shared/sessions";
 import type { ReactNode } from "react";
-import { Keys } from "./Key";
-import { Logo } from "./Logo";
+import { Keys, Logo } from "@/ui";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");

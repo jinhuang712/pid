@@ -1,6 +1,7 @@
 import type { RepoInfo } from "@shared/git";
 import type { SessionSummary } from "@shared/sessions";
 import { type MouseEvent, useEffect, useState } from "react";
+import { ContextMenu, Dot, IconButton, Keys, Logo, type MenuItem } from "@/ui";
 import { useSettings } from "../settings";
 import {
   type Proc,
@@ -10,9 +11,6 @@ import {
   type Workspace,
 } from "../state/workspace";
 import type { Surface } from "../surfaces";
-import { ContextMenu, type MenuItem } from "./ContextMenu";
-import { Keys } from "./Key";
-import { Logo } from "./Logo";
 import type { Page } from "./NavRail";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
@@ -230,27 +228,27 @@ export function SessionTree({
                     so nothing invisible reserves width and the right edge lines up with the rows below. */}
                 {!open && (
                   <span className="flex items-center gap-2 group-hover:hidden">
-                    {liveStatus.includes("running") && <Dot status="running" />}
-                    {liveStatus.includes("needs-you") && <Dot status="needs-you" />}
+                    {liveStatus.includes("running") && <StatusDot status="running" />}
+                    {liveStatus.includes("needs-you") && <StatusDot status="needs-you" />}
                     <span className="text-xs text-ink-3 tabular-nums">{total}</span>
                   </span>
                 )}
                 <span className="hidden group-hover:flex items-center gap-0.5">
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    ground={false}
                     onClick={(e) => openMenu(e, folderMenu(f), f)}
-                    className="w-5 h-5 rounded text-ink-3 hover:text-ink flex items-center justify-center"
                     title="Folder actions"
                   >
                     <Dots />
-                  </button>
+                  </IconButton>
                 </span>
                 {open && (
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    ground={false}
                     onClick={() => actions.newSession(f)}
                     title="New session"
-                    className="w-5 h-5 rounded text-ink-3 hover:text-ink flex items-center justify-center"
                   >
                     <svg
                       width="14"
@@ -263,7 +261,7 @@ export function SessionTree({
                       <title>new session</title>
                       <path d="M8 3v10M3 8h10" />
                     </svg>
-                  </button>
+                  </IconButton>
                 )}
               </section>
 
@@ -434,7 +432,7 @@ function SessionRow({
       }`}
       onContextMenu={onMenu}
     >
-      <Dot status={status} />
+      <StatusDot status={status} />
       <button
         type="button"
         onClick={onActivate}
@@ -446,31 +444,25 @@ function SessionRow({
       <span className={`text-xs ${metaTone} group-hover:hidden`}>{meta}</span>
       <span className="hidden group-hover:flex items-center gap-0.5">
         {onFork && (
-          <button
-            type="button"
-            onClick={onFork}
-            title="Fork from…"
-            className="w-5 h-5 rounded text-ink-3 hover:text-ink flex items-center justify-center"
-          >
+          <IconButton size="sm" ground={false} onClick={onFork} title="Fork from…">
             <ForkIcon />
-          </button>
+          </IconButton>
         )}
         {onMenu && (
-          <button
-            type="button"
-            onClick={(e) => onMenu(e)}
-            title="More"
-            className="w-5 h-5 rounded text-ink-3 hover:text-ink flex items-center justify-center"
-          >
+          <IconButton size="sm" ground={false} onClick={(e) => onMenu(e)} title="More">
             <Dots />
-          </button>
+          </IconButton>
         )}
       </span>
     </section>
   );
 }
 
-function Dot({ status }: { status: SessionStatus }) {
+/**
+ * A session has more states than the window has tones, so this keeps its own map and takes only the
+ * shape from the primitive — every dot in the window is then the same size.
+ */
+function StatusDot({ status }: { status: SessionStatus }) {
   const cls = {
     running: "bg-accent animate-pulse",
     "needs-you": "bg-warn",
@@ -479,7 +471,7 @@ function Dot({ status }: { status: SessionStatus }) {
     exited: "bg-danger/50",
     closed: "border border-line-2",
   }[status];
-  return <span title={status} className={`w-1.5 h-1.5 rounded-full shrink-0 ${cls}`} />;
+  return <Dot title={status} className={cls} />;
 }
 
 function FolderIcon({ open }: { open: boolean }) {
