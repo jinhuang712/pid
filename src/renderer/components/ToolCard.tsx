@@ -52,6 +52,19 @@ function resultImageBlocks(run?: ToolRun): { data: string; mimeType: string }[] 
 }
 
 /**
+ * The model's own one-line description of the call, when something asked for one.
+ *
+ * `brief` is a convention an extension can add to a tool schema (pi-briefly does, in terse mode),
+ * and the model then writes it for every call. It is the most readable thing in the arguments and
+ * the row is where the TUI puts it, so the row shows it rather than burying it in the JSON — the
+ * JSON stays one click away, unchanged.
+ */
+export function callBrief(call: ToolCall): string | undefined {
+  const brief = (call.arguments as Record<string, unknown> | undefined)?.brief;
+  return typeof brief === "string" && brief.trim() ? brief.trim() : undefined;
+}
+
+/**
  * The pieces every tool card is made of: the collapsed line, the status, and the expandable body.
  * The generic card and the built-in renderers differ only in how the body is drawn — the chrome is
  * here once, so a registered renderer never re-answers "when does it show the output".
@@ -81,6 +94,7 @@ export function ToolCallFrame({
   const verb = status === "running" ? lbl.running : lbl.done;
   const out = resultText(run);
   const diff = run?.result?.details?.diff;
+  const brief = callBrief(call);
   const args =
     body === "command"
       ? String((call.arguments as Record<string, unknown> | undefined)?.command ?? "")
@@ -111,6 +125,11 @@ export function ToolCallFrame({
         <span className="font-mono text-ink-3 truncate" title={lbl.detail}>
           {lbl.detail}
         </span>
+        {brief && (
+          <span className="min-w-0 truncate text-ink-3 italic" title={brief}>
+            {brief}
+          </span>
+        )}
         {meta && <span className="text-ink-3 shrink-0">{meta}</span>}
         {isError && <span className="shrink-0">failed</span>}
       </button>
