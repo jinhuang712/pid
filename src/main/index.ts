@@ -9,6 +9,7 @@ import type { PidSettings } from "@shared/settings";
 import { isWebUrl } from "@shared/url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
+import { installDebugDump } from "./debug-dump";
 import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
 import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
@@ -76,7 +77,10 @@ function createWindow(): BrowserWindow {
   nativeTheme.on("updated", () => win.setBackgroundColor(paperColor()));
   // Zoom resets on every load, so the stored interface scale is re-applied with the first frame.
   win.webContents.on("did-finish-load", () => applyAppearance(win));
-  win.once("ready-to-show", () => win.show());
+  // A headless smoke run drives the same window the user would see, but never shows it: the
+  // renderer paints either way and the probes read the real DOM, so nobody gets a popup.
+  const headless = Boolean(process.env.PID_HEADLESS || process.env.PID_DUMP_DIR);
+  if (!headless) win.once("ready-to-show", () => win.show());
 
   // Headless verification hook: PID_SCREENSHOT=/path.png captures the window and quits.
   const shot = process.env.PID_SCREENSHOT;
@@ -125,6 +129,8 @@ ipcMain.handle("app:info", () => ({
   devSearch: process.env.PID_SEARCH,
   devPage: process.env.PID_PAGE,
   devAttach: process.env.PID_ATTACH,
+  // Headless smoke runs: the dump directory, so the renderer knows to publish its probe.
+  devDump: process.env.PID_DUMP_DIR,
 }));
 
 ipcMain.handle("folder:pick", async () => {
@@ -187,6 +193,7 @@ ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
 ipcMain.handle("pi:diagnostics", () => runDiagnostics());
 
 app.whenReady().then(() => {
+  installDebugDump();
   applyTheme(); // decide the theme before the first frame
   installMenu(
     () => mainWindow,

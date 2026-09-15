@@ -54,6 +54,11 @@ export function App() {
   /** Bumped after `/reload` so the `/` menu re-reads pi's command list instead of its cached one. */
   const [commandsEpoch, setCommandsEpoch] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /** Set only by a headless smoke run; see the dump effect below. */
+  const [dumpRequested, setDumpRequested] = useState(false);
+  /** The latest report handed to the dump, kept so a re-render cannot blank it. */
+  const probe = useRef<{ activeDir?: string; sessionKey?: string; items: string[] } | undefined>(undefined);
+  const completeRef = useRef<typeof complete | undefined>(undefined);
   const [forkKey, setForkKey] = useState<string>();
   const [renameKey, setRenameKey] = useState<string>();
 
@@ -644,6 +649,7 @@ export function App() {
     commandsEpoch,
     onReference: composer.addRef,
   });
+  completeRef.current = complete;
   const loadModels = useCallback(
     async () => (liveKey ? (await bridge.pi.command(liveKey, { type: "get_available_models" })).models : []),
     [liveKey],
@@ -653,6 +659,32 @@ export function App() {
       liveKey ? (await bridge.pi.command(liveKey, { type: "get_available_thinking_levels" })).levels : [],
     [liveKey],
   );
+
+  // Headless smoke probe: a terminal without Assistive Access cannot type `@`, so when a run
+  // offers a dump directory the window publishes the picker's data — and which session it belongs
+  // to — for the dump to read out.
+  useEffect(() => {
+    if (!dumpRequested) return;
+    const report = {
+      activeDir,
+      sessionKey: liveKey,
+      activeKey: ws.activeKey,
+      procs: Object.values(ws.procs).map((p) => ({ key: p.key, cwd: p.cwd, pending: p.pending === true })),
+      items: [] as string[],
+    };
+    probe.current = report;
+    (window as unknown as { __pidDump?: unknown }).__pidDump = report;
+    const resolve = completeRef.current;
+    if (!resolve) return;
+    void resolve("@", "").then(
+      (items) => {
+        report.items = items.map((i) => i.id);
+      },
+      () => undefined,
+    );
+    // The workspace is read as a snapshot for the report; subscribing to it would re-run the
+    // probe on every streamed token.
+  }, [dumpRequested, activeDir, liveKey]);
 
   // ---- restore last open sessions (sequentially: each pi start is a few seconds) ----
   const restoring = useRef(false);
@@ -747,6 +779,7 @@ export function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
     void bridge.appInfo().then(async (info) => {
+      if (info.devDump) setDumpRequested(true);
       if (info.devPage) {
         // PID_PAGE=settings/prompt lands on one Settings section.
         const [pg, sub] = info.devPage.split("/");

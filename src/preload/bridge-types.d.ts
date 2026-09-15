@@ -35,6 +35,8 @@ export interface AppInfo {
   devPage?: string;
   /** Colon-separated absolute paths to attach on launch. */
   devAttach?: string;
+  /** Directory a headless smoke run dumps the window into; the renderer publishes its probe when set. */
+  devDump?: string;
 }
 
 export interface Bridge {
