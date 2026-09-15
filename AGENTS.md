@@ -171,9 +171,10 @@ Small commits. See GITFLOW.md.
 
 ## Document Responsibilities
 
-- `PROPOSAL.md` — why PID exists and what it believes
-- `GOALS.md` — goals, non-goals, constraints, conflict priority
-- `DESIGN.md` — how PID works from the user's point of view
-- `FEATURES.md` — tagged feature inventory by priority
+- `PROPOSAL.md` — why PID exists
+- `PHILOSOPHY.md` — principles that decide the calls where several implementations are reasonable
+- `GOALS.md` — goals and non-goals
+- `FEATURES.md` — tagged capability inventory
+- `DESIGN.md` — architectural boundary with Pi, state ownership, runtime lifecycle, interaction model
 - `GITFLOW.md` — commit and branch discipline
 - `AGENTS.md` — this file: how to develop PID

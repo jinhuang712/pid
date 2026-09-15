@@ -1,8 +1,268 @@
 # DESIGN
 
-This document describes how PID works from the user's point of view. It does not describe implementation.
+This document describes the target design of PID.
 
-## Information Architecture
+It covers the architectural boundary with Pi, state ownership, runtime lifecycle, extensibility, and the major interaction model.
+
+It does not explain why PID exists; see `PROPOSAL.md`.
+
+It does not define decision principles; see `PHILOSOPHY.md`.
+
+---
+
+# 1. System Model
+
+PID is another interface to Pi.
+
+The target architecture is:
+
+```text
+                    User's Pi Environment
+                           │
+              @earendil-works/pi-coding-agent
+                           │
+                    Pi Host Process
+                           │
+                  AgentSessionRuntime
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+     SessionManager   ResourceLoader    Pi Extensions
+          │                │                │
+          └────────────────┼────────────────┘
+                           │
+                     typed PID IPC
+                           │
+                    Electron Main
+                           │
+                    PID Renderer
+                           │
+              PID Presentation Extensions
+```
+
+PID does not implement an agent runtime.
+
+It hosts Pi's official coding-agent runtime and provides a graphical interface over it.
+
+---
+
+# 2. Runtime Boundary
+
+PID should use the official `@earendil-works/pi-coding-agent` runtime layer rather than reconstructing behavior from `pi-agent-core`.
+
+The relevant boundary is the same level that owns Pi session behavior:
+
+```text
+AgentSessionRuntime
+    │
+    ├── AgentSession
+    ├── SessionManager
+    ├── models
+    ├── extensions
+    ├── skills
+    ├── tools
+    ├── compaction
+    ├── fork
+    ├── queue
+    └── runtime replacement
+```
+
+PID consumes that runtime.
+
+It does not build equivalent session or agent lifecycle logic.
+
+---
+
+# 3. Pi Host Isolation
+
+Pi should not execute directly inside the Electron renderer.
+
+It should also not be tightly coupled to Electron Main.
+
+PID runs Pi inside an isolated Pi Host process.
+
+A live session conceptually has:
+
+```text
+PID UI
+  │
+Electron Main
+  │
+Pi Host
+  │
+AgentSessionRuntime
+```
+
+Process isolation protects the desktop application from:
+
+* extension crashes
+* accidental `process.exit`
+* leaked global state
+* runaway memory
+* native dependencies
+* extension-level failures
+
+It also preserves a clean boundary between graphical application lifecycle and agent runtime lifecycle.
+
+---
+
+# 4. Runtime Version
+
+PID should prefer the user's installed compatible Pi runtime.
+
+The desired relationship is:
+
+```text
+              User-installed Pi
+                     │
+      @earendil-works/pi-coding-agent
+             /                \
+         Pi TUI              PID Host
+```
+
+This maximizes semantic compatibility between both interfaces.
+
+PID should expose the resolved Pi runtime and version in diagnostics.
+
+A bundled compatible runtime may exist as a fallback, but PID should never silently make the user believe it is using the same Pi version when it is not.
+
+Runtime divergence must be visible.
+
+---
+
+# 5. Session Storage
+
+Pi owns persistent sessions.
+
+PID uses Pi's normal `SessionManager` and normal session directory.
+
+Conceptually:
+
+```text
+                 ~/.pi/agent/sessions/
+                           │
+                    Pi session JSONL
+                           │
+                 ┌─────────┴─────────┐
+                 │                   │
+              Pi TUI                PID
+```
+
+PID does not serialize a second conversation format.
+
+PID does not convert Pi messages into a PID session database and later reconstruct Pi state from it.
+
+The Pi session file is authoritative.
+
+---
+
+# 6. PID Session Index
+
+PID may maintain a session index to support fast graphical navigation and search.
+
+The index is derived:
+
+```text
+Pi session files
+      │
+      ▼
+PID index
+      │
+      ├── search
+      ├── previews
+      ├── folder grouping
+      └── ranking
+```
+
+The index may contain:
+
+* session ID
+* path
+* folder
+* title
+* timestamps
+* searchable user text
+* searchable assistant text
+* derived Git metadata
+
+The index must be rebuildable.
+
+Deleting it must not delete or alter Pi sessions.
+
+---
+
+# 7. Live Session Lifecycle
+
+A session can exist in two PID states:
+
+```text
+Closed
+  session exists on disk
+  no Pi Host required
+
+Live
+  Pi Host running
+  AgentSessionRuntime loaded
+```
+
+Opening a historical session starts a Pi Host only when runtime interaction is required.
+
+Several sessions may be live simultaneously.
+
+Each live session should remain isolated enough that extension-level process-global state cannot accidentally bleed between unrelated runtimes.
+
+---
+
+# 8. One Active Writer
+
+Pi TUI and PID can both open the same session over time.
+
+They should not independently mutate the same session at the same time.
+
+PID therefore treats a session as having one active writer.
+
+Typical handoff:
+
+```text
+PID
+ │
+ │ wait for idle / abort
+ │
+ │ dispose runtime
+ ▼
+session file
+ │
+ ▼
+Pi TUI
+```
+
+PID should provide an **Open in Pi TUI** action.
+
+Before handoff:
+
+* active generation is resolved
+* the Pi Host releases the session
+* persistent state has been written
+
+If the session file changes externally while a PID runtime is active, PID should detect the change and require reload or handoff before accepting another prompt.
+
+PID does not attempt transparent multi-writer merging.
+
+---
+
+# 9. Information Architecture
+
+The main product structure is:
+
+```text
+Sessions
+Skills
+MCP
+Extensions
+Settings
+```
+
+Sessions use:
 
 ```text
 Folders
@@ -14,111 +274,191 @@ Conversation
 Composer
 ```
 
-The conversation is always the center of the screen. Everything else is arranged around it.
+The conversation remains the primary workspace.
 
-First-level entries in the main navigation:
+Skills, MCP, and Extensions are ecosystem surfaces rather than settings categories.
 
-```text
-Sessions      (Folders → Sessions → Conversation)
-Skills
-MCP
-Extensions
-Settings
-```
+---
 
-Skills, MCP, and Extensions are pages of their own. They are part of how a user uses the Pi ecosystem, not settings.
+# 10. Folder Model
 
-## Folder Model
+A Folder is a real filesystem directory.
 
-A Folder is a real directory on disk. PID shows "sessions under this folder".
+PID groups Pi sessions by their working directory.
 
-There is no Project entity. Without project memory, a project is only a folder with a nicer name, and PID does not do project memory. Pi itself reads whatever the repository provides (AGENTS.md, README, source). PID adds nothing implicit on top.
+There is no PID Project entity.
 
-The sidebar is one tree: Folder → Sessions. The active folder is expanded; the others are collapsed
-with a session count. A collapsed folder that has a live session shows a pulsing dot. Long lists fold
-behind "Show N more". Forks nest under their parent. A filter box at the top of the tree narrows it
-(⌘K focuses it).
-
-Each session row carries a status dot fed by the live Pi process:
+Typical sidebar:
 
 ```text
-running    Pi is streaming or compacting
-needs you  an extension dialog or approval is waiting
-idle       a process is open, nothing running
-error      the last turn ended in a provider error
-closed     only the session file on disk
+~/dev/pi
+  ├─ Refactor session
+  ├─ MCP investigation
+  └─ UI cleanup
+
+~/dev/gotato
+  ├─ Runtime design
+  └─ Benchmarking
 ```
 
-Several sessions can be open at once, each with its own Pi process; switching rows never stops a run.
+Folder-level state is mostly presentation:
 
-Row actions live on the row: hover shows Fork and a menu with Fork from…, Copy session reference,
-Rename, Export HTML, Reveal session file, Close process. Folder rows offer New session, New worktree…,
-Remove this worktree, Forget folder.
+* expanded / collapsed
+* recent
+* filtering
+* activity
+* Git metadata
 
-The header carries only identity on the left and, over the conversation column, the session title,
-folder, and branch. It has no controls.
+No hidden context is attached merely because sessions share a folder.
 
-## Worktree Model
+---
 
-Worktrees belong to sessions, not to the sidebar. Pi's `pi-worktree` extension binds a session to a
-worktree (`/worktree`, `worktree_create`), keeps the session's folder at the origin, re-roots the
-session's tool calls into the worktree, and lands or abandons it later (`/land`, `worktree_abandon`).
+# 11. Conversation Timeline
 
-PID does not list worktrees as folders and does not create or remove them. It shows the binding
-where it matters: on the session's title bar, from the extension's own status line —
+The timeline renders Pi session state with graphical hierarchy.
+
+## User Messages
+
+Clearly attributed and visually distinct.
+
+## Assistant Messages
+
+Rendered as Markdown with code blocks and rich links.
+
+## Thinking
+
+Lower visual weight and collapsible.
+
+## Tool Calls
+
+Rendered using Tool Cards.
+
+## Tool Results
+
+Displayed inline or through specialized viewers.
+
+## Compaction
+
+Shown as an explicit timeline boundary.
+
+## Errors
+
+Use consistent error presentation regardless of whether they originate from:
+
+* model
+* tool
+* extension
+* MCP
+* runtime
+
+## Finished Turns
+
+Detailed working steps may collapse after completion behind a summary such as:
 
 ```text
-Sidebar tree redesign · ~/dev/pi/pid   ⑂ wt-sidebar-tree → main · ↑3 · 2 dirty
+Worked for 1m 53s
+4 tool calls
+2 files edited
+66.6k tokens
 ```
 
-Git remains the source of truth for branches; the extension remains the source of truth for the
-binding. A folder's own branch shows on its row and on the title bar when no worktree is bound.
+Expanding restores the full sequence.
 
-## Conversation Timeline
+Historical turns may load collapsed by default.
 
-The timeline shows the session as Pi understands it, with a clear hierarchy:
+---
 
-- **User messages** are visually distinct and right-aligned or otherwise clearly attributed.
-- **Assistant messages** render as Markdown with code blocks.
-- **Thinking** appears as a collapsible block with lower visual weight. Collapsed by default.
-- **Tool calls** render as Tool Cards: one line of summary (tool name, key argument, status) with expandable input and output. Long outputs collapse. Edits render as diffs. File reads show the path and range. Bash shows command and output.
-- **Steps fold when a turn finishes.** While Pi works, every thinking block and tool call stays open so output can be read as it arrives. Once the turn settles, everything before the final answer folds behind one step line — `Worked for 1m 53s · 4 tool calls · edited 2 files · 66.6k tokens (75% cached) · $0.42` — that sits above the answer and unfolds on click. Cost is omitted on a subscription plan. A turn loaded from history is already settled.
-- **Errors** use one consistent visual language regardless of whether they came from a model, a tool, an extension, or an MCP server.
-- **Compaction** appears as an inline marker showing where context was compacted and how much.
-- **Queue state** appears between the active response and the composer: the active response, then queued steers, then queued follow-ups, in order.
-- **Fork lineage** appears as a small indicator on the session header: parent session, sibling forks, and children, each one click away.
+# 12. Tool Rendering
 
-Default density is clean. Details are one expand, hover, or click away.
+The generic tool renderer understands:
 
-## Composer
+```text
+tool name
+status
+input
+output
+error
+timing
+```
 
-The composer is the primary interaction point. It is never disabled, including while Pi is running.
+Specialized renderers improve common cases:
 
-Its footer holds what describes the next message: the model, the thinking level, and a context
-gauge reading used / limit for the selected model (for example `380k / 1M · 38%`). To the right sits
-one Send button. While Pi runs, a running indicator with a small stop glyph replaces the hint text.
+```text
+read       → file viewer
+edit       → diff
+write      → file summary
+bash       → command + terminal output
+grep       → search results
+image      → image viewer
+```
 
-### Attachments
+Specialized rendering is a presentation concern.
 
-Images, PDFs, files, and folders can be attached to the next message: drop them from Finder, paste an
-image, or pick them with the paperclip. An attachment is an absolute path and nothing else. PID never
-copies the bytes anywhere and never inlines them into the session file; the paths are appended to the
-message as a visible block, and Pi opens them with its own tools, exactly as the terminal does when an
-image is pasted. A pasted screenshot has no path yet, so it is written to the OS temp directory first,
-the same way the Pi terminal handles paste.
+The underlying call remains a normal Pi tool call.
 
-Attachments sit in a tray at the top of the composer: images and PDFs as small previews, everything
-else as a chip with its size or item count. A path that no longer exists is marked. Backspace on an
-empty draft takes back the last attachment.
+---
 
-### Inline tokens
+# 13. Extensible Tool Rendering
 
-Links, `$session` tokens, and `@path` mentions are tinted inside the draft as you type. The tray also
-lists every link found in the draft, and every `$session` reference with how much of it will be sent;
-one click shows the exact text. In the timeline a sent message shows its words in the bubble and its
-attachments, links, and session references as the same chips underneath.
+PID core must not contain permanent special cases for every tool in the Pi ecosystem.
 
-Four sigils open four pickers:
+Tool rendering therefore supports registration.
+
+Conceptually:
+
+```text
+Pi Tool Result
+      │
+      ▼
+Renderer Registry
+      │
+ ┌────┴─────┐
+ │          │
+match     no match
+ │          │
+custom    generic
+viewer    Tool Card
+```
+
+A third-party presentation extension should be able to recognize:
+
+* tool name
+* namespace
+* structured output
+* declared metadata
+
+and provide an alternative renderer.
+
+The generic Tool Card is always the fallback.
+
+---
+
+# 14. Composer
+
+The composer is always available.
+
+It describes the next Pi interaction.
+
+Primary state includes:
+
+* draft
+* attachments
+* selected model
+* thinking level
+* context usage
+* send mode
+
+While Pi is active, text can still be entered and queued.
+
+The composer does not create a second prompt-processing system.
+
+Final prompt semantics remain Pi's.
+
+---
+
+# 15. Composer Sigils
+
+PID provides four contextual discovery surfaces:
 
 ```text
 /   Skill
@@ -127,135 +467,661 @@ Four sigils open four pickers:
 $   Session Reference
 ```
 
-### `/` Skill
+These are PID interaction conventions.
 
-Lists the skills actually loaded in the current Pi environment. Typing filters fuzzily. Selecting inserts the skill invocation using Pi's own skill semantics. PID adds discoverability only.
+They map onto real underlying concepts.
 
-### `@` File
+---
 
-Lists files in the current Folder with fuzzy search, recent files first, path preview, and file type. Selecting inserts a visible file mention such as `@src/agent.ts`. Pi reads the file with its own tools. There is no hidden index or embedding.
+# 16. `/` Skill
 
-### `#` Pi Action
+The picker displays skills available to the current Pi environment.
 
-Lists actions Pi already has: change model, change thinking level, compact, fork, branch, abort, and so on. These are not natural-language prompts. `#compact` invokes Pi's real compaction. `#fork` invokes Pi's real fork. If Pi has no such action, it does not appear here.
+Selection invokes Pi's existing skill semantics.
 
-### `$` Session Reference
+PID provides:
 
-Searches sessions across the current folder, sibling worktrees, and all history. Selecting inserts a Session Reference token such as `[$ redis-cache-debug]`.
+* search
+* metadata
+* visual selection
 
-## Session Reference
+Pi provides the skill.
 
-`$session` means: bring content from another session into this one, explicitly.
+---
 
-It is not navigation. It is not memory.
+# 17. `@` File
 
-When a message containing `$session` is sent:
+The file picker operates over the real current filesystem.
 
-- the user sees which session is referenced
-- the user sees how much of it is included and can inspect the exact content before sending
-- the referenced content enters the conversation as explicit prompt content, visible in the timeline
+PID may maintain a derived filename index for speed.
 
-Old sessions can be very long. The reference picker offers a scope: the session summary if Pi produced one, the last N messages, a specific range, or a search hit and its neighbors. The chosen scope is shown, and the token cost is shown. If a summary is used, it is labeled as a summary.
+Selecting a file creates a visible reference to the path.
 
-Nothing is injected silently. Two sessions in the same folder do not know about each other unless the user references one from the other.
+The path remains real.
 
-## Fork
+Pi decides whether and how to read it through its tools.
 
-Fork creates a new session lineage from an existing session at a chosen point.
+---
 
-Fork is different from `$session`:
+# 18. `#` Pi Action
 
-- `$session` keeps two histories separate and copies content from one into the other.
-- Fork makes a new history that shares a prefix with the old one.
+`#` exposes Pi actions graphically.
 
-Fork lives on the session row in the sidebar (hover icon, context menu, or ⌘⇧F for the active
-session). Picking a user message creates the new session before that message and puts its text in the
-composer for editing, exactly like the terminal's `/fork`.
+Examples include:
 
-The GUI supports:
+* compact
+* model selection
+* thinking level
+* fork
+* tree navigation
+* abort
 
-- fork from the current end of the session
-- fork from an earlier message, where Pi's session model allows it
-- forks nested under their parent in the session tree
-- one-click switch to the parent or a sibling from the same tree
+A `#` action should invoke the real Pi behavior.
 
-Lineage comes from Pi's own session data. PID keeps no separate fork database.
+It must not secretly translate into a natural-language prompt when a real runtime action exists.
 
-## Active Run
+---
 
-While Pi is responding, the composer stays open and has one button. Enter sends the text as a
-**follow-up**: it waits for the current work to finish.
+# 19. `$` Session Reference
 
-The queue panel above the composer lists what Pi holds, in Pi's order:
+`$session` explicitly introduces content from another Pi session into the current context.
+
+It is not memory.
+
+It is not navigation.
+
+Flow:
+
+```text
+search session
+    ↓
+select scope
+    ↓
+inspect content
+    ↓
+see estimated size
+    ↓
+send
+    ↓
+content becomes explicit context
+```
+
+Possible scopes include:
+
+* summary
+* latest N messages
+* selected range
+* search hit and neighbors
+
+The user must be able to inspect what will be included.
+
+Nothing crosses session boundaries automatically.
+
+---
+
+# 20. Active Runs
+
+Pi owns queue semantics.
+
+PID visualizes them.
+
+Typical state:
 
 ```text
 Active response
-    ↓
-Queued steer          delivered after the current tool call, before the next model call
-    ↓
-Queued follow-up      delivered when the run ends
+      ↓
+Queued steer
+      ↓
+Queued follow-up
 ```
 
-A queued follow-up can be promoted from its row:
+PID may provide graphical operations for changing queue intent where Pi permits it.
 
-- **Steer after tool**: Pi's native steer. Delivered before the next model call.
-- **Steer now**: abort the current turn, then send it immediately. Pi has no mid-generation injection,
-  so this is the earliest possible delivery.
-- **×**: drop it.
+The queue shown by PID should reflect Pi runtime state rather than a second PID queue.
 
-Queue semantics are Pi's; PID rebuilds the queue through Pi's own clear and re-add commands.
+---
 
-## Tool Presentation
+# 21. Fork and Branching
 
-Every tool call, whether from Pi's built-in tools, an extension, or an MCP server, uses the same Tool Card. Same header, same expand behavior, same error styling. An MCP tool is a Tool; nothing about it is special in the timeline.
+Pi session trees are the source of truth.
 
-## Session Search
+PID adds graphical navigation.
 
-Search is retrieval infrastructure. It is not memory.
+Fork creates a separate Pi session from a selected point.
 
-The filter box at the top of the session tree narrows every folder by title and first message as you
-type; folders with matches expand. Content search across all session files powers the `$` picker and
-uses a derived index over the Pi session files that can be deleted and rebuilt at any time.
+Tree navigation changes the active path within a session where Pi supports it.
 
-## First-class Ecosystem Pages
+PID may display:
 
-### Skills
+* parent
+* children
+* siblings
+* branch points
+* current leaf
 
-Lists every skill available in the current Pi environment: name, description, source, path, and whether it is currently on. Search filters the list. A skill can be opened in its source location. Each skill has a switch that writes the same setting `pi config` writes, globally or for one project; a scope bar picks which, and which project directory the project layer means. This page shows Pi's skills; PID has no skills of its own.
+No separate PID lineage database is required.
 
-### MCP
+---
 
-Lists configured MCP servers: name, connection status, tool count, tools, recent errors, and metadata. Each server has a switch that writes the `disabled` flag the MCP extension reads, globally in `~/.pi/agent/mcp.json` or as a project override in `.pi/mcp.json`, the same thing `/mcp disable` does. Refresh and reconnect are offered where Pi allows them. Servers an extension registered at runtime — a Pi package handing the MCP extension a definition instead of writing an mcp.json — are listed below them, read-only: Pi is running them, no file defines them, so there is no switch to flip.
+# 22. Pi Extensions
 
-With pid-mcp (bundled with PID) every MCP tool is a native Pi tool. The page shows which of a server's tools the model can see right now: pinned by config, activated by `mcp_search` during the session, or still waiting. Cached, connected, and active are three different states and are never conflated. There is no marketplace, no permission engine, no workflow builder.
+Pi extensions execute inside the Pi Host through Pi's normal extension system.
 
-### Extensions
+PID does not reinterpret their agent behavior.
 
-Lists Pi extensions: name, source, path, metadata, a switch that writes the same enable/disable pattern `pi config` writes (global or per project), and a compatibility label:
+Architecture:
 
 ```text
-Compatible
-Partially Compatible
-TUI-only / Unsupported
+Pi Extension
+     │
+     ├── tools
+     ├── commands
+     ├── hooks
+     ├── session state
+     └── UI requests
+             │
+             ▼
+      PID UI Adapter
+             │
+             ▼
+       Desktop UI
 ```
 
-Extensions that rely on terminal widgets or terminal layout are labeled Unsupported in PID. PID does not build an adapter framework to change that.
+Where Pi exposes UI abstractions, PID maps them to desktop equivalents.
 
-## Settings
+Examples:
 
-Settings hold PID's own preferences and light control over Pi runtime preferences that Pi already exposes.
+```text
+confirm       → dialog
+select        → graphical selector
+input         → input dialog
+notification  → notification
+status        → status presentation
+```
 
-- **Appearance**: theme, font size, conversation density, code font, default collapse state for tool cards, thinking, and finished steps, sidebar behavior, panel layout.
-- **Conversation**: Enter and Shift+Enter behavior, default send mode, steer and follow-up shortcuts, auto-scroll, tool output expansion, session reference preview behavior.
-- **Sessions**: default sorting, recent folder behavior, search scope, preview length, fork tree display, visibility of closed sessions.
-- **Files & Worktrees**: ignore patterns for `@` search, hidden file visibility, worktree display, default worktree parent directory, confirmation for destructive worktree actions.
-- **Notifications**: run completed, approval or input required, error, long task completion.
-- **Advanced**: only genuinely advanced PID settings.
+Terminal-specific implementation details may be unavailable.
 
-Skills, MCP, Extensions, provider configuration, and model registry configuration are not in Settings.
+That does not change extension runtime semantics.
 
-## Models
+---
 
-PID reads Pi's local model configuration and shows it: grouped by provider, searchable, with the metadata needed to choose. The user selects a model for the current session.
+# 23. PID Presentation Extensions
 
-PID does not add providers, edit API keys, edit endpoints, register models, or edit model JSON. Those stay in Pi.
+PID also has an extensibility layer of its own.
+
+Its purpose is presentation and interaction, not agent semantics.
+
+The extension host may expose capabilities such as:
+
+```text
+registerToolRenderer()
+registerArtifactViewer()
+registerPanel()
+registerInspector()
+registerCommand()
+registerStatusContribution()
+registerNavigationContribution()
+registerComposerContribution()
+```
+
+The exact API may evolve.
+
+The architectural boundary should not.
+
+A PID presentation extension receives controlled access to:
+
+* Pi state snapshots relevant to presentation
+* PID navigation
+* selected session context
+* presentation events
+* invocation of permitted Pi actions
+
+It should not become an alternative owner of the AgentSession.
+
+---
+
+# 24. Pi Extensions With Rich PID Presentation
+
+A project may provide both runtime behavior and richer desktop presentation.
+
+Conceptually:
+
+```text
+package / extension family
+        │
+        ├── Pi Extension
+        │     ├── tools
+        │     ├── commands
+        │     └── hooks
+        │
+        └── PID Presentation
+              ├── renderer
+              ├── inspector
+              └── panel
+```
+
+The Pi extension must remain useful without PID.
+
+The presentation contribution may depend on PID.
+
+This allows PID to be highly extensible without creating a second agent ecosystem.
+
+---
+
+# 25. Presentation Extension Isolation
+
+Presentation extensions must not compromise Pi session integrity.
+
+They should not directly mutate Pi persistence or bypass Pi runtime semantics.
+
+Where practical, PID should expose capability-oriented APIs rather than unrestricted internal application access.
+
+Extension failures should degrade the extension before they degrade the session.
+
+PID core should always retain a generic fallback presentation.
+
+---
+
+# 26. Ecosystem Pages
+
+## Skills
+
+The Skills page reflects skills from the active Pi environment.
+
+It may show:
+
+* name
+* description
+* source
+* path
+* scope
+* state
+
+Changes to Pi skill configuration should use Pi-compatible configuration mechanisms.
+
+## MCP
+
+The MCP page reflects the MCP extension/runtime used by Pi.
+
+It may show:
+
+* servers
+* transport state
+* authentication
+* errors
+* tools
+* active tool visibility
+* cache state
+* reconnect / refresh operations
+
+The page is a control and inspection surface.
+
+It is not an MCP host.
+
+## Extensions
+
+The Extensions page reflects Pi extensions.
+
+It may show:
+
+* source
+* scope
+* state
+* tools
+* commands
+* compatibility
+* available graphical integrations
+
+A terminal-dependent extension may be marked partially compatible without being rewritten into a PID-specific runtime.
+
+---
+
+# 27. MCP
+
+MCP is implemented through Pi's extension/tool layer.
+
+With `pid-mcp`:
+
+```text
+MCP Server
+    ↓
+pid-mcp
+    ↓
+native Pi Tool
+    ↓
+AgentSession
+    ↓
+PID Tool Presentation
+```
+
+PID should not introduce a permanent generic MCP proxy between the model and the server.
+
+Tool discovery and activation remain Pi-side concerns.
+
+PID provides graphical discovery, state, OAuth interaction, and rendering where useful.
+
+---
+
+# 28. Search
+
+Search operates over derived indexes.
+
+Two primary classes exist:
+
+## Navigation Search
+
+Fast filtering for:
+
+* folders
+* sessions
+* files
+* skills
+* extensions
+* commands
+
+## Session Content Search
+
+Indexes selected Pi session content for historical retrieval and `$session`.
+
+Search output never becomes implicit context.
+
+Retrieval and context injection are separate operations.
+
+---
+
+# 29. Files
+
+Files remain filesystem paths.
+
+PID may provide:
+
+* fuzzy search
+* previews
+* attachment chips
+* file metadata
+* drag and drop
+* reveal in Finder
+
+Pi continues to perform actual agent filesystem operations through its tools.
+
+---
+
+# 30. Attachments
+
+A user can:
+
+* drop files
+* paste images
+* choose files
+* choose folders
+
+Existing paths remain paths.
+
+Temporary pasted data without a path may be written to an operating-system temporary location.
+
+PID should avoid building a permanent attachment store unless Pi itself requires one.
+
+Attachments remain visible to the user.
+
+---
+
+# 31. Git and Worktrees
+
+Git remains authoritative.
+
+PID may inspect:
+
+* branch
+* dirty state
+* worktree relationships
+* divergence
+
+A Git worktree is a real directory and may therefore be opened as another Folder.
+
+If a Pi extension such as `pi-worktree` binds a session to a different working tree, PID displays that binding from extension/runtime state.
+
+PID does not create a parallel source-control database.
+
+---
+
+# 32. Models and Providers
+
+The Pi runtime remains authoritative for:
+
+* model discovery
+* provider information
+* authentication
+* model selection semantics
+* thinking support
+
+PID provides model selection UI for the session.
+
+PID does not require the user to configure the same provider twice.
+
+A separate PID model registry is explicitly avoided.
+
+---
+
+# 33. Settings
+
+Settings are divided by ownership.
+
+## PID Settings
+
+Examples:
+
+* appearance
+* font size
+* density
+* collapse behavior
+* keyboard behavior
+* notifications
+* sidebar state
+* layout
+* search preferences
+
+## Pi Settings Exposed Through PID
+
+PID may expose Pi settings when doing so provides a useful graphical control.
+
+Changing them must modify Pi's real configuration through Pi-compatible mechanisms.
+
+PID should not silently maintain a local override that only affects PID unless the setting is genuinely presentation-specific.
+
+---
+
+# 34. PID-Owned Data
+
+PID may own:
+
+```text
+layout
+window state
+recent folders
+UI preferences
+search index
+preview cache
+presentation-extension settings
+diagnostic cache
+```
+
+PID should not own:
+
+```text
+conversation truth
+Pi session structure
+model registry
+provider credentials
+Pi extension state
+skill semantics
+agent compaction state
+tool semantics
+Git state
+```
+
+This boundary should remain visible in the codebase.
+
+---
+
+# 35. Desktop Process Model
+
+Target process responsibilities:
+
+```text
+PID Renderer
+    │
+    ├── visual state
+    ├── conversation rendering
+    ├── navigation
+    └── presentation extensions
+
+Electron Main
+    │
+    ├── windows
+    ├── OS integration
+    ├── Pi Host lifecycle
+    └── trusted IPC
+
+Pi Host
+    │
+    ├── AgentSessionRuntime
+    ├── SessionManager
+    ├── Pi tools
+    ├── skills
+    ├── Pi extensions
+    ├── model runtime
+    └── agent execution
+```
+
+The renderer should not directly own Pi runtime state.
+
+IPC should carry structured events and commands rather than duplicate agent semantics.
+
+---
+
+# 36. Backend Abstraction
+
+Migration away from the current RPC implementation should happen behind a narrow PID backend boundary.
+
+Conceptually:
+
+```text
+PiBackend
+
+prompt()
+steer()
+followUp()
+abort()
+
+newSession()
+openSession()
+fork()
+navigateTree()
+
+setModel()
+setThinkingLevel()
+
+subscribe()
+getState()
+```
+
+During migration:
+
+```text
+PiBackend
+├── RpcPiBackend
+└── SdkPiBackend
+```
+
+The SDK-backed Pi Host becomes the target implementation.
+
+RPC can remain temporarily as a compatibility or migration backend.
+
+PID product behavior should not depend on which backend is active.
+
+---
+
+# 37. Migration Standard
+
+The SDK backend reaches parity when the same Pi session behaves equivalently across:
+
+* prompt
+* streaming
+* tool execution
+* skills
+* extensions
+* MCP
+* model selection
+* thinking level
+* steer
+* follow-up
+* queue
+* compaction
+* fork
+* tree navigation
+* session persistence
+* TUI round-trip
+
+Once that invariant holds, the RPC-specific integration can be reduced or removed.
+
+---
+
+# 38. Failure Behavior
+
+PID should fail at the correct ownership boundary.
+
+Examples:
+
+### Pi runtime failure
+
+Show Pi runtime failure.
+
+Do not silently reconstruct state through PID.
+
+### Presentation extension failure
+
+Fall back to generic PID presentation.
+
+Do not fail the Pi session.
+
+### Search index corruption
+
+Delete and rebuild the index.
+
+### External session mutation
+
+Stop writes and reload.
+
+### Unsupported extension UI
+
+Preserve runtime behavior where possible and clearly mark unavailable presentation.
+
+The fallback should generally move toward Pi truth, not toward more PID-owned state.
+
+---
+
+# 39. Target Property
+
+The architectural target is:
+
+```text
+        one Pi environment
+                │
+        one set of semantics
+                │
+        one session system
+                │
+        one extension runtime
+                │
+        ┌───────┴───────┐
+        │               │
+      Pi TUI           PID
+                        │
+               extensible presentation
+```
+
+PID becomes more capable by improving how Pi is exposed and by allowing the presentation layer to grow.
+
+It does not become more capable by gradually taking ownership away from Pi.
+
+That boundary is the design.
