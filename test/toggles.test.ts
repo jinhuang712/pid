@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { configureAgentDir } from "../src/main/pi/ecosystem";
 
 /**
  * Toggles write into a throwaway agent dir (PI_CODING_AGENT_DIR) and a throwaway project,
@@ -19,7 +20,9 @@ const skill = (dir: string, name: string) => {
   return join(dir, name, "SKILL.md");
 };
 
-beforeAll(() => {
+beforeAll(async () => {
+  // What main does at start-up. agentDir() still re-reads the environment on every call.
+  await configureAgentDir();
   const root = mkdtempSync(join(tmpdir(), "pid-toggles-"));
   agent = join(root, "agent");
   project = join(root, "project");

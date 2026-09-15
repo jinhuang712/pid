@@ -50,7 +50,7 @@ export interface PiExitEnvelope {
   stderr: string;
 }
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 /** An RPC command without the correlation id (PID assigns it). */
 export type PiCommand = DistributiveOmit<RpcCommand, "id">;
 export type ResponseDataOf<T extends RpcCommand["type"]> =

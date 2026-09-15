@@ -2,7 +2,7 @@ import { parseMcpStatus, runtimeOnly, WIDGET_MCP_STATUS } from "@shared/mcp-stat
 import type { PiHandle, RpcSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { withRuntimeDefinitions } from "../resources/pid-bridge/index";
-import { locateBundled, adapterSource, bundledExtensionArgs, userMcpExtension } from "../src/main/pi/bundled";
+import { locateBundled, adapterSource, bundledExtensionPaths, userMcpExtension } from "../src/main/pi/bundled";
 import { emptyWorkspace, workspaceReducer } from "../src/renderer/state/workspace";
 
 // Real snapshot captured from pi-mcp-adapter 2.33.0 via pid-bridge (see resources/pid-bridge).
@@ -122,14 +122,14 @@ describe("bundled extensions", () => {
   it("prefers the user's MCP extension, whichever it is, and never loads a second one", () => {
     expect(adapterSource(["npm:pi-mcp-adapter"], bundled)).toBe("user");
     expect(userMcpExtension(["npm:pi-mcp-adapter"])).toBe("pi-mcp-adapter");
-    expect(bundledExtensionArgs(["npm:pi-mcp-adapter"], bundled)).toEqual(["-e", bundled.bridge]);
+    expect(bundledExtensionPaths(["npm:pi-mcp-adapter"], bundled)).toEqual([bundled.bridge]);
     expect(adapterSource(["../../dev/pi/pid-mcp"], bundled)).toBe("user");
     expect(userMcpExtension(["../../dev/pi/pid-mcp"])).toBe("pid-mcp");
-    expect(bundledExtensionArgs(["../../dev/pi/pid-mcp"], bundled)).toEqual(["-e", bundled.bridge]);
+    expect(bundledExtensionPaths(["../../dev/pi/pid-mcp"], bundled)).toEqual([bundled.bridge]);
   });
   it("loads the bundled pid-mcp when the user has no MCP extension", () => {
     expect(adapterSource(["npm:pi-view"], bundled)).toBe("bundled");
-    expect(bundledExtensionArgs([], bundled)).toEqual(["-e", bundled.adapter, "-e", bundled.bridge]);
+    expect(bundledExtensionPaths([], bundled)).toEqual([bundled.adapter, bundled.bridge]);
   });
   it("resolves the pid-mcp dependency in this repo and reads its version", () => {
     const b = locateBundled(process.cwd(), {});
@@ -138,7 +138,7 @@ describe("bundled extensions", () => {
   });
   it("reports none when nothing is available", () => {
     expect(adapterSource([], {})).toBe("none");
-    expect(bundledExtensionArgs([], {})).toEqual([]);
+    expect(bundledExtensionPaths([], {})).toEqual([]);
   });
   it("finds the bridge shipped in this repo", () => {
     const b = locateBundled(process.cwd(), {});

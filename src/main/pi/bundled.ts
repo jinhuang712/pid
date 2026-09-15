@@ -3,14 +3,15 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 /**
- * Extensions PID ships and loads into its own `pi --mode rpc` children with `-e`.
+ * Extensions PID ships and loads into its own session workers.
  *
  * - pid-bridge: relays MCP status/OAuth events to PID (resources/pid-bridge/index.ts).
  * - pid-mcp: MCP for Pi, pinned in package.json. Loaded only when the user has not installed an
  *   MCP extension themselves (pid-mcp or pi-mcp-adapter); a user-installed one always wins so the
  *   terminal and PID agree.
  *
- * Nothing is written to Pi's settings. `-e` is per process and leaves the user's setup alone.
+ * Nothing is written to Pi's settings. These paths are passed per worker, as `-e` did per
+ * process, and leave the user's setup alone.
  */
 export interface BundledPi {
   /** Absolute path to pid-bridge's entry, or undefined when it cannot be found. */
@@ -61,12 +62,12 @@ export function adapterSource(userPackages: string[], bundled: BundledPi): McpAd
   return bundled.adapter ? "bundled" : "none";
 }
 
-/** The `-e` arguments to append to `pi --mode rpc`. */
-export function bundledExtensionArgs(userPackages: string[], bundled: BundledPi): string[] {
-  const args: string[] = [];
-  if (adapterSource(userPackages, bundled) === "bundled" && bundled.adapter) args.push("-e", bundled.adapter);
-  if (bundled.bridge) args.push("-e", bundled.bridge);
-  return args;
+/** Extension paths to load into a session worker, in the order Pi should see them. */
+export function bundledExtensionPaths(userPackages: string[], bundled: BundledPi): string[] {
+  const paths: string[] = [];
+  if (adapterSource(userPackages, bundled) === "bundled" && bundled.adapter) paths.push(bundled.adapter);
+  if (bundled.bridge) paths.push(bundled.bridge);
+  return paths;
 }
 
 let current: BundledPi = {};

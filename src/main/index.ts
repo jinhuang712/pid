@@ -14,7 +14,7 @@ import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { configureBundled } from "./pi/bundled";
 import { runDiagnostics } from "./pi/diagnostics";
-import { listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
+import { configureAgentDir, listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
 import { readSessionBranch, readSessionMessages } from "./pi/session-read";
@@ -212,8 +212,10 @@ app.whenReady().then(() => {
     },
   );
   mainWindow = createWindow();
-  // Pay the slow start-up costs now, off the click path: the login-shell PATH probe and the search index.
+  // Pay the slow start-up costs now, off the click path: the login-shell PATH probe, Pi's own
+  // agent-directory resolution, and the search index.
   void warmShellEnv();
+  void configureAgentDir();
   setTimeout(warmSearchIndex, 3000);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();

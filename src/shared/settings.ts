@@ -95,10 +95,6 @@ export interface PidSettings {
     error: boolean;
     onlyWhenUnfocused: boolean;
   };
-  advanced: {
-    piBinary: string; // "" → resolve `pi` from the login shell PATH
-    piExtraArgs: string; // appended to `pi --mode rpc`
-  };
 }
 
 export const DEFAULT_SETTINGS: PidSettings = {
@@ -150,10 +146,6 @@ export const DEFAULT_SETTINGS: PidSettings = {
     inputRequired: true,
     error: true,
     onlyWhenUnfocused: true,
-  },
-  advanced: {
-    piBinary: "",
-    piExtraArgs: "",
   },
 };
 

@@ -2,14 +2,17 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { configureAgentDir } from "../src/main/pi/ecosystem";
 
 /** Reads and writes go to a throwaway agent dir (PI_CODING_AGENT_DIR); the real ~/.pi is untouched. */
 let agent: string;
 const prevAgentDir = process.env.PI_CODING_AGENT_DIR;
 
-beforeAll(() => {
+beforeAll(async () => {
   agent = join(mkdtempSync(join(tmpdir(), "pid-system-prompt-")), "agent");
   process.env.PI_CODING_AGENT_DIR = agent;
+  // What main does at start-up. agentDir() still re-reads the environment on every call.
+  await configureAgentDir();
 });
 afterAll(() => {
   if (prevAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
