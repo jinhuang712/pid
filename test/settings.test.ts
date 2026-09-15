@@ -9,13 +9,15 @@ describe("withDefaults", () => {
   it("keeps stored values of the right type and drops unknown or mistyped keys", () => {
     const s = withDefaults({
       appearance: { theme: "dark", fontSize: "big", bogus: 1 },
-      advanced: { piBinary: "/x/pi" },
+      notifications: { error: false },
+      advanced: { piBinary: "/x/pi" }, // a group that no longer exists
     });
     expect(s.appearance.theme).toBe("dark");
     expect(s.appearance.fontSize).toBe(DEFAULT_SETTINGS.appearance.fontSize);
     expect("bogus" in s.appearance).toBe(false);
-    expect(s.advanced.piBinary).toBe("/x/pi");
-    expect(s.notifications).toEqual(DEFAULT_SETTINGS.notifications);
+    expect("advanced" in s).toBe(false);
+    expect(s.notifications.error).toBe(false);
+    expect(s.notifications.runCompleted).toBe(DEFAULT_SETTINGS.notifications.runCompleted);
   });
   it("clamps sizes a hand-edited file could make unusable", () => {
     const s = withDefaults({

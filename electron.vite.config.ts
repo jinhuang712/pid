@@ -11,6 +11,8 @@ export default defineConfig({
           index: resolve(__dirname, "src/main/index.ts"),
           // utility process entry: the BM25 index is built off the main process
           "search-worker": resolve(__dirname, "src/main/pi/search-worker.ts"),
+          // utility process entry: one per open session, hosting Pi's AgentSessionRuntime
+          "session-worker": resolve(__dirname, "src/main/pi/session-worker.ts"),
         },
       },
     },

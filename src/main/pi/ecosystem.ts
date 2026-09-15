@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { ResolvedResource } from "@earendil-works/pi-coding-agent";
 import type {
@@ -21,8 +21,25 @@ import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from
 
 const sdk = () => import("@earendil-works/pi-coding-agent");
 
+let getAgentDir: (() => string) | undefined;
+
+/**
+ * Load Pi's own `getAgentDir` so `agentDir()` below can stay synchronous.
+ *
+ * The agent directory is not `~/.pi/agent` unconditionally: PI_CODING_AGENT_DIR wins and is
+ * tilde-expanded, and the directory name comes from the installed package rather than a literal.
+ * Asking Pi keeps PID pointed wherever Pi points instead of PID keeping a second copy of that rule.
+ *
+ * What is cached is the function, not its answer: Pi re-reads the environment on every call and
+ * so does PID. Call this once at start-up, before anything reads the agent directory.
+ */
+export async function configureAgentDir(): Promise<void> {
+  getAgentDir ??= (await sdk()).getAgentDir;
+}
+
 export function agentDir(): string {
-  return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+  if (!getAgentDir) throw new Error("configureAgentDir() must run before agentDir()");
+  return getAgentDir();
 }
 
 export function readPiHome(): PiHome {

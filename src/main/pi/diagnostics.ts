@@ -3,12 +3,12 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { delimiter, isAbsolute, join } from "node:path";
 import { compareCompat, type PiDiagnostics } from "@shared/diagnostics";
-import { loadSettings } from "../settings";
 import { warmShellEnv } from "../shell-env";
 import { adapterSource, currentBundled, userMcpExtension } from "./bundled";
 import { readPiHome } from "./ecosystem";
 
-const sdkVersion = (): string => {
+/** The Pi PID actually runs: the version pinned in package.json and loaded by every session worker. */
+const runtimeVersion = (): string => {
   try {
     return (
       createRequire(import.meta.url)("@earendil-works/pi-coding-agent/package.json") as { version: string }
@@ -18,7 +18,7 @@ const sdkVersion = (): string => {
   }
 };
 
-/** Resolve a command the way the shell would, against the login-shell PATH PID spawns with. */
+/** Resolve a command the way the shell would, against the login-shell PATH workers inherit. */
 export function resolveOnPath(cmd: string, env: NodeJS.ProcessEnv): string | undefined {
   if (isAbsolute(cmd)) return existsSync(cmd) ? cmd : undefined;
   for (const dir of (env.PATH ?? "").split(delimiter)) {
@@ -42,22 +42,21 @@ function piVersion(binary: string, env: NodeJS.ProcessEnv): Promise<{ version?: 
 
 export async function runDiagnostics(): Promise<PiDiagnostics> {
   const env = await warmShellEnv();
-  const piBinary = loadSettings().advanced.piBinary || "pi";
-  const piPath = resolveOnPath(piBinary, env);
-  const probe = piPath
-    ? await piVersion(piPath, env)
-    : { error: `${piBinary} not found on the login shell PATH` };
-  const sdk = sdkVersion();
+  const runtime = runtimeVersion();
+  // Informational only: PID does not drive this binary, it just shares a home directory with it.
+  const terminalPath = resolveOnPath("pi", env);
+  const probe = terminalPath
+    ? await piVersion(terminalPath, env)
+    : { error: "no `pi` on the login shell PATH; PID runs its own" };
   const bundled = currentBundled();
   const packages = readPiHome().packages;
   const source = adapterSource(packages, bundled);
   return {
-    piBinary,
-    piPath,
-    piVersion: probe.version,
-    piError: probe.error,
-    sdkVersion: sdk,
-    compat: compareCompat(probe.version, sdk),
+    runtimeVersion: runtime,
+    terminalPath,
+    terminalVersion: probe.version,
+    terminalError: probe.error,
+    compat: compareCompat(probe.version, runtime),
     adapterSource: source,
     adapterName:
       source === "user" ? userMcpExtension(packages) : source === "bundled" ? "pid-mcp" : undefined,

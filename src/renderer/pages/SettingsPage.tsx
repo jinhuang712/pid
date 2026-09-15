@@ -26,8 +26,11 @@ import { bridge } from "../bridge";
 import { useSettings } from "../settings";
 import { Badge, PageShell, PathLink, Toggle } from "./PageShell";
 
-/** PID's own sections, plus the one Pi file that reads like a preference: the appended system prompt. */
-type SectionId = keyof PidSettings | "prompt";
+/**
+ * One per PID settings group, plus two pages that show Pi's own state: the appended system
+ * prompt file, and which Pi is running where.
+ */
+type SectionId = keyof PidSettings | "prompt" | "advanced";
 
 const SECTIONS: { id: SectionId; label: string; note: string }[] = [
   {
@@ -60,7 +63,7 @@ const SECTIONS: { id: SectionId; label: string; note: string }[] = [
   {
     id: "advanced",
     label: "Advanced",
-    note: "How PID launches the pi binary. Provider and model configuration stays in Pi.",
+    note: "Which Pi runs where. Provider and model configuration stays in Pi.",
   },
 ];
 
@@ -403,28 +406,7 @@ export function SettingsPage({
 
           {section === "prompt" && <AppendSystemPromptEditor />}
 
-          {section === "advanced" && (
-            <Group title="The pi process">
-              <Row
-                label="pi binary"
-                hint="Empty: resolve `pi` from your login shell PATH. Applies to new sessions."
-              >
-                <TextInput
-                  value={settings.advanced.piBinary}
-                  placeholder="/opt/homebrew/bin/pi"
-                  onChange={(piBinary) => update("advanced", { piBinary })}
-                />
-              </Row>
-              <Row label="Extra pi arguments" hint="Appended to `pi --mode rpc`, e.g. --no-extensions.">
-                <TextInput
-                  value={settings.advanced.piExtraArgs}
-                  placeholder="--thinking high"
-                  onChange={(piExtraArgs) => update("advanced", { piExtraArgs })}
-                />
-              </Row>
-            </Group>
-          )}
-          {section === "advanced" && <Diagnostics binary={settings.advanced.piBinary} />}
+          {section === "advanced" && <Diagnostics />}
         </div>
       </div>
     </PageShell>
@@ -432,41 +414,39 @@ export function SettingsPage({
 }
 
 /**
- * The two Pis PID deals with, side by side: the binary it spawns and the SDK it bundles, plus the
- * MCP adapter and bridge that ride along. Re-probed when the configured binary changes.
+ * Which Pi is which: the one PID runs in its session workers, and the one on the user's PATH for
+ * the terminal. Both share ~/.pi/agent, so drift between them is worth seeing.
  */
-function Diagnostics({ binary }: { binary: string }) {
+function Diagnostics() {
   const [d, setD] = useState<PiDiagnostics>();
   const [err, setErr] = useState<string>();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-probe when the configured binary changes
   useEffect(() => {
-    setD(undefined);
     bridge.pi.diagnostics().then(setD, (e: unknown) => setErr(String(e)));
-  }, [binary]);
+  }, []);
   const compat: Record<PiDiagnostics["compat"], { label: string; tone: "ok" | "warn" | "danger" | "muted" }> =
     {
-      tested: { label: "tested combination", tone: "ok" },
-      newer: { label: "pi newer than PID's SDK", tone: "warn" },
-      older: { label: "pi older than PID's SDK", tone: "warn" },
-      unknown: { label: "unknown", tone: "muted" },
+      tested: { label: "same version", tone: "ok" },
+      newer: { label: "your terminal's pi is newer", tone: "warn" },
+      older: { label: "your terminal's pi is older", tone: "warn" },
+      unknown: { label: "no pi on PATH", tone: "muted" },
     };
   return (
     <Group
       title="Diagnostics"
-      note="PID drives the pi on your PATH but reads sessions and resources with its own pinned SDK. When the two drift apart, what PID shows and what Pi does can differ."
+      note="PID runs Pi itself, at the version it pins. Your terminal's pi reads and writes the same ~/.pi/agent, so when the two versions drift apart their behaviour can differ."
     >
       {err && <div className="px-3.5 py-2.5 text-xs text-danger">{err}</div>}
-      {!d && !err && <div className="px-3.5 py-2.5 text-xs text-ink-3">Probing pi…</div>}
+      {!d && !err && <div className="px-3.5 py-2.5 text-xs text-ink-3">Probing…</div>}
       {d && (
         <>
-          <Row label="pi executable" hint={d.piPath ? undefined : d.piError}>
-            {d.piPath ? <PathLink path={d.piPath} /> : <Badge tone="danger">not found</Badge>}
+          <Row label="Pi runtime in PID">
+            <span className="font-mono text-sm text-ink">{d.runtimeVersion}</span>
           </Row>
-          <Row label="pi runtime version" hint={d.piPath && d.piError ? d.piError : undefined}>
-            <span className="font-mono text-sm text-ink">{d.piVersion ?? "?"}</span>
+          <Row label="pi on your PATH" hint={d.terminalPath ? undefined : d.terminalError}>
+            {d.terminalPath ? <PathLink path={d.terminalPath} /> : <Badge tone="muted">not installed</Badge>}
           </Row>
-          <Row label="PID bundled SDK">
-            <span className="font-mono text-sm text-ink">{d.sdkVersion}</span>
+          <Row label="Its version" hint={d.terminalPath && d.terminalError ? d.terminalError : undefined}>
+            <span className="font-mono text-sm text-ink">{d.terminalVersion ?? "—"}</span>
           </Row>
           <Row label="Compatibility">
             <Badge tone={compat[d.compat].tone}>{compat[d.compat].label}</Badge>
@@ -477,7 +457,7 @@ function Diagnostics({ binary }: { binary: string }) {
               d.adapterSource === "user"
                 ? `${d.adapterName ?? "An MCP extension"} from your Pi packages; PID adds nothing.`
                 : d.adapterSource === "bundled"
-                  ? "pid-mcp, loaded per session with -e; your Pi settings are untouched."
+                  ? "pid-mcp, loaded into each session worker; your Pi settings are untouched."
                   : "Not installed and not bundled: the MCP page is read-only."
             }
           >
@@ -489,7 +469,10 @@ function Diagnostics({ binary }: { binary: string }) {
                   : d.adapterSource}
             </span>
           </Row>
-          <Row label="PID bridge extension" hint="Relays MCP status into PID. Loaded per session with -e.">
+          <Row
+            label="PID bridge extension"
+            hint="Relays MCP status into PID. Loaded into each session worker."
+          >
             {d.bridgePath ? <PathLink path={d.bridgePath} /> : <Badge tone="warn">missing</Badge>}
           </Row>
         </>
