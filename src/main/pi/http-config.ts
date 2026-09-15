@@ -15,7 +15,7 @@ import type { SettingsManager } from "@earendil-works/pi-coding-agent";
  * that into a visible diagnostic. Re-check this path whenever the pinned Pi version moves.
  */
 export async function applyPiHttpSettings(settings: SettingsManager): Promise<string | undefined> {
-  const global = settings.getGlobalSettings() as { httpProxy?: string };
+  const { httpProxy } = settings.getGlobalSettings();
   const idleTimeoutMs = settings.getHttpIdleTimeoutMs();
   try {
     const entry = fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"));
@@ -24,12 +24,12 @@ export async function applyPiHttpSettings(settings: SettingsManager): Promise<st
       applyHttpProxySettings: (proxy: string | undefined) => void;
       configureHttpDispatcher: (timeoutMs?: number) => void;
     };
-    applyHttpProxySettings(global.httpProxy);
+    applyHttpProxySettings(httpProxy);
     configureHttpDispatcher(idleTimeoutMs);
     return undefined;
   } catch (err) {
     return `Pi's HTTP settings were not applied (${(err as Error).message}). ${
-      global.httpProxy ? `The configured proxy ${global.httpProxy} is not in effect.` : ""
+      httpProxy ? `The configured proxy ${httpProxy} is not in effect.` : ""
     }`.trim();
   }
 }

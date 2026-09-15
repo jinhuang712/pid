@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type { JsonAgentSessionEvent } from "@shared/protocol";
+import type { PiAgentEvent } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { emptyConversation, fromMessages, reduce } from "../src/renderer/state/conversation";
 import { emptyUsage, type Usage } from "../src/renderer/turn-summary";
@@ -26,7 +26,7 @@ const assistant = (u: Usage, timestamp = 0): AssistantMessage => ({
   timestamp,
 });
 
-const messageEnd = (m: AgentMessage): JsonAgentSessionEvent =>
+const messageEnd = (m: AgentMessage): PiAgentEvent =>
   ({ type: "message_end", message: m }) as never;
 
 /**

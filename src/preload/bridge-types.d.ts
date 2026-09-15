@@ -13,11 +13,11 @@ import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
 import type {
   PiCommand,
+  PiDialogResponse,
   PiEventEnvelope,
   PiExitEnvelope,
   PiHandle,
   ResponseDataOf,
-  RpcExtensionUIResponse,
   StartPiOptions,
 } from "@shared/protocol";
 import type {
@@ -125,7 +125,7 @@ export interface Bridge {
   pi: {
     start(opts: StartPiOptions): Promise<PiHandle>;
     command<C extends PiCommand>(key: string, command: C): Promise<ResponseDataOf<C["type"]>>;
-    uiResponse(key: string, response: RpcExtensionUIResponse): Promise<void>;
+    uiResponse(key: string, response: PiDialogResponse): Promise<void>;
     stop(key: string): Promise<void>;
     onEvent(listener: (e: PiEventEnvelope) => void): () => void;
     onExit(listener: (e: PiExitEnvelope) => void): () => void;

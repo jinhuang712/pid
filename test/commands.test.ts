@@ -1,4 +1,4 @@
-import type { PiHandle, RpcSessionState } from "@shared/protocol";
+import type { PiHandle, PiSessionState } from "@shared/protocol";
 import { describe, expect, it } from "vitest";
 import { commandEnd, commandStart, emptyConversation } from "../src/renderer/state/conversation";
 import { emptyWorkspace, workspaceReducer } from "../src/renderer/state/workspace";
@@ -41,7 +41,7 @@ describe("workspace: command-start / command-end reach the session's conversatio
   const handle: PiHandle = {
     key: "k",
     cwd: "/repo",
-    state: { sessionFile: null } as unknown as RpcSessionState,
+    state: { sessionFile: null } as unknown as PiSessionState,
     earlyEvents: [],
   };
   it("routes by key", () => {

@@ -1,13 +1,10 @@
-import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@shared/protocol";
+import type { PiDialogRequest, PiDialogResponse } from "@shared/protocol";
 import { useEffect, useState } from "react";
 
-export type DialogRequest = Extract<
-  RpcExtensionUIRequest,
-  { method: "select" | "confirm" | "input" | "editor" }
->;
+export type DialogRequest = Extract<PiDialogRequest, { method: "select" | "confirm" | "input" | "editor" }>;
 
 /**
- * Pi extensions ask for UI through the RPC extension_ui sub-protocol.
+ * Pi extensions ask for UI through the dialog channel PID defines in shared/protocol.
  * PID answers the four dialog methods here with plain desktop dialogs.
  */
 export function ExtensionDialog({
@@ -15,12 +12,12 @@ export function ExtensionDialog({
   onRespond,
 }: {
   req: DialogRequest;
-  onRespond: (r: RpcExtensionUIResponse) => void;
+  onRespond: (r: PiDialogResponse) => void;
 }) {
   const [value, setValue] = useState(req.method === "editor" ? (req.prefill ?? "") : "");
   const [cursor, setCursor] = useState(0);
   const id = req.id;
-  const cancel = () => onRespond({ type: "extension_ui_response", id, cancelled: true });
+  const cancel = () => onRespond({ id, cancelled: true });
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -49,7 +46,7 @@ export function ExtensionDialog({
                 type="button"
                 key={o}
                 onMouseEnter={() => setCursor(i)}
-                onClick={() => onRespond({ type: "extension_ui_response", id, value: o })}
+                onClick={() => onRespond({ id, value: o })}
                 className={`w-full text-left px-4 h-8 text-sm ${i === cursor ? "bg-paper-3" : ""}`}
               >
                 {o}
@@ -64,9 +61,7 @@ export function ExtensionDialog({
                 autoFocus
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && onRespond({ type: "extension_ui_response", id, value })
-                }
+                onKeyDown={(e) => e.key === "Enter" && onRespond({ id, value })}
                 placeholder={req.placeholder}
                 className="w-full h-8 px-2 rounded-md bg-paper-3 outline-none text-sm placeholder:text-ink-3"
               />
@@ -93,14 +88,14 @@ export function ExtensionDialog({
             <>
               <button
                 type="button"
-                onClick={() => onRespond({ type: "extension_ui_response", id, confirmed: false })}
+                onClick={() => onRespond({ id, confirmed: false })}
                 className={`${btn} border border-line text-ink`}
               >
                 No
               </button>
               <button
                 type="button"
-                onClick={() => onRespond({ type: "extension_ui_response", id, confirmed: true })}
+                onClick={() => onRespond({ id, confirmed: true })}
                 className={`${btn} bg-accent text-white`}
               >
                 Yes
@@ -110,7 +105,7 @@ export function ExtensionDialog({
           {(req.method === "input" || req.method === "editor") && (
             <button
               type="button"
-              onClick={() => onRespond({ type: "extension_ui_response", id, value })}
+              onClick={() => onRespond({ id, value })}
               className={`${btn} bg-accent text-white`}
             >
               OK

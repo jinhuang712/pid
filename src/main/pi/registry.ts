@@ -1,17 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type {
   PiCommand,
+  PiDialogResponse,
   PiEvent,
   PiEventEnvelope,
   PiExitEnvelope,
-  RpcExtensionUIResponse,
-  RpcSessionState,
+  PiSessionState,
   StartPiOptions,
 } from "@shared/protocol";
 import type { BrowserWindow } from "electron";
 import { warmShellEnv } from "../shell-env";
 import { bundledExtensionPaths, currentBundled } from "./bundled";
-import { detachFork } from "./detach-fork";
 import { readPiHome } from "./ecosystem";
 import { SessionProcess } from "./session-process";
 
@@ -43,7 +42,7 @@ export class PiRegistry {
       },
     });
     this.procs.set(key, proc);
-    let state: RpcSessionState;
+    let state: PiSessionState;
     try {
       state = await withTimeout(proc.started, STARTUP_TIMEOUT_MS);
     } catch (err) {
@@ -60,17 +59,10 @@ export class PiRegistry {
   }
 
   async command(key: string, command: PiCommand) {
-    const proc = this.get(key);
-    const r = await proc.request(command);
-    // a fork is a plain new session in PID: drop pi's parentSession stamp from its header
-    if (command.type === "fork") {
-      const state = await proc.request({ type: "get_state" });
-      if (state.sessionFile) await detachFork(state.sessionFile);
-    }
-    return r;
+    return this.get(key).request(command);
   }
 
-  respondUI(key: string, response: RpcExtensionUIResponse) {
+  respondUI(key: string, response: PiDialogResponse) {
     this.get(key).respondUI(response);
   }
 

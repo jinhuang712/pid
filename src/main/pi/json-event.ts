@@ -1,39 +1,40 @@
-import type { AgentSessionEvent, JsonAgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { PiAgentEvent, PiDelta } from "@shared/protocol";
 
 /**
- * Make one AgentSessionEvent safe to send to the renderer.
+ * Reduce one session event to what can cross a process boundary.
  *
- * In-process, `message_update` carries the whole partial message on every delta, which is
- * both large and full of things structured clone chokes on. Pi strips it the same way before
- * writing to its RPC stream; this is that transform, kept here because the SDK exports the
- * resulting type but not the function that produces it.
+ * In-process a `message_update` carries the whole partial message on every delta: large, repeated
+ * per token, and full of values structured clone rejects. The window rebuilds the message from the
+ * deltas, so only the increment is sent. Every other event passes through untouched.
  *
- * Keep in step with `dist/modes/json-event.js` when the pinned Pi version moves.
+ * A tool call's id and name are lifted out of the partial before it goes, because they are the one
+ * thing `toolcall_start` does not carry on its own.
  */
-export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent {
-  if (event.type !== "message_update") return event as JsonAgentSessionEvent;
+export function toJsonEvent(event: AgentSessionEvent): PiAgentEvent {
+  if (event.type !== "message_update") return event;
   if (event.message.role !== "assistant") {
     throw new Error("message_update message is not an assistant message");
   }
   return {
     type: "message_update",
     usage: event.message.usage,
-    assistantMessageEvent: toJsonAssistantMessageEvent(event.assistantMessageEvent),
-  } as JsonAgentSessionEvent;
+    assistantMessageEvent: toDelta(event.assistantMessageEvent),
+  };
 }
 
 type AssistantMessageEvent = Extract<AgentSessionEvent, { type: "message_update" }>["assistantMessageEvent"];
 
-function toJsonAssistantMessageEvent(event: AssistantMessageEvent) {
+function toDelta(event: AssistantMessageEvent): PiDelta {
   if (event.type === "toolcall_start") {
     const toolCall = event.partial.content[event.contentIndex];
     if (toolCall?.type !== "toolCall") {
       throw new Error(`toolcall_start content at index ${event.contentIndex} is not a tool call`);
     }
-    const { partial: _partial, ...deltaEvent } = event;
-    return { ...deltaEvent, id: toolCall.id, toolName: toolCall.name };
+    const { partial: _partial, ...delta } = event;
+    return { ...delta, id: toolCall.id, toolName: toolCall.name };
   }
   if (!("partial" in event)) return event;
-  const { partial: _partial, ...deltaEvent } = event;
-  return deltaEvent;
+  const { partial: _partial, ...delta } = event;
+  return delta;
 }
