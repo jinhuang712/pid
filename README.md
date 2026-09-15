@@ -83,10 +83,11 @@ it bundles, and which MCP extension loads.
 
 ## Documents
 
-- `PROPOSAL.md` — why PID exists and what it believes
-- `GOALS.md` — goals, non-goals, constraints
-- `DESIGN.md` — how PID works from the user's point of view
-- `FEATURES.md` — tagged feature inventory
+- `PROPOSAL.md` — why PID exists
+- `PHILOSOPHY.md` — principles that decide close calls
+- `GOALS.md` — goals and non-goals
+- `FEATURES.md` — tagged capability inventory
+- `DESIGN.md` — architectural boundary with Pi, state ownership, interaction model
 - `GITFLOW.md` — commit discipline
 - `AGENTS.md` — development guide for humans and coding agents
 

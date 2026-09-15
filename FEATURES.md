@@ -1,177 +1,542 @@
 # FEATURES
 
-Complete feature inventory, grouped by priority. Every feature carries a tag:
+This document defines PID's target product surface.
+
+It is a capability inventory, not an architecture document and not a statement of implementation status.
+
+Features use the following ownership tags:
 
 ```text
-[Pi]            capability that already exists in Pi; PID exposes it
-[Presentation]  visualization of a Pi concept
-[Desktop]       desktop-native affordance
-[PID]           genuinely PID-owned state or behavior (UI preferences, caches)
+[Pi]             Pi owns the underlying behavior or state.
+[Presentation]   PID renders or visualizes an existing concept.
+[Desktop]        Desktop-native interaction or operating-system integration.
+[PID]            Legitimately PID-owned UI state or derived infrastructure.
+[Extension]      Extensible PID presentation surface.
 ```
 
-If a feature would need the tag `[New Agent Semantic]`, stop and re-evaluate. It is almost certainly out of scope.
+If a feature appears to require a new category such as `[Agent Semantic]`, stop and reconsider the boundary.
 
-## P0 — Basic Pi Desktop
+---
 
-- create Pi session `[Pi]`
-- open existing Pi session `[Pi]`
-- resume session `[Pi]`
-- user message `[Pi]`
-- assistant message `[Presentation]`
-- streaming `[Presentation]`
-- thinking `[Presentation]`
-- tool calls `[Presentation]`
-- tool results `[Presentation]`
-- errors `[Presentation]`
-- composer `[Desktop]`
-- abort `[Pi]`
-- current working folder `[Pi]`
-- read local Pi model list `[Pi]`
-- select existing Pi model `[Pi]`
-- thinking level `[Pi]`
+# 1. Sessions
 
-## P1 — Pi Interaction
+* create a persistent Pi session `[Pi]`
+* open an existing Pi session `[Pi]`
+* resume a Pi session `[Pi]`
+* switch between sessions `[Pi]` `[Desktop]`
+* open Pi TUI sessions in PID `[Pi]`
+* continue PID sessions in Pi TUI `[Pi]`
+* current session identity `[Pi]`
+* session name `[Pi]`
+* session folder `[Pi]`
+* session history `[Pi]`
+* session tree `[Pi]` `[Presentation]`
+* closed-session browsing without starting a runtime `[PID]`
+* multiple live sessions `[Desktop]`
+* session activity indicators `[Presentation]`
+* external session change detection `[Desktop]`
+* Open in Pi TUI `[Desktop]`
+* safe handoff between PID and terminal ownership `[Desktop]`
 
-- steer `[Pi]`
-- follow-up `[Pi]`
-- queued messages `[Pi]`
-- queue visualization `[Presentation]`
-- compaction `[Pi]`
-- branch `[Pi]`
-- fork `[Pi]`
-- fork lineage `[Presentation]`
-- context state `[Presentation]`
-- Pi-native lifecycle events `[Pi]`
+PID maintains no separate authoritative conversation database.
 
-## P2 — Smart Composer
+---
+
+# 2. Folder Navigation
 
 ```text
-/   Skills
-@   Files
-#   Pi Actions
-$   Session References
+Folders
+└── Sessions
 ```
 
-- sigil autocomplete `[Desktop]`
-- fuzzy search `[Desktop]`
-- keyboard navigation `[Desktop]`
-- mouse selection `[Desktop]`
-- visual tokens for mentions, links, and references, in the draft and in the timeline `[Presentation]`
-- session reference preview `[Presentation]`
-- attachments by absolute path: images, PDFs, files, folders via drop, paste, or picker `[Desktop]`
-- attachment previews and chips, in the composer tray and on sent messages `[Presentation]`
+* recent folders `[PID]`
+* open folder `[Desktop]`
+* forget folder `[PID]`
+* sessions grouped by working directory `[Pi]` `[Presentation]`
+* folder-level session count `[Presentation]`
+* activity indicators on folders `[Presentation]`
+* folder filtering `[PID]`
+* branch information where Git is available `[Presentation]`
+* reveal folder in filesystem `[Desktop]`
 
-## P3 — Folder & Session UX
+There is no Project entity.
 
-- recent folders `[PID]`
-- open folder `[Desktop]`
-- sessions under folder `[Pi]`
-- resume `[Pi]`
-- fast switching `[Desktop]`
-- history `[Pi]`
-- session tree `[Presentation]`
-- fork tree `[Presentation]`
-- global session list `[Pi]`
-- current-folder session list `[Pi]`
+---
 
-## P4 — Session Search & Reference
+# 3. Conversation
 
-- global search `[PID]` (derived, rebuildable index)
-- folder-scoped search `[PID]`
-- message content search `[PID]`
-- fuzzy search `[PID]`
-- branch and worktree metadata in results `[Presentation]`
-- result preview `[Presentation]`
-- explicit `$session` reference `[Pi]` via explicit prompt content
-- inspect referenced content `[Presentation]`
-- context-budget-aware reference handling `[Presentation]`
-- no silent cross-session injection (constraint, not feature)
+* user messages `[Pi]` `[Presentation]`
+* assistant messages `[Pi]` `[Presentation]`
+* streaming text `[Pi]` `[Presentation]`
+* streaming thinking `[Pi]` `[Presentation]`
+* tool calls `[Pi]` `[Presentation]`
+* tool results `[Pi]` `[Presentation]`
+* extension messages `[Pi]` `[Presentation]`
+* errors `[Pi]` `[Presentation]`
+* compaction markers `[Pi]` `[Presentation]`
+* branch summaries `[Pi]` `[Presentation]`
+* context usage `[Pi]` `[Presentation]`
+* message metadata `[Pi]` `[Presentation]`
+* long-output collapse `[Presentation]`
+* finished-turn collapse `[Presentation]`
+* rich Markdown `[Presentation]`
+* code rendering `[Presentation]`
+* copy actions `[Desktop]`
+* selectable and inspectable message content `[Desktop]`
 
-## P5 — Coding Presentation
+The conversation is viewer-first.
 
-- file tool visualization `[Presentation]`
-- edits `[Presentation]`
-- diff `[Presentation]`
-- changed files `[Presentation]`
-- bash output `[Presentation]`
-- search output `[Presentation]`
-- long output collapse `[Presentation]`
-- steps fold behind a "Worked for …" line once a turn finishes `[Presentation]`
-- markdown rendering `[Presentation]`
-- code rendering `[Presentation]`
-- context usage visualization `[Presentation]`
-- compaction indication `[Presentation]`
+PID is not a code editor.
 
-Viewer-first. Not an IDE.
+---
 
-## P6 — Worktree
+# 4. Tool Presentation
 
-- show the session's pi-worktree binding on the title bar `[Pi]` `[Presentation]`
-- folder branch on folder rows and the title bar `[Presentation]` (via Git)
-- sessions under a worktree-bound session stay under their origin folder `[Pi]`
+All Pi tools share a common Tool Card model.
 
-Worktree creation, landing, and removal are Pi's (`pi-worktree`). PID adds no worktree UI of its own.
+This includes:
 
-## P7 — MCP
+* built-in Pi tools
+* Pi extension tools
+* MCP tools
 
-- first-class MCP page `[Presentation]`
-- list servers `[Pi]`
-- status `[Pi]`
-- tools per server `[Pi]`
-- errors `[Pi]`
-- reconnect / refresh where Pi allows `[Pi]`
-- servers an extension registered at runtime are listed read-only, from the MCP extension's snapshot `[Pi]`
-- on/off switch per server, global or per project, via the `disabled` flag `[Pi]`
-- MCP tools flow through Pi as native Pi tools (pid-mcp) `[Pi]`
-- which tools the model can see right now: pinned, search-activated, or waiting `[Pi]`
-- last error per server `[Pi]`
-- OAuth outcome of the last sign-in `[Pi]`
-- unified Tool Card rendering `[Presentation]`
+Common capabilities:
 
-Not an MCP platform.
+* name `[Pi]`
+* execution state `[Pi]`
+* input `[Pi]`
+* output `[Pi]`
+* error state `[Pi]`
+* duration `[Presentation]`
+* expandable details `[Presentation]`
+* large output handling `[Presentation]`
 
-## P8 — Skills
+Specialized built-in renderers may include:
 
-- first-class Skills page `[Presentation]`
-- list / search `[Pi]`
-- metadata `[Pi]`
-- source `[Pi]`
-- usability status `[Pi]`
-- on/off switch, global or per project, written as `pi config` would `[Pi]`
-- integration with `/` `[Desktop]`
+* file read `[Presentation]`
+* file write `[Presentation]`
+* edit / diff `[Presentation]`
+* shell command `[Presentation]`
+* grep / search `[Presentation]`
+* image `[Presentation]`
+* structured JSON `[Presentation]`
+* resource / artifact `[Presentation]`
 
-## P9 — Extensions
+Tool presentation is extensible.
 
-- first-class Extensions page `[Presentation]`
-- list / search `[Pi]`
-- metadata `[Pi]`
-- source `[Pi]`
-- compatibility state `[Presentation]`
-- on/off switch, global or per project, written as `pi config` would `[Pi]`
-- best-effort support `[Pi]`
-- explicit TUI-only unsupported state `[Presentation]`
+Third-party renderers can replace the generic card for recognized tool output. `[Extension]`
 
-No PID Extension Framework.
+---
 
-## P10 — Settings
+# 5. Composer
 
-- Appearance `[PID]`
-- Conversation `[PID]`
-- Sessions `[PID]`
-- Files & Worktrees `[PID]`
-- Notifications `[PID]`
-- System prompt: edits `~/.pi/agent/APPEND_SYSTEM.md`, Pi's appended system prompt `[Pi]`
-- Advanced `[PID]`
+The composer remains available while Pi is running.
 
-Excludes Skills, MCP, Extensions, provider config, model registry config.
+It supports:
 
-## P11 — Desktop Polish
+* text input `[Desktop]`
+* multiline editing `[Desktop]`
+* configurable Enter behavior `[PID]`
+* image paste `[Desktop]`
+* file drop `[Desktop]`
+* file picker `[Desktop]`
+* visible attachments `[Presentation]`
+* attachment previews `[Presentation]`
+* model selector `[Pi]` `[Presentation]`
+* thinking-level selector `[Pi]` `[Presentation]`
+* context gauge `[Pi]` `[Presentation]`
+* abort `[Pi]`
+* steer `[Pi]`
+* follow-up `[Pi]`
 
-- shortcuts `[Desktop]`
-- drag and drop `[Desktop]`
-- notifications `[Desktop]`
-- theme `[PID]`
-- layout persistence `[PID]`
-- performance
-- packaging `[Desktop]`
-- updater `[Desktop]`
+Four primary sigils provide contextual discovery:
+
+```text
+/   Skill
+@   File
+#   Pi Action
+$   Session Reference
+```
+
+---
+
+# 6. `/` Skills
+
+* list currently available skills `[Pi]`
+* fuzzy search `[Desktop]`
+* metadata `[Pi]`
+* source `[Pi]`
+* invocation `[Pi]`
+* insert skill invocation `[Desktop]`
+
+PID improves discovery.
+
+Skill semantics remain Pi's.
+
+---
+
+# 7. `@` Files
+
+* fuzzy file search `[PID]`
+* recent files `[PID]`
+* path preview `[Presentation]`
+* file type `[Presentation]`
+* hidden-file handling `[PID]`
+* ignore patterns `[PID]`
+* insert visible file mention `[Desktop]`
+
+An `@` mention refers to a real file path.
+
+PID does not create hidden file context merely because a file is mentioned.
+
+---
+
+# 8. `#` Pi Actions
+
+Expose actions that already exist in Pi, such as:
+
+* change model `[Pi]`
+* change thinking level `[Pi]`
+* compact `[Pi]`
+* fork `[Pi]`
+* navigate branch `[Pi]`
+* abort `[Pi]`
+* extension commands where appropriate `[Pi]`
+
+`#` is graphical discoverability for Pi actions.
+
+It is not a second command language.
+
+---
+
+# 9. `$` Session References
+
+A session may explicitly reference content from another Pi session.
+
+Capabilities:
+
+* global session search `[PID]`
+* folder-scoped search `[PID]`
+* session preview `[Presentation]`
+* selected scope `[Desktop]`
+* exact included content preview `[Presentation]`
+* token estimate `[Presentation]`
+* visible reference token `[Presentation]`
+* visible referenced content after send `[Presentation]`
+
+Possible scopes include:
+
+* session summary when one exists `[Pi]`
+* latest messages `[Pi]`
+* selected message range `[Pi]`
+* search hit with neighboring messages `[PID]`
+
+Nothing is injected silently.
+
+---
+
+# 10. Active Run and Queue
+
+* streaming run state `[Pi]`
+* abort `[Pi]`
+* steer `[Pi]`
+* follow-up `[Pi]`
+* pending steer messages `[Pi]`
+* pending follow-ups `[Pi]`
+* queue visualization `[Presentation]`
+* remove queued item where Pi allows `[Pi]`
+* promote follow-up to steer `[Desktop]`
+* run-complete notification `[Desktop]`
+
+PID exposes Pi's queue semantics rather than creating another scheduler.
+
+---
+
+# 11. Branching and Fork
+
+* session tree `[Pi]`
+* navigate existing branch `[Pi]`
+* fork from current state `[Pi]`
+* fork from an earlier point `[Pi]`
+* clone where supported by Pi `[Pi]`
+* parent lineage `[Pi]` `[Presentation]`
+* sibling sessions `[Pi]` `[Presentation]`
+* children `[Pi]` `[Presentation]`
+* graphical tree navigation `[Presentation]`
+
+Fork lineage comes from Pi session data.
+
+---
+
+# 12. Session Search
+
+Search is retrieval infrastructure, not memory.
+
+Capabilities:
+
+* search session names `[PID]`
+* search first messages `[PID]`
+* search user messages `[PID]`
+* search assistant messages `[PID]`
+* folder filter `[PID]`
+* fuzzy ranking `[PID]`
+* result preview `[Presentation]`
+* branch metadata `[Presentation]`
+* Git/worktree metadata `[Presentation]`
+
+The index is derived from Pi session files and can be rebuilt.
+
+---
+
+# 13. Models
+
+* show Pi-available models `[Pi]`
+* group by provider `[Presentation]`
+* search `[Desktop]`
+* model metadata `[Pi]`
+* select model for session `[Pi]`
+* thinking-level support `[Pi]`
+* scoped model information where Pi exposes it `[Pi]`
+
+PID does not maintain its own model registry.
+
+Provider credentials and model registration remain Pi concerns.
+
+---
+
+# 14. Skills Page
+
+Skills are a first-class ecosystem surface.
+
+* list `[Pi]`
+* search `[Desktop]`
+* description `[Pi]`
+* source `[Pi]`
+* path `[Pi]`
+* scope `[Pi]`
+* usability state `[Pi]`
+* reveal source `[Desktop]`
+* enable / disable where Pi supports configuration `[Pi]`
+
+PID has no separate skill ecosystem.
+
+---
+
+# 15. MCP Page
+
+MCP is a first-class ecosystem surface.
+
+* configured servers `[Pi]`
+* runtime-registered servers `[Pi]`
+* connection state `[Pi]`
+* authentication state `[Pi]`
+* tools per server `[Pi]`
+* tool metadata `[Pi]`
+* last error `[Pi]`
+* refresh `[Pi]`
+* reconnect `[Pi]`
+* enable / disable where supported `[Pi]`
+* OAuth interaction `[Pi]` `[Desktop]`
+* active / inactive tool visibility `[Pi]` `[Presentation]`
+* unified Tool Card execution `[Presentation]`
+
+With `pid-mcp`, MCP tools remain native Pi tools.
+
+PID is not an MCP execution platform.
+
+---
+
+# 16. Pi Extensions Page
+
+Pi Extensions are a first-class ecosystem surface.
+
+* list loaded and discoverable extensions `[Pi]`
+* search `[Desktop]`
+* source `[Pi]`
+* metadata `[Pi]`
+* path `[Pi]`
+* scope `[Pi]`
+* enabled state `[Pi]`
+* enable / disable where Pi supports it `[Pi]`
+* compatibility state `[Presentation]`
+* contributed tools `[Pi]`
+* contributed commands `[Pi]`
+* contributed UI capability where observable `[Pi]` `[Presentation]`
+
+Compatibility presentation may include:
+
+```text
+Compatible
+Partially Compatible
+TUI-specific
+Unavailable
+```
+
+PID does not fork Pi extension behavior.
+
+---
+
+# 17. Extension UI Mapping
+
+Where Pi exposes interface-level extension primitives, PID maps them to desktop equivalents.
+
+Examples:
+
+* confirm → dialog `[Presentation]`
+* select → graphical selector `[Presentation]`
+* input → desktop input dialog `[Presentation]`
+* notification → native/in-app notification `[Presentation]`
+* status → status contribution `[Presentation]`
+
+Terminal implementation details without a meaningful graphical mapping may degrade gracefully.
+
+---
+
+# 18. PID Presentation Extensibility
+
+PID itself should be highly extensible.
+
+Presentation extensions may contribute:
+
+### Tool Renderers
+
+Custom visualization for a Pi tool or class of tool results. `[Extension]`
+
+### Artifact Viewers
+
+Render structured output such as:
+
+* HTML
+* diagrams
+* images
+* structured data
+* custom artifacts
+
+`[Extension]`
+
+### Panels
+
+Additional graphical inspection surfaces. `[Extension]`
+
+### Inspectors
+
+Contextual inspection for session, tool, file, extension, or artifact state. `[Extension]`
+
+### Commands
+
+Desktop actions discoverable through the command palette. `[Extension]`
+
+### Status Contributions
+
+Small status indicators attached to appropriate PID surfaces. `[Extension]`
+
+### Navigation Contributions
+
+Additional ways to navigate Pi or extension-defined state. `[Extension]`
+
+### Composer Contributions
+
+Graphical affordances around input where they do not redefine Pi prompt semantics. `[Extension]`
+
+The extension surface should prefer general primitives over extension-specific logic in PID core.
+
+---
+
+# 19. Pi Extension + PID Presentation Integration
+
+A Pi extension may optionally have richer PID presentation without making PID necessary for its core behavior.
+
+Target model:
+
+```text
+Pi extension
+├── runtime behavior
+│   ├── tools
+│   ├── commands
+│   └── hooks
+│
+└── optional PID presentation
+    ├── renderer
+    ├── panel
+    └── inspector
+```
+
+The runtime half remains usable without PID.
+
+The presentation half may be desktop-specific.
+
+---
+
+# 20. Git and Worktrees
+
+* show current Git branch `[Presentation]`
+* show dirty state `[Presentation]`
+* show relevant divergence metadata `[Presentation]`
+* recognize real worktree directories `[Presentation]`
+* allow a worktree directory to be opened as a normal Folder `[Desktop]`
+* display Pi extension-defined worktree bindings `[Pi]` `[Presentation]`
+
+Git remains authoritative.
+
+PID does not maintain a parallel worktree database.
+
+---
+
+# 21. Settings
+
+PID settings contain PID-owned presentation preferences and explicit controls for Pi settings that Pi already exposes.
+
+PID-owned categories may include:
+
+* Appearance `[PID]`
+* Conversation `[PID]`
+* Sessions `[PID]`
+* Search `[PID]`
+* Files `[PID]`
+* Notifications `[PID]`
+* Extensions UI `[PID]`
+* Advanced `[PID]`
+
+Skills, MCP, and Pi Extensions remain first-class pages rather than being buried inside Settings.
+
+PID does not build an alternate provider or model configuration system.
+
+---
+
+# 22. Desktop Integration
+
+* keyboard shortcuts `[Desktop]`
+* command palette `[Desktop]`
+* drag and drop `[Desktop]`
+* clipboard integration `[Desktop]`
+* native notifications `[Desktop]`
+* Finder integration `[Desktop]`
+* Open in Terminal / Pi `[Desktop]`
+* window state `[PID]`
+* layout persistence `[PID]`
+* theme `[PID]`
+* packaging `[Desktop]`
+* update mechanism `[Desktop]`
+* diagnostics `[Desktop]`
+
+---
+
+# 23. Diagnostics
+
+PID should make the Pi boundary inspectable.
+
+Diagnostics may show:
+
+* active Pi runtime version `[Pi]`
+* runtime source `[Pi]`
+* session path `[Pi]`
+* session ID `[Pi]`
+* working directory `[Pi]`
+* loaded extensions `[Pi]`
+* model `[Pi]`
+* active tools `[Pi]`
+* PID presentation extensions `[Extension]`
+* derived index state `[PID]`
+* runtime errors `[Presentation]`
+
+Diagnostics exist to make integration understandable, not to introduce another configuration layer.
