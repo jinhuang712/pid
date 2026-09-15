@@ -2,14 +2,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "n
 
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { ResolvedResource } from "@earendil-works/pi-coding-agent";
-import type {
-  ExtensionView,
-  McpServerView,
-  McpToolSummary,
-  McpView,
-  PiHome,
-  SkillView,
-} from "@shared/ecosystem";
+import type { ExtensionView, PiHome, SkillView } from "@shared/ecosystem";
 import {
   PID_UI_SUPPORT,
   TERMINAL_RENDERER_APIS,
@@ -17,10 +10,10 @@ import {
   type UiSupport,
   type UiUsage,
 } from "@shared/extension-ui";
-import { mcpGlobalPath, mcpProjectPaths, projectStateOf, resolveResources } from "./toggles";
+import { projectStateOf, resolveResources } from "./toggles";
 
 /**
- * Discovery of skills, extensions, and MCP servers: what Pi loads from ~/.pi/agent and <cwd>/.pi,
+ * Discovery of skills and extensions: what Pi loads from ~/.pi/agent and <cwd>/.pi,
  * resolved by Pi's own package manager so enabled/disabled state matches `pi config`.
  */
 
@@ -232,7 +225,7 @@ function readManifest(baseDir: string): { version?: string; description?: string
   }
 }
 
-/** Package name for display: "npm:pi-mcp-adapter@1.2" → "pi-mcp-adapter", "../../dev/pi/pi-view" → "pi-view". */
+/** Package name for display: the last path or package segment, without version or .git. */
 function packageName(source: string, baseDir?: string): string {
   if (baseDir) return basename(baseDir);
   const spec = source.replace(/^(npm|git|github):/, "");
@@ -299,90 +292,4 @@ export async function listExtensions(cwd?: string): Promise<ExtensionView[]> {
   }
   out.sort((a, b) => (a.scope === b.scope ? a.name.localeCompare(b.name) : a.scope === "package" ? -1 : 1));
   return out;
-}
-
-/** MCP as configured for the MCP extension: layers merged by server name, project files winning. */
-export function readMcp(cwd?: string): McpView {
-  const globalPath = mcpGlobalPath();
-  const layers: { path: string; scope: "global" | "shared" | "pi" }[] = [
-    { path: globalPath, scope: "global" },
-  ];
-  if (cwd) {
-    const p = mcpProjectPaths(cwd);
-    layers.push({ path: p.shared, scope: "shared" }, { path: p.pi, scope: "pi" });
-  }
-  const configPaths: string[] = [];
-  const merged = new Map<string, McpServerView & { raw: Record<string, unknown> }>();
-  for (const layer of layers) {
-    if (!existsSync(layer.path)) continue;
-    let cfg: Record<string, unknown> = {};
-    try {
-      cfg = JSON.parse(readFileSync(layer.path, "utf8"));
-    } catch {
-      continue;
-    }
-    configPaths.push(layer.path);
-    const servers = (cfg.mcpServers ?? cfg["mcp-servers"] ?? {}) as Record<string, Record<string, unknown>>;
-    for (const [name, s] of Object.entries(servers)) {
-      if (!s || typeof s !== "object") continue;
-      const prev = merged.get(name);
-      const raw = { ...prev?.raw, ...s };
-      const view: McpServerView & { raw: Record<string, unknown> } = {
-        name,
-        configPath: prev?.configPath ?? layer.path,
-        definedIn: [...(prev?.definedIn ?? []), layer.path],
-        transport: typeof raw.url === "string" ? "http" : "stdio",
-        command: str(raw.command),
-        args: Array.isArray(raw.args) ? (raw.args as string[]) : undefined,
-        url: str(raw.url),
-        auth: str(raw.auth),
-        directTools:
-          typeof raw.directTools === "boolean" || raw.directTools === "search"
-            ? raw.directTools
-            : Array.isArray(raw.directTools)
-              ? (raw.directTools as string[]).filter((t): t is string => typeof t === "string")
-              : undefined,
-        disabled: raw.disabled === true,
-        globalDisabled: prev?.globalDisabled,
-        projectDisabled: prev?.projectDisabled,
-        raw,
-      };
-      if (!prev && !(typeof s.command === "string" || typeof s.url === "string")) {
-        // an override with no definition underneath: nothing Pi can start
-        view.configPath = layer.path;
-      }
-      if (layer.scope === "global") view.globalDisabled = s.disabled === true;
-      if (layer.scope === "pi" && "disabled" in s) view.projectDisabled = s.disabled === true;
-      merged.set(name, view);
-    }
-  }
-  const servers: McpServerView[] = [...merged.values()]
-    .filter((s) => s.command || s.url)
-    .map(({ raw: _raw, ...s }) => s);
-  const cachePath = join(agentDir(), "mcp-cache.json");
-  let cacheTools: Record<string, McpToolSummary[]> | undefined;
-  if (existsSync(cachePath)) {
-    try {
-      const cache = JSON.parse(readFileSync(cachePath, "utf8")) as {
-        servers?: Record<string, { tools?: McpToolSummary[] }>;
-      };
-      cacheTools = {};
-      for (const [name, entry] of Object.entries(cache.servers ?? {})) {
-        if (entry?.tools)
-          cacheTools[name] = entry.tools.map((t) => ({ name: t.name, description: t.description }));
-      }
-      for (const s of servers) {
-        const tools = cacheTools[s.name];
-        if (tools) s.cachedTools = tools;
-      }
-    } catch {
-      // unreadable cache: show servers without tools
-    }
-  }
-  return {
-    configPaths,
-    cachePath: existsSync(cachePath) ? cachePath : undefined,
-    ...(cacheTools && Object.keys(cacheTools).length > 0 ? { cacheTools } : {}),
-    servers,
-  };
 }

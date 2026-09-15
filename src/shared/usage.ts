@@ -6,9 +6,9 @@
  * being cut off, which is the thing you want to know before starting a long run.
  *
  * Pi carries no quota data — the only quota awareness in the coding agent is a friendlier error
- * message on a 429 — so an extension fetches it. pi-x-footer already did, to draw its terminal
- * footer, and PID used to do the same work again in its main process. Now there is one fetcher: the
- * extension publishes what it computed on the widget channel and PID draws it.
+ * message on a 429 — so an extension fetches it. PID used to do the same work again in its main
+ * process, which was one job done twice. Now there is one fetcher: the extension publishes what it
+ * computed on the widget channel and PID draws it.
  *
  * Which providers exist, which windows they report and what to call them are the extension's to
  * know. PID's part is the picture: order as given, labels as given, thresholds as the user set them

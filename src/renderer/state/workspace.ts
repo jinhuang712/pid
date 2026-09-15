@@ -158,8 +158,19 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
               // plain keys, and structured keys for kinds PID does not know — reaches the strip,
               // which is what the terminal does with a widget too.
               const read = readKind(ev.widgetKey, ev.widgetLines);
-              if (read)
-                return { ...p, published: setOrClear(p.published, read.kind, read.data) as Published };
+              if (read) {
+                const byNs = setOrClear(
+                  (p.published[read.kind] ?? {}) as Record<string, unknown>,
+                  read.ns,
+                  read.data,
+                );
+                const published = setOrClear(
+                  p.published as Record<string, unknown>,
+                  read.kind,
+                  Object.keys(byNs).length > 0 ? byNs : undefined,
+                ) as Published;
+                return { ...p, published };
+              }
               return { ...p, widgets: setOrClear(p.widgets, ev.widgetKey, ev.widgetLines) };
             }
             default:

@@ -1,14 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { PiDiagnostics } from "@shared/diagnostics";
-import type {
-  AppendSystemPrompt,
-  ExtensionView,
-  McpToggle,
-  McpView,
-  PiHome,
-  ResourceToggle,
-  SkillView,
-} from "@shared/ecosystem";
+import type { AppendSystemPrompt, ExtensionView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
 import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
 import type {
@@ -83,11 +75,8 @@ export interface Bridge {
     home(): Promise<PiHome>;
     skills(cwd?: string): Promise<SkillView[]>;
     extensions(cwd?: string): Promise<ExtensionView[]>;
-    mcp(cwd?: string): Promise<McpView>;
     /** Write a skill/extension on-off state into Pi's settings, as `pi config` would. */
     setResource(req: ResourceToggle): Promise<void>;
-    /** Write an MCP server's `disabled` flag into mcp.json, as `/mcp` would. */
-    setMcp(req: McpToggle): Promise<void>;
     /** ~/.pi/agent/APPEND_SYSTEM.md, the file Pi appends to its system prompt. */
     appendSystemPrompt(): Promise<AppendSystemPrompt>;
     /** Write the file in place; empty text removes it. Applies to new sessions. */
@@ -115,7 +104,7 @@ export interface Bridge {
     stop(key: string): Promise<void>;
     onEvent(listener: (e: PiEventEnvelope) => void): () => void;
     onExit(listener: (e: PiExitEnvelope) => void): () => void;
-    /** Which pi binary, which version, which SDK, which MCP adapter. Probes `pi --version`. */
+    /** Which Pi PID runs, and which `pi` is on the PATH. Probes `pi --version`. */
     diagnostics(): Promise<PiDiagnostics>;
   };
 }

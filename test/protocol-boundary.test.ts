@@ -73,9 +73,11 @@ describe("protocol boundary", () => {
    * in `@shared/extension-kinds` and `src/renderer/surfaces.ts` say which — so no other file needs
    * to name an extension to decide what to draw.
    */
-  it("names no extension anywhere in its own code", () => {
+  it("names no extension, and no ecosystem of one, anywhere in its own code", () => {
+    // Product names, and the domains that arrive with a product. PID renders kinds of data: a page
+    // it was handed, a quota someone fetched. What the rows mean stays with whoever published them.
     const NAMES =
-      /\b(pid-mcp|pi-mcp-adapter|pi-x-footer|x-footer|pi-worktree|pi-view|pi-briefly|pi-elapsed|pi-lite-web|pid-bridge)\b/;
+      /\b(pid-mcp|pi-mcp-adapter|pi-x-footer|x-footer|pi-worktree|pi-view|pi-briefly|pi-elapsed|pi-lite-web|pid-bridge)\b|\bmcp\b/i;
     // A name in prose explains where a shape came from; a name in code is a special case.
     const offenders = files.filter((f) => stripComments(f.text).match(NAMES)).map((f) => f.rel);
     expect(offenders).toEqual([]);

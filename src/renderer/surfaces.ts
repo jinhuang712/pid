@@ -1,41 +1,51 @@
-import { KINDS, type Kind } from "@shared/extension-kinds";
+import { each } from "@shared/extension-kinds";
+import type { ExtensionPage } from "@shared/extension-page";
 import type { Page } from "./components/NavRail";
 import type { Workspace } from "./state/workspace";
 
 /**
- * Which pages exist right now.
+ * What the navigation offers right now.
  *
- * Some of PID's pages are PID's own — Skills and Extensions read Pi's configuration and are there
- * whatever is installed. Others are a place for an extension to put something, and are only a page
- * while an extension is filling them: MCP without an MCP extension is an empty frame with a
- * heading, which is worse than no menu entry.
- *
- * The rule lives in this table so the window never asks whether one particular extension is
- * installed. A new surface is a row here; nothing branches on its name.
+ * Skills and Extensions are PID's own: they read Pi's configuration and are there whatever is
+ * installed. Everything else in that list was put there by an extension describing a page, and is
+ * there only while one is. Nothing is predicted — PID has no list of pages that might exist.
  */
-export interface PageSurface {
+export interface Surface {
+  /** `page:<namespace>` for an extension's page; PID's own pages keep their fixed ids. */
   id: Page;
   label: string;
-  /** The published kind that fills it. Absent means the page is PID's own and always there. */
-  kind?: Kind;
+  /** The page to draw, when an extension described one. */
+  page?: ExtensionPage;
+  /** The session that published it, so its commands run where they mean something. */
+  sessionKey?: string;
 }
 
-export const PAGE_SURFACES: PageSurface[] = [
+/** PID's own pages, in the order they appear above anything an extension adds. */
+const OWN: Surface[] = [
   { id: "skills", label: "Skills" },
-  { id: "mcp", label: "MCP", kind: "mcp-status" },
   { id: "extensions", label: "Extensions" },
 ];
 
-/** Kinds any live session has published. A closed or exited session contributes nothing. */
-export function liveKinds(ws: Workspace): Set<Kind> {
-  const out = new Set<Kind>();
+export const pageId = (ns: string): Page => `page:${ns}`;
+
+/**
+ * Pages described by live sessions, one per publisher.
+ *
+ * A pending or exited session contributes nothing: its extensions are not running, so neither are
+ * the commands its page's buttons would send.
+ */
+export function extensionPages(ws: Workspace): Surface[] {
+  const out = new Map<string, Surface>();
   for (const p of Object.values(ws.procs)) {
     if (p.pending || p.exit) continue;
-    for (const kind of KINDS) if (p.published[kind] !== undefined) out.add(kind);
+    for (const [ns, page] of each(p.published, "page")) {
+      // Two sessions in different folders can publish the same page; the first live one answers.
+      if (!out.has(ns)) out.set(ns, { id: pageId(ns), label: page.title, page, sessionKey: p.key });
+    }
   }
-  return out;
+  return [...out.values()];
 }
 
-export function availablePages(kinds: Set<Kind>): PageSurface[] {
-  return PAGE_SURFACES.filter((s) => !s.kind || kinds.has(s.kind));
+export function surfaces(ws: Workspace): Surface[] {
+  return [...OWN, ...extensionPages(ws)];
 }

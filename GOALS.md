@@ -195,7 +195,7 @@ PID may extend how that behavior is presented.
 
 ### 12. Make the Pi Ecosystem Discoverable
 
-Skills, MCP, and Extensions should be visible, inspectable first-class parts of the desktop experience.
+Skills and Extensions should be visible, inspectable first-class parts of the desktop experience, as should anything an extension brings.
 
 Users should be able to understand:
 
@@ -207,13 +207,15 @@ Users should be able to understand:
 
 These are ecosystem surfaces, not miscellaneous settings.
 
-### 13. Keep MCP Inside Pi's Tool Model
+### 13. Carry No Ecosystem
 
-MCP should not require PID to become an MCP runtime or agent platform.
+A capability that reaches Pi through an extension — MCP is the clearest example — must not put code
+for itself inside PID. Its tools flow through Pi's normal tool system, and its page, if it wants
+one, is a description it publishes and PID renders.
 
-MCP tools should flow through Pi's normal tool system.
-
-PID may provide better discovery, inspection, authentication UI, status, and presentation.
+A PID without that extension installed has no page for it, no navigation entry, and no lines of
+code that know it exists. Installing the extension adds all three, to the terminal and to PID
+alike.
 
 ### 14. Respect Real Filesystem and Git Concepts
 

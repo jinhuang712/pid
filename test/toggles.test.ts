@@ -37,22 +37,6 @@ beforeAll(async () => {
   writeFileSync(join(pkgDir, "ext.ts"), "export default function () {}\n");
   skill(join(pkgDir, "skills"), "gamma");
   writeFileSync(join(agent, "settings.json"), JSON.stringify({ packages: [pkgDir] }, null, 2));
-  writeFileSync(
-    join(agent, "mcp.json"),
-    JSON.stringify({ mcpServers: { srv: { command: "echo", args: ["hi"] }, off: { command: "x", disabled: true } } }),
-  );
-  // pkg-engine stands in for a server an extension registered at runtime: Pi discovered its tools,
-  // no mcp.json mentions it. The page can only learn about it from this cache.
-  writeFileSync(
-    join(agent, "mcp-cache.json"),
-    JSON.stringify({
-      version: 1,
-      servers: {
-        srv: { tools: [{ name: "srv_ping", description: "ping" }] },
-        "pkg-engine": { tools: [{ name: "pkg_a" }, { name: "pkg_b" }] },
-      },
-    }),
-  );
   process.env.PI_CODING_AGENT_DIR = agent;
 });
 afterAll(() => {
@@ -136,55 +120,3 @@ describe("skills and extensions", () => {
   });
 });
 
-describe("mcp", () => {
-  it("exposes cached tools for a server no config defines", async () => {
-    const { readMcp } = await import("../src/main/pi/ecosystem");
-    const v = readMcp(project);
-    expect(v.servers.find((s) => s.name === "srv")?.cachedTools?.map((t) => t.name)).toEqual(["srv_ping"]);
-    // No row: it is not configured. The cache is the only thing that knows its tools.
-    expect(v.servers.some((s) => s.name === "pkg-engine")).toBe(false);
-    expect(v.cacheTools?.["pkg-engine"]?.map((t) => t.name)).toEqual(["pkg_a", "pkg_b"]);
-  });
-
-  it("reads the disabled flag and merges layers by name", async () => {
-    const { readMcp } = await import("../src/main/pi/ecosystem");
-    const v = readMcp(project);
-    expect(v.servers.map((s) => [s.name, s.disabled])).toEqual([
-      ["srv", false],
-      ["off", true],
-    ]);
-  });
-
-  it("global toggle edits the entry in place", async () => {
-    const { setMcpDisabled } = await import("../src/main/pi/toggles");
-    const { readMcp } = await import("../src/main/pi/ecosystem");
-    setMcpDisabled({ name: "srv", scope: "global", disabled: true });
-    expect(json(join(agent, "mcp.json")).mcpServers.srv).toEqual({ command: "echo", args: ["hi"], disabled: true });
-    setMcpDisabled({ name: "off", scope: "global", disabled: false });
-    expect(json(join(agent, "mcp.json")).mcpServers.off).toEqual({ command: "x" });
-    expect(readMcp().servers.map((s) => [s.name, s.disabled])).toEqual([
-      ["srv", true],
-      ["off", false],
-    ]);
-  });
-
-  it("project toggle writes a disabled-only override and never copies the definition", async () => {
-    const { setMcpDisabled } = await import("../src/main/pi/toggles");
-    const { readMcp } = await import("../src/main/pi/ecosystem");
-    // srv is globally disabled now; enabling it for the project needs an explicit false.
-    setMcpDisabled({ name: "srv", scope: "project", cwd: project, disabled: false });
-    expect(json(join(project, ".pi", "mcp.json")).mcpServers.srv).toEqual({ disabled: false });
-    let s = readMcp(project).servers.find((x) => x.name === "srv");
-    expect(s?.disabled).toBe(false);
-    expect(s?.projectDisabled).toBe(false);
-    expect(s?.command).toBe("echo");
-
-    setMcpDisabled({ name: "off", scope: "project", cwd: project, disabled: true });
-    expect(json(join(project, ".pi", "mcp.json")).mcpServers.off).toEqual({ disabled: true });
-    // Re-enabling a server that lower layers do not disable removes the override entirely.
-    setMcpDisabled({ name: "off", scope: "project", cwd: project, disabled: false });
-    expect(json(join(project, ".pi", "mcp.json")).mcpServers.off).toBeUndefined();
-    s = readMcp(project).servers.find((x) => x.name === "off");
-    expect(s?.projectDisabled).toBeUndefined();
-  });
-});

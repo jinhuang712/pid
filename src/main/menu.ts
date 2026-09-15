@@ -10,7 +10,6 @@ export type MenuCommand =
   | "close-session"
   | "page:sessions"
   | "page:skills"
-  | "page:mcp"
   | "page:extensions"
   | "page:settings";
 
@@ -70,9 +69,8 @@ export function installMenu(win: () => BrowserWindow | undefined, onScale: (step
       submenu: [
         { label: "Sessions", accelerator: "CmdOrCtrl+1", click: send("page:sessions") },
         { label: "Skills", accelerator: "CmdOrCtrl+2", click: send("page:skills") },
-        { label: "MCP", accelerator: "CmdOrCtrl+3", click: send("page:mcp") },
-        { label: "Extensions", accelerator: "CmdOrCtrl+4", click: send("page:extensions") },
-        { label: "Settings", accelerator: "CmdOrCtrl+5", click: send("page:settings") },
+        { label: "Extensions", accelerator: "CmdOrCtrl+3", click: send("page:extensions") },
+        { label: "Settings", accelerator: "CmdOrCtrl+4", click: send("page:settings") },
         { type: "separator" },
         { role: "reload" },
         { role: "toggleDevTools" },

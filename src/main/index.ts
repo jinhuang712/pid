@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { McpToggle, ResourceToggle } from "@shared/ecosystem";
+import type { ResourceToggle } from "@shared/ecosystem";
 import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
@@ -13,13 +13,13 @@ import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { runDiagnostics } from "./pi/diagnostics";
-import { configureAgentDir, listExtensions, listSkills, readMcp, readPiHome } from "./pi/ecosystem";
+import { configureAgentDir, listExtensions, listSkills, readPiHome } from "./pi/ecosystem";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
 import { readSessionBranch, readSessionMessages } from "./pi/session-read";
 import { listAllSessions, listSessions } from "./pi/sessions";
 import { readAppendSystemPrompt, writeAppendSystemPrompt } from "./pi/system-prompt";
-import { setMcpDisabled, setResourceState } from "./pi/toggles";
+import { setResourceState } from "./pi/toggles";
 import {
   flushState,
   forgetFolder,
@@ -152,9 +152,7 @@ ipcMain.handle("settings:set", (_e, s: PidSettings) => {
 ipcMain.handle("pi:home", () => readPiHome());
 ipcMain.handle("eco:skills", (_e, cwd?: string) => listSkills(cwd));
 ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
-ipcMain.handle("eco:mcp", (_e, cwd?: string) => readMcp(cwd));
 ipcMain.handle("eco:setResource", (_e, req: ResourceToggle) => setResourceState(req));
-ipcMain.handle("eco:setMcp", (_e, req: McpToggle) => setMcpDisabled(req));
 ipcMain.handle("eco:appendSystemPrompt", () => readAppendSystemPrompt());
 ipcMain.handle("eco:setAppendSystemPrompt", (_e, text: string) => writeAppendSystemPrompt(text));
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(expandHome(path)));

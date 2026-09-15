@@ -63,9 +63,11 @@ to fake a terminal.
 `ctx.hasUI` is not a terminal check: PID has a UI, so it is true here. Only `ctx.mode === "tui"`
 stands an extension's terminal parts down.
 
-## MCP Boundary
+## Ecosystem Boundary
 
-MCP tools end up as Pi Tools and flow through Pi's agent loop. No MCP agent mode, no MCP platform.
+An extension's tools end up as Pi Tools and flow through Pi's agent loop. PID runs no second tool
+system, and carries no code for any particular ecosystem: a page for one arrives as a description
+its extension published, or does not exist.
 
 ## Model Boundary
 
@@ -106,7 +108,7 @@ Pi Coding Agent SDK
 - **Live agent**: one Electron utility process per open session, hosting Pi's own
   `AgentSessionRuntime` — the layer the Pi terminal runs on (`src/main/pi/session-worker.ts`,
   spawned by `src/main/pi/session-process.ts`). It reads the user's `~/.pi/agent`, so their
-  extensions, MCP servers, skills, models and auth apply unchanged. One session per process keeps
+  extensions, skills, models and auth apply unchanged. One session per process keeps
   Pi's process-global state per session and contains a crashing extension.
 - **Protocol** (`src/shared/protocol.ts`): PID's own commands, events, dialogs and session state,
   shaped from `AgentSession` and `AgentSessionEvent` so a field cannot drift from what the agent
@@ -115,18 +117,15 @@ Pi Coding Agent SDK
   Pi's agent API; `test/protocol-boundary.test.ts` fails if anything else does.
 - **Discovery**: session lists (`SessionManager.list/listAll`), skills (`loadSkillsFromDir`),
   and skill/extension enablement resolved by Pi's `DefaultPackageManager` so it matches `pi config`.
-  MCP config is parsed from the `mcp.json` layers pid-mcp and pi-mcp-adapter both read.
-- **PID ships one extension**: `resources/pid-bridge`, its own relay. Nothing else. MCP, the footer
-  and the rest are installed into Pi by the user, after which the terminal and PID both have them.
-  PID must never bundle, vendor or fall back to an ecosystem extension — that would make it a Pi
-  distribution, which GOALS lists as a non-goal.
+  An extension's own configuration is the extension's to read and write, never PID's.
+- **PID ships no extension.** A session loads exactly what Pi resolves for its directory, which is
+  what the terminal loads too. PID must never bundle, vendor or fall back to one — that would make
+  it a Pi distribution, which GOALS lists as a non-goal.
 - **On/off switches** (`src/main/pi/toggles.ts`): the only writes PID makes under `~/.pi/agent` or
   `<cwd>/.pi`, and they are Pi's own formats through Pi's own code paths. Skills and extensions go
   through `SettingsManager` as the same `+pattern` / `-pattern` entries `pi config` writes (global
-  or `--local`, including the project-layer inherit state). MCP servers get the MCP extension's
-  `disabled` flag: edited in place globally, or as a `{ disabled }`-only override in
-  `<cwd>/.pi/mcp.json` like `/mcp disable`. No other key in those files is touched.
-- **Appended system prompt** (`src/main/pi/system-prompt.ts`): the Settings page edits
+  or `--local`, including the project-layer inherit state). An extension's own configuration files
+  are the extension's to write; PID touches no other key and no other file.
   `~/.pi/agent/APPEND_SYSTEM.md` in place, Pi's own global append-system-prompt file, so the same
   rules apply in the terminal. An empty box removes the file. PID keeps no copy and never writes
   `SYSTEM.md` or a project's `.pi/APPEND_SYSTEM.md`.
@@ -139,15 +138,21 @@ Pi Coding Agent SDK
   any extension reach the strip above the composer — no allowlist, the same as the terminal. An
   extension wanting more than a line names its widget `<ns>:<kind>/v<n>` and sends JSON; PID routes
   claimed kinds to their renderer and shows the rest as their payload. PID's own bridge
-  (`resources/pid-bridge`) publishes MCP status through that contract, not a private channel, so the
-  core has no shortcut an extension author cannot take.
-- **Kinds and surfaces, as tables**: `@shared/extension-kinds` maps a widget kind to how PID reads
-  it; `src/renderer/surfaces.ts` maps it to the page it fills. Those two files are the whole of
-  PID's knowledge about extension presentation. Nowhere else names an extension or asks whether one
-  is installed — `if (hasMcp)` is the same mistake as `widgets["pi-worktree"]` was, and
-  `test/protocol-boundary.test.ts` fails on either. A surface exists because something filled it.
-  Every parser is defensive: the payload crosses from code PID does not own, so a bad reading reads
-  as nothing rather than painting nonsense.
+  core has no private channel an extension author cannot use.
+- **Kinds, as a table**: `@shared/extension-kinds` maps a published kind to how PID reads it, and is
+  the whole of PID's knowledge about extension presentation. A kind is a shape of data, never a
+  product: `usage` is "how much of the plan is gone", `page` is "a list of things with switches and
+  buttons". Every parser is defensive — the payload crosses from code PID does not own, so a bad
+  reading reads as nothing rather than painting nonsense.
+- **Pages an extension describes** (`@shared/extension-page`): PID cannot load an extension's code,
+  so an extension that wants a page sends one as data and PID renders the shape. Each switch and
+  button carries a command string PID runs the way a typed slash command runs — the same command
+  that works in the terminal. Navigation is derived from what is published
+  (`src/renderer/surfaces.ts`): no extension, no entry.
+- **PID names no extension, and no ecosystem of one.** Not `pi-worktree`, not MCP. Whatever a row
+  means stays with whoever published it. A hardcoded widget key, a check for one extension being
+  installed, and a built-in page for one ecosystem were three versions of the same mistake;
+  `test/protocol-boundary.test.ts` fails on any of them.
 - **Quota is not PID's**: PID fetches no usage. An extension that already computes it for the
   terminal — pi-x-footer does — publishes the same numbers as a `usage` widget, and PID draws them.
   PID owns the thresholds and the shape of the row, nothing else.

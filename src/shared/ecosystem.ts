@@ -1,6 +1,6 @@
 /**
- * Views of the Pi ecosystem on this machine. PID shows them and flips their on/off state
- * by writing the same settings `pi config` and `/mcp` write; Pi owns everything else.
+ * Views of the Pi ecosystem on this machine. PID shows them and flips their on/off state by
+ * writing the same settings `pi config` writes; Pi owns everything else.
  */
 
 import type { UiUsage } from "./extension-ui";
@@ -19,7 +19,7 @@ export interface SkillView {
   description: string;
   path: string;
   baseDir: string;
-  /** Where it was discovered: "user", "project", or a package source such as "npm:pi-view". */
+  /** Where it was discovered: "user", "project", or the package source Pi resolved it from. */
   source: string;
   disableModelInvocation: boolean;
   /** Effective state after global and project settings, as Pi resolves it. */
@@ -51,49 +51,6 @@ export interface ExtensionView {
   projectState?: ProjectState;
 }
 
-/** One entry of the MCP tool cache (`~/.pi/agent/mcp-cache.json`, shared by pid-mcp and pi-mcp-adapter). */
-export interface McpToolSummary {
-  name: string;
-  description?: string;
-}
-
-export interface McpServerView {
-  name: string;
-  /** The file that defines the server (lowest layer that has a command or url). */
-  configPath: string;
-  /** Every config file mentioning this server, lowest precedence first. */
-  definedIn: string[];
-  transport: "stdio" | "http";
-  command?: string;
-  args?: string[];
-  url?: string;
-  auth?: string;
-  /**
-   * How the server's tools reach the model: `true` always visible, a list pins those names,
-   * anything else ("search", false, absent) waits for `mcp_search`.
-   */
-  directTools?: boolean | string[] | "search";
-  /** Effective `disabled` after all layers. */
-  disabled: boolean;
-  /** `disabled` as written in the global mcp.json, if that file defines the server. */
-  globalDisabled?: boolean;
-  /** `disabled` as written in the project's .pi/mcp.json override, if any. */
-  projectDisabled?: boolean;
-  /** From the MCP tool cache; undefined when the server has never been connected. */
-  cachedTools?: McpToolSummary[];
-}
-
-export interface McpView {
-  configPaths: string[];
-  cachePath?: string;
-  /**
-   * The whole tool cache by server name. Runtime-registered servers appear here too — they have no
-   * config entry, so this is the only place the page can learn their tools.
-   */
-  cacheTools?: Record<string, McpToolSummary[]>;
-  servers: McpServerView[];
-}
-
 export interface PiHome {
   agentDir: string;
   settingsPath: string;
@@ -121,11 +78,4 @@ export interface ResourceToggle {
   cwd?: string;
   /** Global scope: "load" or "unload". Project scope: any of the three. */
   state: ProjectState;
-}
-
-export interface McpToggle {
-  name: string;
-  scope: ToggleScope;
-  cwd?: string;
-  disabled: boolean;
 }

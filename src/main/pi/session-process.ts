@@ -35,7 +35,7 @@ export class SessionProcess {
     this.child = utilityProcess.fork(join(__dirname, "session-worker.js"), [], {
       serviceName: "pid-session",
       stdio: "pipe",
-      // Pi's bash tool and its MCP servers inherit the worker's environment, so it has to be the
+      // Pi's bash tool and anything an extension spawns inherit the worker's environment, so it has to be the
       // login shell's: a GUI app's PATH is not the one the user's tools live on.
       env: shellEnv(),
     });
@@ -47,7 +47,7 @@ export class SessionProcess {
 
     this.child.stderr?.setEncoding("utf8");
     this.child.stderr?.on("data", (chunk: string) => this.collectStderr(chunk));
-    // Extensions that write to stdout (MCP status lines, for one) would be protocol noise for a
+    // An extension that writes to stdout would be protocol noise for a
     // `pi --mode rpc` child; here they are just logs, so they join the same tail.
     this.child.stdout?.setEncoding("utf8");
     this.child.stdout?.on("data", (chunk: string) => this.collectStderr(chunk));

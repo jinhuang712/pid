@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 /**
  * Which settings layer the ecosystem pages write to, and which project directory the project
- * layer means. Shared across the Skills / MCP / Extensions pages through sessionStorage so the
+ * layer means. Shared across the Skills and Extensions pages through sessionStorage so the
  * choice survives switching pages; it resets when PID restarts.
  */
 const KEY = "pid.ecoScope";

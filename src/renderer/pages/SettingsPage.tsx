@@ -97,7 +97,7 @@ const ACCENT_SWATCH: Record<Accent, string> = {
 };
 
 /**
- * Fine-grained but restrained: PID's own preferences only. Skills, MCP, Extensions,
+ * Fine-grained but restrained: PID's own preferences only. Skills, Extensions,
  * providers, and models are not settings and do not live here.
  */
 export function SettingsPage({ initialSection }: { initialSection?: string }) {

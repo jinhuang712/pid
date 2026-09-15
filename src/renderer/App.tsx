@@ -1,3 +1,4 @@
+import { only } from "@shared/extension-kinds";
 import type { RepoInfo } from "@shared/git";
 import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { PiDialogRequest, PiDialogResponse, PiEvent } from "@shared/protocol";
@@ -18,8 +19,8 @@ import { QueuePanel } from "./components/QueuePanel";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
 import { Timeline } from "./components/Timeline";
 import { expandLinks } from "./links";
+import { ExtensionPage } from "./pages/ExtensionPage";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
-import { McpPage } from "./pages/McpPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import {
@@ -34,7 +35,7 @@ import { useSettings } from "./settings";
 import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
 import { emptyWorkspace, fromMessages, procForSession, workspaceReducer } from "./state/workspace";
-import { availablePages, liveKinds } from "./surfaces";
+import { surfaces } from "./surfaces";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
@@ -766,7 +767,7 @@ export function App() {
     : undefined;
   // An extension publishes the binding it made; PID shows it in place of the plain git branch,
   // because "where this work lands" is the more useful answer when the two differ.
-  const worktreeLine = worktreeSummary(active?.published.binding);
+  const worktreeLine = worktreeSummary(active ? only(active.published, "binding") : undefined);
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
@@ -797,9 +798,9 @@ export function App() {
     : undefined;
   const dialog = renameReq ?? active?.dialogs[0];
 
-  // A page an extension fills is a page only while one is filling it. PID provides the mount
-  // point and reads the table; it never asks after a particular extension.
-  const pages = useMemo(() => availablePages(liveKinds(ws)), [ws]);
+  // Every page beyond PID's own was described by an extension, and is here only while one is
+  // describing it. PID knows none of their names.
+  const pages = useMemo(() => surfaces(ws), [ws]);
   useEffect(() => {
     // Closing the last session that filled a page takes the page with it.
     setPage((cur) =>
@@ -873,24 +874,21 @@ export function App() {
             }}
           />
         )}
-        {page === "mcp" && (
-          <McpPage
-            folder={folder}
-            sources={Object.values(ws.procs).flatMap((p) =>
-              p.published["mcp-status"] && !p.pending && !p.exit
-                ? [
-                    {
-                      key: p.key,
-                      cwd: p.cwd,
-                      active: p.key === key,
-                      mcp: p.published["mcp-status"],
-                      oauth: p.published["mcp-oauth"],
-                    },
-                  ]
-                : [],
-            )}
-            runCommand={(k, command) => bridge.pi.command(k, { type: "prompt", message: command })}
-          />
+        {pages.map(
+          (s) =>
+            s.page &&
+            page === s.id && (
+              <ExtensionPage
+                key={s.id}
+                page={s.page}
+                onCommand={
+                  s.sessionKey
+                    ? (command) =>
+                        bridge.pi.command(s.sessionKey as string, { type: "prompt", message: command })
+                    : undefined
+                }
+              />
+            ),
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
         {page === "settings" && <SettingsPage initialSection={settingsSection} />}
@@ -933,12 +931,7 @@ export function App() {
               <>
                 {/* keyed per session file (stable across the pending → live handover): scroll position
                     and the rendered window start fresh for each session */}
-                <Timeline
-                  key={active.piState.sessionFile ?? key}
-                  state={conv}
-                  cwd={active.cwd}
-                  mcpServers={active.published["mcp-status"]?.servers.map((s) => s.name)}
-                />
+                <Timeline key={active.piState.sessionFile ?? key} state={conv} cwd={active.cwd} />
                 {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}
                 <QueuePanel
                   streaming={conv.isStreaming}
@@ -984,7 +977,7 @@ export function App() {
                   }
                   thinkingLevel={active?.piState.thinkingLevel}
                   usage={conv.lastUsage}
-                  providerUsage={active.published.usage}
+                  providerUsage={only(active.published, "usage")}
                   sessionUsage={conv.sessionUsage}
                   compacting={conv.compacting}
                   loadModels={loadModels}
