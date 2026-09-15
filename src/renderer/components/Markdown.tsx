@@ -1,3 +1,4 @@
+import { isWebUrl } from "@shared/url";
 import { type MouseEvent, memo, useCallback, useMemo } from "react";
 import { useCwd } from "../cwd-context";
 import { fromFileUrl } from "../file-paths";
@@ -12,8 +13,23 @@ function anchorAt(e: MouseEvent<HTMLElement>): HTMLAnchorElement | undefined {
 /** Where a click on an anchor should go. `file-link` tokens carry the real path in `data-path`. */
 export type LinkTarget = { kind: "path"; path: string } | { kind: "url"; url: string } | undefined;
 
-const WEB_RE = /^(?:https?:|mailto:)/i;
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+type ShellBridge = Window["bridge"]["shell"];
+
+/**
+ * The shell bridge, or `undefined` when the preload bundle predates one of its methods — a stale
+ * `out/preload` after a rebuild that skipped the main process. Callers bail out before calling
+ * `preventDefault`, so the main process navigation handlers still open web URLs and the click
+ * degrades instead of dying silently.
+ */
+function shellBridge(): ShellBridge | undefined {
+  // The declared type promises every method; only the bundle actually loaded decides.
+  const shell = window.bridge?.shell as Partial<ShellBridge> | undefined;
+  if (shell?.openExternal && shell.openPath && shell.reveal) return shell as ShellBridge;
+  console.error("PID: window.bridge.shell is incomplete — rebuild and restart the app.");
+  return undefined;
+}
 
 /**
  * Anything that is not a web URL is a file: an absolute or "~" path opens as is, "file://" is
@@ -26,7 +42,7 @@ export function resolveLink(
 ): LinkTarget {
   if (tokenPath) return { kind: "path", path: tokenPath };
   if (!href || href === "#") return undefined;
-  if (WEB_RE.test(href)) return { kind: "url", url: href };
+  if (isWebUrl(href)) return { kind: "url", url: href };
   if (href.startsWith("file://")) return { kind: "path", path: fromFileUrl(href) };
   if (SCHEME_RE.test(href)) return undefined;
   let path: string;
@@ -62,12 +78,14 @@ export const Markdown = memo(function Markdown({
     (e: MouseEvent<HTMLElement>) => {
       const a = anchorAt(e);
       if (!a) return;
+      const shell = shellBridge();
+      if (!shell) return;
       e.preventDefault();
       const target = targetOf(a, cwd);
       if (!target) return;
-      if (target.kind === "url") void window.bridge.shell.openExternal(target.url);
-      else if (e.metaKey || e.altKey) void window.bridge.shell.reveal(target.path);
-      else void window.bridge.shell.openPath(target.path);
+      if (target.kind === "url") void shell.openExternal(target.url);
+      else if (e.metaKey || e.altKey) void shell.reveal(target.path);
+      else void shell.openPath(target.path);
     },
     [cwd],
   );
@@ -77,8 +95,10 @@ export const Markdown = memo(function Markdown({
       if (!a) return;
       const target = targetOf(a, cwd);
       if (target?.kind !== "path") return;
+      const shell = shellBridge();
+      if (!shell) return;
       e.preventDefault();
-      void window.bridge.shell.reveal(target.path);
+      void shell.reveal(target.path);
     },
     [cwd],
   );

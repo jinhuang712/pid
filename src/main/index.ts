@@ -5,6 +5,7 @@ import type { McpToggle, ResourceToggle } from "@shared/ecosystem";
 import type { PiCommand, RpcExtensionUIResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
+import { isWebUrl } from "@shared/url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
@@ -49,8 +50,6 @@ const pi = new PiRegistry(() => mainWindow);
 
 /** File tokens in the timeline may carry "~/…"; Electron's shell wants a real absolute path. */
 const expandHome = (path: string) => path.replace(/^~(?=\/|$)/, homedir());
-/** The only schemes a click inside the app may hand to the OS. */
-const isWebUrl = (url: string) => /^(?:https?:|mailto:)/i.test(url);
 
 function createWindow(): BrowserWindow {
   const state = windowStateKeeper({ defaultWidth: 1440, defaultHeight: 900 });
