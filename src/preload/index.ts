@@ -43,6 +43,12 @@ const bridge: Bridge = {
     set: (s) => ipcRenderer.invoke("settings:set", s),
     onChange: (l) => on("settings:changed", l),
   },
+  usage: {
+    watch: (model) => ipcRenderer.invoke("usage:watch", model),
+    turnEnded: () => ipcRenderer.invoke("usage:turnEnded"),
+    refresh: () => ipcRenderer.invoke("usage:refresh"),
+    onChange: (l) => on("usage:changed", l),
+  },
   eco: {
     home: () => ipcRenderer.invoke("pi:home"),
     skills: (cwd) => ipcRenderer.invoke("eco:skills", cwd),

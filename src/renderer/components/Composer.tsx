@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { ProviderUsage } from "@shared/usage";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -21,6 +22,7 @@ import { Keys, SigilChip } from "./Key";
 import { ModelPicker } from "./ModelPicker";
 import { Popover } from "./Popover";
 import { ThinkingPicker } from "./ThinkingPicker";
+import { UsageBar } from "./UsageBar";
 
 // biome-ignore lint/suspicious/noExplicitAny: Pi models are Model<any> on the wire
 type AnyModel = Model<any>;
@@ -39,6 +41,10 @@ export interface ComposerProps {
   model?: { provider: string; id: string; contextWindow?: number };
   thinkingLevel?: ThinkingLevel;
   usage?: AssistantMessage["usage"];
+  /** Plan quota for the account behind the model, from the main process. */
+  providerUsage?: ProviderUsage;
+  /** Everything this session has spent, for the running cost in the usage row. */
+  sessionUsage?: AssistantMessage["usage"];
   compacting?: boolean;
   loadModels: () => Promise<AnyModel[]>;
   loadLevels: () => Promise<ThinkingLevel[]>;
@@ -72,6 +78,10 @@ export function Composer(p: ComposerProps) {
   const { text, setText, streaming, onSend, complete, pick, attachments } = p;
   const { settings } = useSettings();
   const { enterSends } = settings.conversation;
+  // The usage row carries the context gauge when it is showing session stats; running both would
+  // put the same number on the card twice.
+  const usageRow = settings.usageBar.enabled;
+  const contextInRow = usageRow && settings.usageBar.sessionStats;
   const ref = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
   const [attachMenu, setAttachMenu] = useState(false);
@@ -374,7 +384,7 @@ export function Composer(p: ComposerProps) {
             className={`${EDITOR_BOX} relative w-full resize-none bg-transparent outline-none text-transparent caret-ink placeholder:text-ink-3 disabled:opacity-60`}
           />
         </div>
-        <div className="flex items-center gap-0.5 pl-2.5 pr-2.5 pb-2.5 pt-1">
+        <div className={`flex items-center gap-0.5 pl-2.5 pr-2.5 pt-1 ${usageRow ? "pb-1" : "pb-2.5"}`}>
           <span className="relative">
             <button
               type="button"
@@ -429,7 +439,13 @@ export function Composer(p: ComposerProps) {
                   placement="up"
                 />
               )}
-              <ContextChip usage={p.usage} contextWindow={p.model.contextWindow} compacting={p.compacting} />
+              {!contextInRow && (
+                <ContextChip
+                  usage={p.usage}
+                  contextWindow={p.model.contextWindow}
+                  compacting={p.compacting}
+                />
+              )}
             </>
           )}
           <span className={p.model ? "ml-1" : ""}>{sigils}</span>
@@ -490,6 +506,13 @@ export function Composer(p: ComposerProps) {
             </button>
           )}
         </div>
+        <UsageBar
+          usage={p.providerUsage}
+          lastUsage={p.usage}
+          sessionUsage={p.sessionUsage}
+          contextWindow={p.model?.contextWindow}
+          compacting={p.compacting}
+        />
       </section>
     </div>
   );
