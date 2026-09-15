@@ -12,7 +12,7 @@ import {
 } from "@shared/settings";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Badge, Eyebrow, Segmented, Toggle } from "@/ui";
+import { Badge, Eyebrow, Panel, Segmented, Toggle } from "@/ui";
 import { bridge } from "../bridge";
 import { useSettings } from "../settings";
 import { PageShell, PathLink } from "./PageShell";
@@ -791,11 +791,11 @@ function Preview() {
             It isn't — <code>warmSearchIndex</code> runs once, then each write patches the postings in place.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-line bg-paper-2 px-2.5 py-1.5">
+        <Panel className="flex items-center gap-2 px-2.5 py-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
           <span className="font-mono text-xs text-ink-2 truncate">read src/main/pi/search.ts</span>
           <span className="ml-auto text-2xs text-ink-3 tabular-nums shrink-0">234 lines</span>
-        </div>
+        </Panel>
       </div>
     </section>
   );
