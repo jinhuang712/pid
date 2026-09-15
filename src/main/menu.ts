@@ -18,12 +18,16 @@ export type MenuCommand =
  * Native application menu. Every entry maps to a renderer command; nothing here talks to Pi directly.
  * Zoom is the exception: it is a stored appearance setting, so it goes through `onScale` rather
  * than Electron's `zoomIn`/`zoomOut` roles, which would drift away from the Settings pane.
+ *
+ * `menuTemplate` is separate from `installMenu` so tests can read the accelerators and fire the
+ * click handlers without an Electron app behind them.
  */
-export function installMenu(win: () => BrowserWindow | undefined, onScale: (steps: number) => void) {
-  const send = (cmd: MenuCommand) => () => win()?.webContents.send("menu:command", cmd);
+export function menuTemplate(
+  send: (cmd: MenuCommand) => () => void,
+  onScale: (steps: number) => void,
+): MenuItemConstructorOptions[] {
   const isMac = process.platform === "darwin";
-
-  const template: MenuItemConstructorOptions[] = [
+  return [
     ...(isMac
       ? [
           {
@@ -101,5 +105,11 @@ export function installMenu(win: () => BrowserWindow | undefined, onScale: (step
       ],
     },
   ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+export function installMenu(win: () => BrowserWindow | undefined, onScale: (steps: number) => void) {
+  const send = (cmd: MenuCommand) => (): void => {
+    win()?.webContents.send("menu:command", cmd);
+  };
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(send, onScale)));
 }
