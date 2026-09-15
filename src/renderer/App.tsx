@@ -721,6 +721,12 @@ export function App() {
       if (cmd.startsWith("page:")) return setPage(cmd.slice(5) as Page);
       if (cmd === "search") return setPaletteOpen(true);
       if (cmd === "open-folder") return sessionActions.openFolder("");
+      if (cmd === "home") {
+        // Home, not "close everything": every running session stays alive in the tree. Same
+        // meaning as Escape on a session, which is the gesture people already know.
+        setPage("sessions");
+        return dispatch({ type: "activate", key: undefined });
+      }
       if (cmd === "new-session") return activeDir && sessionActions.newSession(activeDir);
       if (cmd === "fork") return key && setForkKey(key);
       if (cmd === "compact") return actions.compact();

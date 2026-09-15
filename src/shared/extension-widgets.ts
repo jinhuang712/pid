@@ -9,8 +9,8 @@
  * So one extension serves both hosts:
  *
  *     ctx.mode === "tui"
- *       ? ctx.ui.setWidget("usage", [`quota ${used}/${limit}`])
- *       : ctx.ui.setWidget("x-usage:quota/v1", [JSON.stringify({ used, limit })]);
+ *       ? ctx.ui.setWidget("metrics", [`${rps} rps`])
+ *       : ctx.ui.setWidget("metrics:stats/v1", [JSON.stringify({ rps, p99 })]);
  *
  * PID's own bridge uses the same keys as anyone else's extension. Nothing here is private.
  */

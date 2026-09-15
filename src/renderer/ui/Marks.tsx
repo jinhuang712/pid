@@ -61,8 +61,8 @@ export function Num({
 /**
  * The small caps label above a group of settings, or before a number.
  *
- * It existed at two sizes and two letter-spacings, one in the usage row and one in the settings
- * page. This is the settings page's, which is the one anchored to the type scale.
+ * It existed at two sizes and two letter-spacings, one in the settings page and one in a settings
+ * preview card. This is the settings page's, which is the one anchored to the type scale.
  */
 export function Eyebrow({ className = "", children }: { className?: string; children: ReactNode }) {
   return <span className={`text-2xs uppercase tracking-[0.08em] text-ink-3 ${className}`}>{children}</span>;
