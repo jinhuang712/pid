@@ -84,15 +84,6 @@ export interface McpServerView {
 }
 
 export interface McpView {
-  /**
-   * Which MCP extension a PID-started Pi loads: the user's own package, PID's bundled pid-mcp
-   * (added per process with `-e`, nothing written to Pi's settings), or none.
-   */
-  adapterSource: "user" | "bundled" | "none";
-  /** Name of the extension that will load: "pid-mcp" or "pi-mcp-adapter". */
-  adapterName?: string;
-  /** Version of the bundled copy, when that is what will load. */
-  adapterVersion?: string;
   configPaths: string[];
   cachePath?: string;
   /**

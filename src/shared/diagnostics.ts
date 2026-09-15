@@ -22,10 +22,6 @@ export interface PiDiagnostics {
   /** Why the terminal probe found nothing. Not having pi installed is fine; PID runs its own. */
   terminalError?: string;
   compat: PiCompat;
-  adapterSource: "user" | "bundled" | "none";
-  /** "pid-mcp" or "pi-mcp-adapter", whichever will load. */
-  adapterName?: string;
-  adapterVersion?: string;
   bridgePath?: string;
 }
 

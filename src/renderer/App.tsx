@@ -2,6 +2,7 @@ import type { RepoInfo } from "@shared/git";
 import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { PiDialogRequest, PiDialogResponse, PiEvent } from "@shared/protocol";
 import type { SessionSummary } from "@shared/sessions";
+import { worktreeSummary } from "@shared/worktree";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { appendAttachments, parseAttachments, toAttachment } from "./attachments";
 import { bridge } from "./bridge";
@@ -33,7 +34,7 @@ import { useSettings } from "./settings";
 import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
 import { emptyWorkspace, fromMessages, procForSession, workspaceReducer } from "./state/workspace";
-import { useTurnEndedSignal, useUsageWatch } from "./usage";
+import { availablePages, liveKinds } from "./surfaces";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
@@ -61,10 +62,6 @@ export function App() {
   // any command sent there is an "unknown pi process" error in the main process.
   const liveKey = active && !active.pending && !active.exit ? active.key : undefined;
   const conv = active?.conv ?? emptyConversation();
-  // Plan quota is an account fact, so one watcher covers every open session: it follows whichever
-  // model is in front of the user and the main process does the fetching.
-  const usageSnapshot = useUsageWatch(active?.piState.model);
-  useTurnEndedSignal(conv.isStreaming);
   // Draft, $session refs, and attachments live per session; the entry view has its own scope.
   const composer = useComposer(active?.key ?? HOME_SCOPE);
   const { draft, refs, attachments, links, setDraft } = composer;
@@ -767,6 +764,9 @@ export function App() {
       activeSummary?.firstMessage ||
       (active.conv.messages.length ? firstUserText(active.conv.messages) : undefined)
     : undefined;
+  // An extension publishes the binding it made; PID shows it in place of the plain git branch,
+  // because "where this work lands" is the more useful answer when the two differ.
+  const worktreeLine = worktreeSummary(active?.published.binding);
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
@@ -797,6 +797,16 @@ export function App() {
     : undefined;
   const dialog = renameReq ?? active?.dialogs[0];
 
+  // A page an extension fills is a page only while one is filling it. PID provides the mount
+  // point and reads the table; it never asks after a particular extension.
+  const pages = useMemo(() => availablePages(liveKinds(ws)), [ws]);
+  useEffect(() => {
+    // Closing the last session that filled a page takes the page with it.
+    setPage((cur) =>
+      cur === "sessions" || cur === "settings" || pages.some((s) => s.id === cur) ? cur : "sessions",
+    );
+  }, [pages]);
+
   const paletteActions: PaletteAction[] = [
     {
       id: "new",
@@ -813,9 +823,7 @@ export function App() {
     },
     { id: "fork", label: "Fork from…", hint: ["⌘", "⇧", "F"], run: () => key && setForkKey(key) },
     { id: "compact", label: "Compact context", run: () => actions.compact() },
-    { id: "skills", label: "Skills", run: () => setPage("skills") },
-    { id: "mcp", label: "MCP", run: () => setPage("mcp") },
-    { id: "extensions", label: "Extensions", run: () => setPage("extensions") },
+    ...pages.map((s) => ({ id: s.id, label: s.label, run: () => setPage(s.id) })),
     { id: "settings", label: "Settings", hint: ["⌘", ","], run: () => setPage("settings") },
   ];
 
@@ -853,6 +861,7 @@ export function App() {
           onSearch={() => setPaletteOpen(true)}
           actions={sessionActions}
           page={page}
+          pages={pages}
           onPage={setPage}
         />
         {page === "skills" && (
@@ -868,15 +877,23 @@ export function App() {
           <McpPage
             folder={folder}
             sources={Object.values(ws.procs).flatMap((p) =>
-              p.mcp && !p.pending && !p.exit
-                ? [{ key: p.key, cwd: p.cwd, active: p.key === key, mcp: p.mcp, oauth: p.mcpOAuth }]
+              p.published["mcp-status"] && !p.pending && !p.exit
+                ? [
+                    {
+                      key: p.key,
+                      cwd: p.cwd,
+                      active: p.key === key,
+                      mcp: p.published["mcp-status"],
+                      oauth: p.published["mcp-oauth"],
+                    },
+                  ]
                 : [],
             )}
             runCommand={(k, command) => bridge.pi.command(k, { type: "prompt", message: command })}
           />
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
-        {page === "settings" && <SettingsPage initialSection={settingsSection} usage={usageSnapshot} />}
+        {page === "settings" && <SettingsPage initialSection={settingsSection} />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <main className="flex-1 flex flex-col min-w-0">
             {/* two tiers: the title owns line one; folder and branch share line two */}
@@ -891,11 +908,21 @@ export function App() {
                       <FolderGlyph />
                       {base(active.cwd)}
                     </span>
-                    {branch && (
-                      <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
+                    {worktreeLine ? (
+                      <span
+                        className="inline-flex items-center gap-1 min-w-0 truncate text-warn"
+                        title="Worktree binding for this session"
+                      >
                         <BranchGlyph />
-                        <span className="font-mono truncate">{branch}</span>
+                        <span className="font-mono truncate">{worktreeLine}</span>
                       </span>
+                    ) : (
+                      branch && (
+                        <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
+                          <BranchGlyph />
+                          <span className="font-mono truncate">{branch}</span>
+                        </span>
+                      )
                     )}
                     {active.exit && <span className="text-danger truncate">{active.exit}</span>}
                   </div>
@@ -910,7 +937,7 @@ export function App() {
                   key={active.piState.sessionFile ?? key}
                   state={conv}
                   cwd={active.cwd}
-                  mcpServers={active.mcp?.servers.map((s) => s.name)}
+                  mcpServers={active.published["mcp-status"]?.servers.map((s) => s.name)}
                 />
                 {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}
                 <QueuePanel
@@ -957,7 +984,7 @@ export function App() {
                   }
                   thinkingLevel={active?.piState.thinkingLevel}
                   usage={conv.lastUsage}
-                  providerUsage={usageSnapshot.usage}
+                  providerUsage={active.published.usage}
                   sessionUsage={conv.sessionUsage}
                   compacting={conv.compacting}
                   loadModels={loadModels}

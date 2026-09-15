@@ -36,9 +36,3 @@ export const widgetKey = (k: WidgetKey) => `${k.ns}:${k.kind}/v${k.version}`;
 /** Keys PID's own bundled bridge publishes. They parse by the same rule as anyone else's. */
 export const WIDGET_MCP_STATUS = "pid:mcp-status/v1";
 export const WIDGET_MCP_OAUTH = "pid:mcp-oauth/v1";
-
-/**
- * Structured payloads PID has a renderer for. Everything else structured is shown as its JSON under
- * its key, so an extension author can see the data arrived before PID knows what to draw with it.
- */
-export const CLAIMED_KINDS = new Set(["mcp-status", "mcp-oauth"]);

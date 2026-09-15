@@ -1,11 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { WIDGET_MCP_OAUTH, WIDGET_MCP_STATUS } from "@shared/extension-widgets";
-import {
-  type McpOAuthOutcome,
-  type McpStatusSnapshot,
-  parseMcpOAuth,
-  parseMcpStatus,
-} from "@shared/mcp-status";
+import { type Published, readKind } from "@shared/extension-kinds";
 import type { PiEvent, PiHandle, PiSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
 import {
@@ -31,10 +25,11 @@ export interface Proc {
   /** setWidget lines by key, from any extension; PID shows them all. */
   widgets: Record<string, string[]>;
   dialogs: DialogRequest[];
-  /** Live MCP server status from the MCP extension (pid-mcp), via pid-bridge. Undefined until the first snapshot. */
-  mcp?: McpStatusSnapshot;
-  /** The most recent OAuth outcome the MCP extension reported, via pid-bridge. */
-  mcpOAuth?: McpOAuthOutcome;
+  /**
+   * Structured widgets this session's extensions have published, by kind. A kind that is absent is
+   * one no extension filled, which is how PID decides a surface does not exist.
+   */
+  published: Published;
   /** Set when the process exited; the entry stays until dismissed so the user sees why. */
   exit?: string;
   /**
@@ -93,6 +88,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         conv: placeholder?.conv ?? emptyConversation(),
         statuses: {},
         widgets: {},
+        published: {},
         dialogs: [],
       };
       const { [a.replaces ?? ""]: _placeholder, ...rest } = ws.procs;
@@ -116,6 +112,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         conv: a.messages ? fromMessages(a.messages) : emptyConversation(),
         statuses: {},
         widgets: {},
+        published: {},
         dialogs: [],
         pending: true,
       };
@@ -156,13 +153,15 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
               return { ...p, dialogs: [...p.dialogs, ev] };
             case "setStatus":
               return { ...p, statuses: setOrClear(p.statuses, ev.statusKey, ev.statusText || undefined) };
-            case "setWidget":
-              // A `<ns>:<kind>/v<n>` key whose renderer PID has goes to that renderer. Everything
-              // else — plain keys and structured keys nothing claims — reaches the strip, which is
-              // what the terminal does with a widget too.
-              if (ev.widgetKey === WIDGET_MCP_STATUS) return { ...p, mcp: parseMcpStatus(ev.widgetLines) };
-              if (ev.widgetKey === WIDGET_MCP_OAUTH) return { ...p, mcpOAuth: parseMcpOAuth(ev.widgetLines) };
+            case "setWidget": {
+              // A `<ns>:<kind>/v<n>` key PID has a kind for becomes that kind. Everything else —
+              // plain keys, and structured keys for kinds PID does not know — reaches the strip,
+              // which is what the terminal does with a widget too.
+              const read = readKind(ev.widgetKey, ev.widgetLines);
+              if (read)
+                return { ...p, published: setOrClear(p.published, read.kind, read.data) as Published };
               return { ...p, widgets: setOrClear(p.widgets, ev.widgetKey, ev.widgetLines) };
+            }
             default:
               return p;
           }

@@ -25,6 +25,11 @@ function sourceFiles(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
+/** Prose may name an extension; code may not. Crude on purpose — a false positive is a comment. */
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
 const files = sourceFiles(SRC).map((path) => ({
   path,
   rel: path.slice(path.indexOf("src")),
@@ -56,6 +61,26 @@ describe("protocol boundary", () => {
     const offenders = files
       .filter((f) => /^src[/\\](renderer|preload)[/\\]/.test(f.rel))
       .filter((f) => f.text.includes("@earendil-works/pi-coding-agent"))
+      .map((f) => f.rel);
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * PID renders kinds of data, not products.
+   *
+   * `widgets["pi-worktree"]` and `if (hasMcp)` are the same mistake twice: the core deciding what
+   * to show by the name of one extension. A surface exists because something filled it — the tables
+   * in `@shared/extension-kinds` and `src/renderer/surfaces.ts` say which — so no other file needs
+   * to name an extension to decide what to draw.
+   */
+  it("names no extension where it decides what to show", () => {
+    const TABLES = [join("src", "shared", "extension-kinds.ts"), join("src", "renderer", "surfaces.ts")];
+    const NAMES = /\b(pid-mcp|pi-mcp-adapter|pi-x-footer|pi-worktree|pi-view|pi-briefly|pi-elapsed)\b/;
+    const offenders = files
+      .filter((f) => /^src[/\\]renderer[/\\]/.test(f.rel) || /^src[/\\]shared[/\\]/.test(f.rel))
+      .filter((f) => !TABLES.includes(f.rel))
+      // A name in prose explains where a shape came from; a name in code is a special case.
+      .filter((f) => stripComments(f.text).match(NAMES))
       .map((f) => f.rel);
     expect(offenders).toEqual([]);
   });

@@ -10,16 +10,7 @@ import {
   RESET_DISPLAYS,
   type ThemeMode,
   UI_SCALES,
-  USAGE_REFRESH_STOPS,
 } from "@shared/settings";
-import {
-  PROVIDER_LABEL,
-  type ProviderHealth,
-  USAGE_PROVIDERS,
-  USAGE_WINDOWS,
-  type UsageSnapshot,
-  WINDOW_LABEL,
-} from "@shared/usage";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { bridge } from "../bridge";
@@ -52,7 +43,7 @@ const SECTIONS: { id: SectionId; label: string; note: string }[] = [
   {
     id: "files",
     label: "Files",
-    note: "The @ file picker. Worktrees belong to Pi (pi-worktree) and show on the session title bar.",
+    note: "The @ file picker. A worktree binding belongs to the extension that made it, and shows on the session title bar.",
   },
   { id: "notifications", label: "Notifications", note: "Desktop notifications for things that need you." },
   {
@@ -109,14 +100,7 @@ const ACCENT_SWATCH: Record<Accent, string> = {
  * Fine-grained but restrained: PID's own preferences only. Skills, MCP, Extensions,
  * providers, and models are not settings and do not live here.
  */
-export function SettingsPage({
-  initialSection,
-  usage,
-}: {
-  initialSection?: string;
-  /** The live quota reading, so the Usage bar section can show a real preview and real providers. */
-  usage?: UsageSnapshot;
-}) {
+export function SettingsPage({ initialSection }: { initialSection?: string }) {
   const { settings, update } = useSettings();
   const [section, setSection] = useState<SectionId>(
     SECTIONS.some((s) => s.id === initialSection) ? (initialSection as SectionId) : "appearance",
@@ -307,7 +291,7 @@ export function SettingsPage({
             </Group>
           )}
 
-          {section === "usageBar" && <UsageSection usage={usage} />}
+          {section === "usageBar" && <UsageSection />}
 
           {section === "sessions" && (
             <Group title="Session list">
@@ -452,24 +436,6 @@ function Diagnostics() {
             <Badge tone={compat[d.compat].tone}>{compat[d.compat].label}</Badge>
           </Row>
           <Row
-            label="MCP extension"
-            hint={
-              d.adapterSource === "user"
-                ? `${d.adapterName ?? "An MCP extension"} from your Pi packages; PID adds nothing.`
-                : d.adapterSource === "bundled"
-                  ? "pid-mcp, loaded into each session worker; your Pi settings are untouched."
-                  : "Not installed and not bundled: the MCP page is read-only."
-            }
-          >
-            <span className="font-mono text-sm text-ink">
-              {d.adapterSource === "bundled"
-                ? `pid-mcp ${d.adapterVersion ?? ""} (bundled)`
-                : d.adapterSource === "user"
-                  ? (d.adapterName ?? "user")
-                  : d.adapterSource}
-            </span>
-          </Row>
-          <Row
             label="PID bridge extension"
             hint="Relays MCP status into PID. Loaded into each session worker."
           >
@@ -564,43 +530,21 @@ function AppendSystemPromptEditor() {
  * how often it asks, and when a number turns amber — ending on the row itself, so the thresholds
  * have somewhere to land.
  */
-function UsageSection({ usage }: { usage?: UsageSnapshot }) {
+function UsageSection() {
   const { settings, update } = useSettings();
   const u = settings.usageBar;
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshedAt, setRefreshedAt] = useState<number | undefined>(undefined);
-  const stop = Math.max(
-    0,
-    USAGE_REFRESH_STOPS.findIndex((s) => s >= u.refreshSeconds),
-  );
-
-  const refresh = () => {
-    setRefreshing(true);
-    void bridge.usage.refresh().finally(() => {
-      setRefreshing(false);
-      setRefreshedAt(Date.now());
-    });
-  };
 
   return (
     <div className="flex flex-col gap-5">
-      <Group title="Display">
+      <Group
+        title="Display"
+        note="An extension publishes the quota. Which providers it can read, which windows they report and how often it asks are its settings, not PID's. Install one into Pi and both the terminal and PID show it."
+      >
         <Row
           label="Show the usage bar"
-          hint="One line under the composer toolbar. It hides itself when the model's provider publishes no quota."
+          hint="One line under the composer toolbar. It hides itself when no extension publishes quota for the model's provider."
         >
           <Toggle value={u.enabled} onChange={(enabled) => update("usageBar", { enabled })} />
-        </Row>
-        <Row
-          label="Quota windows"
-          hint="Codex publishes a 5-hour and a weekly window; the Ark plans add a monthly one."
-        >
-          <MultiSegmented
-            value={u.windows}
-            options={USAGE_WINDOWS}
-            labels={WINDOW_LABEL}
-            onChange={(windows) => update("usageBar", { windows })}
-          />
         </Row>
         <Row
           label="Reset"
@@ -625,49 +569,8 @@ function UsageSection({ usage }: { usage?: UsageSnapshot }) {
       </Group>
 
       <Group
-        title="Refresh"
-        note="A reading is taken when the model changes, on the interval, and shortly after a turn settles."
-      >
-        <Row label="Interval">
-          <Slider
-            value={stop}
-            min={0}
-            max={USAGE_REFRESH_STOPS.length - 1}
-            step={1}
-            format={(i) => fmtSeconds(USAGE_REFRESH_STOPS[i])}
-            onChange={(i) => update("usageBar", { refreshSeconds: USAGE_REFRESH_STOPS[i] })}
-          />
-        </Row>
-        <Row
-          label="Refresh after each turn"
-          hint="Debounced, so a turn with many tool calls still costs one request."
-        >
-          <Toggle
-            value={u.refreshAfterTurn}
-            onChange={(refreshAfterTurn) => update("usageBar", { refreshAfterTurn })}
-          />
-        </Row>
-        <Row
-          label="Keep the last reading on failure"
-          hint="The row stays with a stale mark instead of disappearing."
-        >
-          <Toggle value={u.keepStale} onChange={(keepStale) => update("usageBar", { keepStale })} />
-        </Row>
-        <Row label={refreshedAt ? "Refreshed just now" : "Ask the providers again"}>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={refreshing}
-            className="h-7 px-2.5 rounded-md text-xs text-ink-2 hover:bg-paper-3 hover:text-ink disabled:opacity-40"
-          >
-            {refreshing ? "Refreshing…" : "Refresh now"}
-          </button>
-        </Row>
-      </Group>
-
-      <Group
         title="Quota thresholds"
-        note="A window the provider itself reports as rate-limited stays amber whatever these say. The context gauge keeps its own thresholds."
+        note="A window the publisher itself reports as rate-limited stays amber whatever these say. The context gauge keeps its own thresholds."
       >
         <Row label="Warn at">
           <Slider
@@ -690,72 +593,9 @@ function UsageSection({ usage }: { usage?: UsageSnapshot }) {
           />
         </Row>
       </Group>
-
-      {/* Last: an account list is reference, not a control. You read it when something looks
-          wrong, not when you are setting the row up. */}
-      <Group
-        title="Providers"
-        note="PID reads the credential Pi is already signed in with, and only ever reads it — signing in and out stays in Pi. Only the provider behind the running model is queried; a model pointed at a proxy is never asked about."
-      >
-        {USAGE_PROVIDERS.map((id) => (
-          <ProviderRow key={id} health={usage?.providers.find((p) => p.provider === id)} provider={id} />
-        ))}
-      </Group>
     </div>
   );
 }
-
-/**
- * One account row. "Active" means this is the provider behind the model running now; the others
- * report only whether a credential exists, since proving a login works means spending a request.
- */
-function ProviderRow({
-  provider,
-  health,
-}: {
-  provider: (typeof USAGE_PROVIDERS)[number];
-  health?: ProviderHealth;
-}) {
-  const state = health?.state ?? "unknown";
-  const { dot, text, label } = PROVIDER_STATE[state];
-  return (
-    <Row label={PROVIDER_LABEL[provider]} hint={health?.detail ?? PROVIDER_SOURCE[provider]}>
-      <span className="inline-flex items-center gap-2 whitespace-nowrap">
-        {dot ? (
-          <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-        ) : (
-          // A ring, not a filled dot: nothing is wrong, nothing has been confirmed either.
-          <span className="w-2 h-2 rounded-full shrink-0 border-[1.5px] border-ink-3 box-border" />
-        )}
-        <span className={`text-xs ${text}`}>{label}</span>
-      </span>
-    </Row>
-  );
-}
-
-/**
- * Each label says exactly what was checked. "Signed in" means a credential was found on disk;
- * a CLI-backed plan that has never been queried gets "Not checked" rather than a green light it
- * has not earned.
- */
-const PROVIDER_STATE: Record<
-  NonNullable<ProviderHealth["state"]>,
-  { dot: string; text: string; label: string }
-> = {
-  active: { dot: "bg-ok", text: "text-ok", label: "In use" },
-  ready: { dot: "bg-ink-3", text: "text-ink-3", label: "Signed in" },
-  unknown: { dot: "", text: "text-ink-3", label: "Not checked" },
-  "signed-out": { dot: "bg-warn", text: "text-warn", label: "Not signed in" },
-  unsupported: { dot: "", text: "text-ink-3", label: "Unavailable" },
-};
-
-/** Where each reading comes from, so nobody has to guess what PID is talking to. */
-const PROVIDER_SOURCE: Record<(typeof USAGE_PROVIDERS)[number], string> = {
-  "openai-codex": "chatgpt.com, with the ChatGPT login Pi holds",
-  "opencode-go": "opencode.ai, with the Zen key Pi holds",
-  "volcengine-agent-plan": "arkcli usage plan --product agent-plan",
-  "volcengine-coding-plan": "arkcli usage plan --product coding-plan",
-};
 
 const fmtSeconds = (s: number) => (s < 60 ? `${s}s` : `${s / 60}m`);
 

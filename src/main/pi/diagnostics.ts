@@ -4,8 +4,7 @@ import { createRequire } from "node:module";
 import { delimiter, isAbsolute, join } from "node:path";
 import { compareCompat, type PiDiagnostics } from "@shared/diagnostics";
 import { warmShellEnv } from "../shell-env";
-import { adapterSource, currentBundled, userMcpExtension } from "./bundled";
-import { readPiHome } from "./ecosystem";
+import { currentBundled } from "./bundled";
 
 /** The Pi PID actually runs: the version pinned in package.json and loaded by every session worker. */
 const runtimeVersion = (): string => {
@@ -48,19 +47,12 @@ export async function runDiagnostics(): Promise<PiDiagnostics> {
   const probe = terminalPath
     ? await piVersion(terminalPath, env)
     : { error: "no `pi` on the login shell PATH; PID runs its own" };
-  const bundled = currentBundled();
-  const packages = readPiHome().packages;
-  const source = adapterSource(packages, bundled);
   return {
     runtimeVersion: runtime,
     terminalPath,
     terminalVersion: probe.version,
     terminalError: probe.error,
     compat: compareCompat(probe.version, runtime),
-    adapterSource: source,
-    adapterName:
-      source === "user" ? userMcpExtension(packages) : source === "bundled" ? "pid-mcp" : undefined,
-    adapterVersion: source === "bundled" ? bundled.adapterVersion : undefined,
-    bridgePath: bundled.bridge,
+    bridgePath: currentBundled().bridge,
   };
 }

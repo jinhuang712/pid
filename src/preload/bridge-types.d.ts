@@ -28,7 +28,6 @@ import type {
   SessionSummary,
 } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
-import type { UsageSnapshot } from "@shared/usage";
 
 export interface AppInfo {
   version: string;
@@ -79,19 +78,6 @@ export interface Bridge {
     set(s: PidSettings): Promise<PidSettings>;
     /** Settings changed outside the renderer — the View menu's interface-scale items. */
     onChange(listener: (s: PidSettings) => void): () => void;
-  };
-  usage: {
-    /**
-     * Tell the main process which model is in front of the user, and get the reading it already
-     * has. Quota belongs to the account behind the model, so this is the only session fact the
-     * usage service needs — pass undefined when no session is open.
-     */
-    watch(model: { provider: string; baseUrl: string } | undefined): Promise<UsageSnapshot>;
-    /** A turn settled, so the quota moved. Debounced in the main process. */
-    turnEnded(): Promise<void>;
-    /** Refetch now, ignoring the last reading. The Refresh button in settings. */
-    refresh(): Promise<UsageSnapshot>;
-    onChange(listener: (s: UsageSnapshot) => void): () => void;
   };
   eco: {
     home(): Promise<PiHome>;
