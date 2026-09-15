@@ -8,6 +8,26 @@ When principles conflict, the earlier and more fundamental principle should gene
 
 ---
 
+## North Star: Monorepo Native
+
+PID should be structurally mergeable into the Pi monorepo without creating a second owner for any Pi semantic.
+
+A useful test for every architectural decision is:
+
+> If PID moved into `pi/apps/pid` tomorrow, would this code still make sense?
+
+PID-specific presentation, navigation, search, inspection and desktop interaction are valid.
+
+PID-specific implementations of Pi runtime semantics are not.
+
+The goal is not merely compatibility with Pi.
+
+The goal is an architecture native enough that PID could become another official Pi host without fundamental redesign.
+
+This North Star sits above every principle below: where a principle is ambiguous, read it the way that keeps PID mergeable.
+
+---
+
 ## 1. One Pi
 
 There is one Pi.
