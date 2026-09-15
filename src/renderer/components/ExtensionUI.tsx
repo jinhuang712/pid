@@ -1,5 +1,6 @@
 import type { PiDialogRequest, PiDialogResponse } from "@shared/protocol";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Modal } from "@/ui";
 
 export type DialogRequest = Extract<PiDialogRequest, { method: "select" | "confirm" | "input" | "editor" }>;
 
@@ -18,6 +19,13 @@ export function ExtensionDialog({
   const [cursor, setCursor] = useState(0);
   const id = req.id;
   const cancel = () => onRespond({ id, cancelled: true });
+  // The dialog interrupts whatever the window was doing to ask a question, so the answer field
+  // takes focus. Done here rather than with `autoFocus`, which is only sound inside a dialog and
+  // the dialog element now lives one component away.
+  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  useEffect(() => {
+    field.current?.focus();
+  }, []);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -29,91 +37,86 @@ export function ExtensionDialog({
 
   const btn = "h-7 px-3 rounded-md text-xs";
   return (
-    <div className="absolute inset-0 z-50 bg-black/30 flex items-center justify-center">
-      <dialog
-        open
-        aria-label={req.title}
-        className="relative m-0 p-0 w-[520px] max-w-[92vw] rounded-xl border border-line bg-paper-2 shadow-2xl text-ink"
-      >
-        <div className="px-4 pt-3 pb-2 text-sm font-medium">{req.title}</div>
-        {req.method === "confirm" && (
-          <div className="px-4 pb-3 text-sm text-ink-2 whitespace-pre-wrap">{req.message}</div>
-        )}
-        {req.method === "select" && (
-          <div className="pb-2 max-h-80 overflow-y-auto">
-            {req.options.map((o, i) => (
-              <button
-                type="button"
-                key={o}
-                onMouseEnter={() => setCursor(i)}
-                onClick={() => onRespond({ id, value: o })}
-                className={`w-full text-left px-4 h-8 text-sm ${i === cursor ? "bg-paper-3" : ""}`}
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-        )}
-        {(req.method === "input" || req.method === "editor") && (
-          <div className="px-4 pb-3">
-            {req.method === "input" ? (
-              <input
-                autoFocus
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && onRespond({ id, value })}
-                placeholder={req.placeholder}
-                className="w-full h-8 px-2 rounded-md bg-paper-3 outline-none text-sm placeholder:text-ink-3"
-              />
-            ) : (
-              <textarea
-                autoFocus
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                rows={10}
-                className="w-full px-2 py-1.5 rounded-md bg-paper-3 outline-none text-sm font-mono"
-              />
-            )}
-          </div>
-        )}
-        <div className="px-4 pb-3 flex items-center gap-2 justify-end">
-          <button
-            type="button"
-            onClick={cancel}
-            className={`${btn} border border-line text-ink-2 hover:text-ink`}
-          >
-            Cancel
-          </button>
-          {req.method === "confirm" && (
-            <>
-              <button
-                type="button"
-                onClick={() => onRespond({ id, confirmed: false })}
-                className={`${btn} border border-line text-ink`}
-              >
-                No
-              </button>
-              <button
-                type="button"
-                onClick={() => onRespond({ id, confirmed: true })}
-                className={`${btn} bg-accent text-white`}
-              >
-                Yes
-              </button>
-            </>
-          )}
-          {(req.method === "input" || req.method === "editor") && (
+    // z-50: an extension's question must sit above the palette, which a keystroke can open under it.
+    <Modal label={req.title} z={50}>
+      <div className="px-4 pt-3 pb-2 text-sm font-medium">{req.title}</div>
+      {req.method === "confirm" && (
+        <div className="px-4 pb-3 text-sm text-ink-2 whitespace-pre-wrap">{req.message}</div>
+      )}
+      {req.method === "select" && (
+        <div className="pb-2 max-h-80 overflow-y-auto">
+          {req.options.map((o, i) => (
             <button
               type="button"
-              onClick={() => onRespond({ id, value })}
-              className={`${btn} bg-accent text-white`}
+              key={o}
+              onMouseEnter={() => setCursor(i)}
+              onClick={() => onRespond({ id, value: o })}
+              className={`w-full text-left px-4 h-8 text-sm ${i === cursor ? "bg-paper-3" : ""}`}
             >
-              OK
+              {o}
             </button>
+          ))}
+        </div>
+      )}
+      {(req.method === "input" || req.method === "editor") && (
+        <div className="px-4 pb-3">
+          {req.method === "input" ? (
+            <input
+              ref={field}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onRespond({ id, value })}
+              placeholder={req.placeholder}
+              className="w-full h-8 px-2 rounded-md bg-paper-3 outline-none text-sm placeholder:text-ink-3"
+            />
+          ) : (
+            <textarea
+              ref={field}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              rows={10}
+              className="w-full px-2 py-1.5 rounded-md bg-paper-3 outline-none text-sm font-mono"
+            />
           )}
         </div>
-      </dialog>
-    </div>
+      )}
+      <div className="px-4 pb-3 flex items-center gap-2 justify-end">
+        <button
+          type="button"
+          onClick={cancel}
+          className={`${btn} border border-line text-ink-2 hover:text-ink`}
+        >
+          Cancel
+        </button>
+        {req.method === "confirm" && (
+          <>
+            <button
+              type="button"
+              onClick={() => onRespond({ id, confirmed: false })}
+              className={`${btn} border border-line text-ink`}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              onClick={() => onRespond({ id, confirmed: true })}
+              className={`${btn} bg-accent text-white`}
+            >
+              Yes
+            </button>
+          </>
+        )}
+        {(req.method === "input" || req.method === "editor") && (
+          <button
+            type="button"
+            onClick={() => onRespond({ id, value })}
+            className={`${btn} bg-accent text-white`}
+          >
+            OK
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }
 

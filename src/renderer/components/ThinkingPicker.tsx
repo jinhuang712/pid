@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { useEffect, useState } from "react";
-import { Popover } from "./Popover";
+import { Dot, Popover, Row, Trigger } from "@/ui";
 
 export function ThinkingPicker({
   current,
@@ -20,26 +20,9 @@ export function ThinkingPicker({
   }, [open, load]);
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink inline-flex items-center whitespace-nowrap ${placement === "up" ? "h-[26px] rounded-full text-[12.5px] hover:bg-paper-3" : "hover:bg-paper-3"}`}
-        title="Thinking level"
-      >
+      <Trigger placement={placement} title="Thinking level" onClick={() => setOpen(!open)}>
         {current}
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          className="ml-1 inline-block opacity-70"
-        >
-          <title>open</title>
-          <path d="m5 6 3 3 3-3" />
-        </svg>
-      </button>
+      </Trigger>
       <Popover
         open={open}
         onClose={() => setOpen(false)}
@@ -47,18 +30,17 @@ export function ThinkingPicker({
       >
         {levels.length === 0 && <div className="px-3 py-1.5 text-xs text-ink-3">not supported</div>}
         {levels.map((l) => (
-          <button
-            type="button"
+          <Row
             key={l}
+            className="text-xs"
             onClick={() => {
               onSelect(l);
               setOpen(false);
             }}
-            className="w-full flex items-center gap-2 px-3 h-7 text-left text-xs hover:bg-paper-3"
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${l === current ? "bg-accent" : "bg-transparent"}`} />
+            <Dot tone={l === current ? "accent" : undefined} />
             <span className="text-ink">{l}</span>
-          </button>
+          </Row>
         ))}
       </Popover>
     </div>

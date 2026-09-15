@@ -1,7 +1,7 @@
 import type { FolderSuggestion, SearchHit, SessionSummary } from "@shared/sessions";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Keys, Modal } from "@/ui";
 import { bridge } from "../bridge";
-import { Keys } from "./Key";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
@@ -116,80 +116,68 @@ export function Palette({
   ];
 
   return (
-    <div className="absolute inset-0 z-40 flex items-start justify-center pt-[14vh] bg-black/25">
-      <button
-        type="button"
-        aria-label="Close"
-        className="absolute inset-0 cursor-default"
-        onMouseDown={onClose}
-      />
-      <dialog
-        open
-        aria-label="Search"
-        className="relative m-0 p-0 w-[680px] max-w-[92vw] rounded-2xl border border-line-2 bg-paper-2 shadow-[0_24px_80px_rgba(0,0,0,0.45)] flex flex-col max-h-[64vh] text-ink overflow-hidden"
-      >
-        <div className="flex items-center gap-3 px-4 h-12">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            className="text-ink-3 shrink-0"
-          >
-            <title>search</title>
-            <circle cx="7" cy="7" r="4.5" />
-            <path d="m10.5 10.5 3 3" />
-          </svg>
-          <input
-            ref={input}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") return onClose();
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setCursor((c) => Math.min(c + 1, items.length - 1));
-              } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setCursor((c) => Math.max(c - 1, 0));
-              } else if (e.key === "Enter" && items[cursor]) pick(items[cursor], e.metaKey || e.ctrlKey);
-            }}
-            placeholder="Sessions, past conversations, folders, actions…"
-            className="flex-1 bg-transparent outline-none text-[14px] text-ink placeholder:text-ink-3"
-          />
-          {busy && <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
-        </div>
-        <div className="overflow-y-auto pb-1 border-t border-line">
-          {items.length === 0 && <div className="px-4 py-3 text-[12.5px] text-ink-3">Nothing matches.</div>}
-          {groups.map(({ title, kind }) => {
-            const rows = items.map((it, i) => [it, i] as const).filter(([it]) => it.kind === kind);
-            if (rows.length === 0) return null;
-            return (
-              <div key={kind} className="pt-1">
-                {title && <div className="px-4 pt-1 pb-0.5 text-[11.5px] text-ink-3">{title}</div>}
-                {rows.map(([it, i]) => (
-                  <Row
-                    key={i}
-                    active={i === cursor}
-                    onHover={() => setCursor(i)}
-                    onClick={(alt) => pick(it, alt)}
-                  >
-                    {render(it, folder)}
-                  </Row>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-        <div className="px-4 h-8 flex items-center gap-4 text-[12px] text-ink-3 border-t border-line">
-          <Keys keys={["⏎"]} label="open" />
-          <Keys keys={["⌘", "⏎"]} label="copy session reference" />
-          <Keys keys={["esc"]} label="close" />
-        </div>
-      </dialog>
-    </div>
+    <Modal label="Search" align="top" width={680} maxHeight="64vh" onClose={onClose}>
+      <div className="flex items-center gap-3 px-4 h-12">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          className="text-ink-3 shrink-0"
+        >
+          <title>search</title>
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="m10.5 10.5 3 3" />
+        </svg>
+        <input
+          ref={input}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") return onClose();
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setCursor((c) => Math.min(c + 1, items.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setCursor((c) => Math.max(c - 1, 0));
+            } else if (e.key === "Enter" && items[cursor]) pick(items[cursor], e.metaKey || e.ctrlKey);
+          }}
+          placeholder="Sessions, past conversations, folders, actions…"
+          className="flex-1 bg-transparent outline-none text-[14px] text-ink placeholder:text-ink-3"
+        />
+        {busy && <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
+      </div>
+      <div className="overflow-y-auto pb-1 border-t border-line">
+        {items.length === 0 && <div className="px-4 py-3 text-[12.5px] text-ink-3">Nothing matches.</div>}
+        {groups.map(({ title, kind }) => {
+          const rows = items.map((it, i) => [it, i] as const).filter(([it]) => it.kind === kind);
+          if (rows.length === 0) return null;
+          return (
+            <div key={kind} className="pt-1">
+              {title && <div className="px-4 pt-1 pb-0.5 text-[11.5px] text-ink-3">{title}</div>}
+              {rows.map(([it, i]) => (
+                <Row
+                  key={i}
+                  active={i === cursor}
+                  onHover={() => setCursor(i)}
+                  onClick={(alt) => pick(it, alt)}
+                >
+                  {render(it, folder)}
+                </Row>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-4 h-8 flex items-center gap-4 text-[12px] text-ink-3 border-t border-line">
+        <Keys keys={["⏎"]} label="open" />
+        <Keys keys={["⌘", "⏎"]} label="copy session reference" />
+        <Keys keys={["esc"]} label="close" />
+      </div>
+    </Modal>
   );
 }
 

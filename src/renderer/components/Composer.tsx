@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { IconButton, Keys, Popover, SigilChip } from "@/ui";
 import { type Attachment, segment } from "../attachments";
 import { collapseLinks, type LinkRef } from "../links";
 import type { SessionReference } from "../session-reference";
@@ -18,9 +19,7 @@ import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
 import { ContextTray } from "./ContextTray";
-import { Keys, SigilChip } from "./Key";
 import { ModelPicker } from "./ModelPicker";
-import { Popover } from "./Popover";
 import { ThinkingPicker } from "./ThinkingPicker";
 import { UsageBar } from "./UsageBar";
 
@@ -387,14 +386,12 @@ export function Composer(p: ComposerProps) {
         </div>
         <div className={`flex items-center gap-0.5 pl-2.5 pr-2.5 pt-1 ${usageRow ? "pb-1" : "pb-2.5"}`}>
           <span className="relative">
-            <button
-              type="button"
+            <IconButton
               onClick={() => setAttachMenu((v) => !v)}
               disabled={p.disabled}
               title="Attach files or folders (paths only, nothing is copied)"
               aria-haspopup="menu"
               aria-expanded={attachMenu}
-              className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-ink-3 hover:text-ink hover:bg-paper-3 transition-colors disabled:opacity-40"
             >
               <svg
                 width="14"
@@ -408,7 +405,7 @@ export function Composer(p: ComposerProps) {
                 <title>attach</title>
                 <path d="M10.5 5.5 6 10a1.75 1.75 0 0 0 2.5 2.5l5-5a3.5 3.5 0 0 0-5-5l-5.5 5.5a5 5 0 0 0 7 7L13 12" />
               </svg>
-            </button>
+            </IconButton>
             <Popover
               open={attachMenu}
               onClose={() => setAttachMenu(false)}
@@ -457,15 +454,16 @@ export function Composer(p: ComposerProps) {
               <Keys keys={["⇧", "⏎"]} label="newline" />
             </span>
           )}
-          <button
-            type="button"
+          <IconButton
+            size="lg"
+            ground={false}
+            className="mr-1"
             onClick={toggleExpanded}
             title={expanded ? "Collapse editor" : "Expand editor"}
             aria-pressed={expanded}
-            className="w-[30px] h-[30px] mr-1 rounded-full flex items-center justify-center text-ink-3 hover:text-ink transition-colors"
           >
             <ExpandIcon expanded={expanded} />
-          </button>
+          </IconButton>
           {stopMode ? (
             <button
               type="button"

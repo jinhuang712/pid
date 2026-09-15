@@ -1,27 +1,10 @@
 import type { Model } from "@earendil-works/pi-ai";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Dot, Num, Popover, Row, Trigger } from "@/ui";
 import { fuzzyFilter } from "../fuzzy";
-import { Popover } from "./Popover";
 
 // biome-ignore lint/suspicious/noExplicitAny: Pi models are Model<any> on the wire
 type AnyModel = Model<any>;
-
-function Chevron() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      className="ml-1 inline-block opacity-70"
-    >
-      <title>open</title>
-      <path d="m5 6 3 3 3-3" />
-    </svg>
-  );
-}
 
 export function ModelPicker({
   current,
@@ -65,15 +48,13 @@ export function ModelPicker({
 
   return (
     <div className="relative">
-      <button
-        type="button"
+      <Trigger
+        placement={placement}
         onClick={() => setOpen(!open)}
-        className={`no-drag h-6.5 px-2 rounded-md text-xs text-ink-2 hover:text-ink inline-flex items-center whitespace-nowrap ${placement === "up" ? "h-[26px] rounded-full text-[12.5px] hover:bg-paper-3" : "hover:bg-paper-3"}`}
         title={current ? `${current.provider}/${current.id} · from Pi's model configuration` : "Model"}
       >
         {current ? current.id : "model"}
-        <Chevron />
-      </button>
+      </Trigger>
       <Popover
         open={open}
         onClose={() => setOpen(false)}
@@ -103,22 +84,21 @@ export function ModelPicker({
                 const idx = filtered.indexOf(m);
                 const isCurrent = current?.provider === m.provider && current?.id === m.id;
                 return (
-                  <button
-                    type="button"
+                  <Row
                     key={`${m.provider}/${m.id}`}
+                    active={idx === cursor}
+                    hover={false}
+                    className="text-xs"
                     onClick={() => pick(m)}
                     onMouseEnter={() => setCursor(idx)}
-                    className={`w-full flex items-center gap-2 px-3 h-7 text-left text-xs ${idx === cursor ? "bg-paper-3" : ""}`}
                   >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${isCurrent ? "bg-accent" : "bg-transparent"}`}
-                    />
+                    <Dot tone={isCurrent ? "accent" : undefined} />
                     <span className="text-ink truncate">{m.id}</span>
                     <span className="text-ink-3 truncate">{m.name}</span>
                     <span className="flex-1" />
                     {m.reasoning && <span className="text-ink-3">think</span>}
-                    <span className="text-ink-3 tabular-nums">{Math.round(m.contextWindow / 1000)}k</span>
-                  </button>
+                    <Num className="text-ink-3">{Math.round(m.contextWindow / 1000)}k</Num>
+                  </Row>
                 );
               })}
             </div>

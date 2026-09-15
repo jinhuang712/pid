@@ -10,6 +10,7 @@ import {
   windowTone,
 } from "@shared/usage";
 import type { ReactNode } from "react";
+import { Eyebrow, FILL, Num, TEXT } from "@/ui";
 import { useSettings } from "../settings";
 import { fmtCost, fmtTokens, type Usage } from "../turn-summary";
 
@@ -111,10 +112,10 @@ function Window({
       className="inline-flex items-center gap-1.5 shrink-0"
       title={`${usage.providerLabel ?? usage.provider} ${w.label}: ${formatUsedPercent(w.usedPercent)} used${detail}`}
     >
-      <Label>{w.label}</Label>
+      <Eyebrow>{w.label}</Eyebrow>
       {prefs.meters && <Meter percent={w.usedPercent} tone={tone} />}
-      <span className={`font-mono tabular-nums ${TEXT[tone]}`}>{formatUsedPercent(w.usedPercent)}</span>
-      {reset && <span className="text-[11px] font-mono tabular-nums text-ink-3">{reset}</span>}
+      <Num className={TEXT[tone]}>{formatUsedPercent(w.usedPercent)}</Num>
+      {reset && <Num className="text-[11px] text-ink-3">{reset}</Num>}
     </span>
   );
 }
@@ -123,15 +124,11 @@ function Window({
 function Pending({ label, meters }: { label: string; meters: boolean }): ReactNode {
   return (
     <span className="inline-flex items-center gap-1.5 shrink-0">
-      <Label>{label}</Label>
+      <Eyebrow>{label}</Eyebrow>
       {meters && <Meter percent={undefined} tone="muted" />}
-      <span className="font-mono tabular-nums text-ink-3">—</span>
+      <Num className="text-ink-3">—</Num>
     </span>
   );
-}
-
-function Label({ children }: { children: ReactNode }): ReactNode {
-  return <span className="text-[10.5px] uppercase tracking-[0.06em] text-ink-3">{children}</span>;
 }
 
 function Meter({ percent, tone }: { percent?: number; tone: UsageTone }): ReactNode {
@@ -174,15 +171,15 @@ function renderSession(
         >
           <Ring percent={pct} compacting={compacting} />
           <span>
-            <span className="font-mono tabular-nums text-ink-2">{fmtTokens(used)}</span>
+            <Num className="text-ink-2">{fmtTokens(used)}</Num>
             {` / ${fmtTokens(contextWindow)}`}
           </span>
         </span>
       )}
       {cost && (
-        <span className="font-mono tabular-nums text-ink-3" title="Cost of this session so far">
+        <Num className="text-ink-3" title="Cost of this session so far">
           {cost}
-        </span>
+        </Num>
       )}
     </>
   );
@@ -210,17 +207,3 @@ function Ring({ percent, compacting }: { percent: number; compacting?: boolean }
     </svg>
   );
 }
-
-const TEXT: Record<UsageTone, string> = {
-  ok: "text-ok",
-  warn: "text-warn",
-  danger: "text-danger",
-  muted: "text-ink-3",
-};
-
-const FILL: Record<UsageTone, string> = {
-  ok: "bg-ok",
-  warn: "bg-warn",
-  danger: "bg-danger",
-  muted: "bg-ink-3",
-};
