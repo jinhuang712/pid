@@ -57,6 +57,8 @@ export function groupTurns(messages: AgentMessage[], markers: Marker[]): Turn[] 
 export interface Split {
   steps: Indexed[];
   answer?: AssistantMessage;
+  /** The answer is gateway text rather than model output; the real reply is likely in the steps. */
+  suspect?: boolean;
 }
 
 export function splitReply(replies: Indexed[]): Split {
@@ -80,7 +82,25 @@ export function splitReply(replies: Indexed[]): Split {
     tail.length > 0 || last.stopReason === "error" || last.stopReason === "aborted"
       ? { ...last, content: tail }
       : undefined;
-  return { steps, answer };
+  return { steps, answer, suspect: answer && looksInjected(answer) ? true : undefined };
+}
+
+/**
+ * Anthropic-compat gateways sometimes put their own text in the assistant content channel — a
+ * `--- BANNER ---` context note, or a placeholder standing in for content they dropped — while the
+ * model's actual reply lands in the thinking block. Two shapes, both seen from
+ * aliyun-workspace/deepseek-v4.1-flash:
+ *   `--- CONTEXT UPDATE (ignore if irrelevant) ---`
+ *   `[System: Empty message content sanitised to satisfy protocol]`
+ */
+function looksInjected(m: AssistantMessage): boolean {
+  const text = m.content
+    .map((c) => (c.type === "text" ? c.text : ""))
+    .join("")
+    .trim();
+  if (!text) return false;
+  const first = text.split("\n")[0].trim();
+  return /^---\s+\S.*\S\s+---$/.test(first) || /^\[System:[^\]]*\]$/.test(text);
 }
 
 const EDITING_TOOLS = new Set(["edit", "write"]);
