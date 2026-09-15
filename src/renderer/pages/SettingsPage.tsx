@@ -521,9 +521,9 @@ function AppendSystemPromptEditor() {
 }
 
 /**
- * The Usage bar section. Four questions in order: what the row shows, which accounts it can read,
- * how often it asks, and when a number turns amber — ending on the row itself, so the thresholds
- * have somewhere to land.
+ * The Usage bar section. Two groups: what the row shows, and when a number
+ * turns amber. Which accounts quota can be read for and how often it is asked
+ * are the publishing extension's settings, not PID's — the Display note says so.
  */
 function UsageSection() {
   const { settings, update } = useSettings();
