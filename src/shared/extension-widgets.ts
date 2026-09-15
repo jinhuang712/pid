@@ -32,7 +32,3 @@ export function parseWidgetKey(key: string): WidgetKey | undefined {
 }
 
 export const widgetKey = (k: WidgetKey) => `${k.ns}:${k.kind}/v${k.version}`;
-
-/** Keys PID's own bundled bridge publishes. They parse by the same rule as anyone else's. */
-export const WIDGET_MCP_STATUS = "pid:mcp-status/v1";
-export const WIDGET_MCP_OAUTH = "pid:mcp-oauth/v1";

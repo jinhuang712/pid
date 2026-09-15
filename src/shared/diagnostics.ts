@@ -22,7 +22,6 @@ export interface PiDiagnostics {
   /** Why the terminal probe found nothing. Not having pi installed is fine; PID runs its own. */
   terminalError?: string;
   compat: PiCompat;
-  bridgePath?: string;
 }
 
 /** Compare major.minor only; patch releases are not treated as drift. */

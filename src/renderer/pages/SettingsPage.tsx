@@ -435,12 +435,6 @@ function Diagnostics() {
           <Row label="Compatibility">
             <Badge tone={compat[d.compat].tone}>{compat[d.compat].label}</Badge>
           </Row>
-          <Row
-            label="PID bridge extension"
-            hint="Relays MCP status into PID. Loaded into each session worker."
-          >
-            {d.bridgePath ? <PathLink path={d.bridgePath} /> : <Badge tone="warn">missing</Badge>}
-          </Row>
         </>
       )}
     </Group>

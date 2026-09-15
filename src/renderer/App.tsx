@@ -537,7 +537,7 @@ export function App() {
   const reload = async (k: string) => {
     const names = async () => (await bridge.pi.command(k, { type: "get_commands" })).commands;
     const before = new Set((await names()).map((c) => c.name));
-    await bridge.pi.command(k, { type: "prompt", message: "/reload" });
+    await bridge.pi.command(k, { type: "reload" });
     const after = await names();
     setCommandsEpoch((n) => n + 1);
     const count = (source: string) => after.filter((c) => c.source === source).length;
