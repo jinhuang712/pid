@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { IconButton, Keys, Popover, SigilChip } from "@/ui";
+import { IconButton, Popover, SigilChip } from "@/ui";
 import { type Attachment, segment } from "../attachments";
 import { collapseLinks, type LinkRef } from "../links";
 import type { SessionReference } from "../session-reference";
@@ -431,12 +431,6 @@ export function Composer(p: ComposerProps) {
           )}
           <span className={p.model ? "ml-1" : ""}>{sigils}</span>
           <span className="flex-1" />
-          {/* The send button already says how to send; only the newline chord needs a hint, and only when Enter sends. */}
-          {enterSends && !streaming && (
-            <span className="flex items-center pr-2">
-              <Keys keys={["⇧", "⏎"]} label="newline" />
-            </span>
-          )}
           <IconButton
             size="lg"
             ground={false}
