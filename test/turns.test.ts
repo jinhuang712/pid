@@ -76,6 +76,18 @@ describe("splitReply", () => {
     const aborted = assistant([call("1", "bash", {})], { stopReason: "aborted" });
     expect(splitReply([{ index: 0, m: aborted }]).answer?.content).toEqual([]);
   });
+
+  it("flags gateway text sitting in the answer slot", () => {
+    const banner = assistant([
+      { type: "thinking", thinking: "the reply the user actually wanted" },
+      text("--- CONTEXT UPDATE (ignore if irrelevant) ---\n[checkpoint] Save point reached."),
+    ]);
+    expect(splitReply([{ index: 0, m: banner }]).suspect).toBe(true);
+    const placeholder = assistant([text("[System: Empty message content sanitised to satisfy protocol]")]);
+    expect(splitReply([{ index: 0, m: placeholder }]).suspect).toBe(true);
+    // A leading horizontal rule is markdown, not a banner.
+    expect(splitReply([{ index: 0, m: assistant([text("---\n\nheading")]) }]).suspect).toBeUndefined();
+  });
 });
 
 describe("describeTurn", () => {

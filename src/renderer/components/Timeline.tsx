@@ -414,9 +414,10 @@ const TurnBlock = memo(function TurnBlock({
   streaming?: AssistantMessage;
 }) {
   const { settings } = useSettings();
-  const [open, setOpen] = useState(!settings.appearance.stepsCollapsed);
+  const { steps, answer, suspect } = useMemo(() => splitReply(turn.replies), [turn.replies]);
+  // A suspect answer starts unfolded: what the user came for is in the steps, not the answer slot.
+  const [open, setOpen] = useState(!settings.appearance.stepsCollapsed || suspect === true);
   const settled = turn.summary !== undefined;
-  const { steps, answer } = useMemo(() => splitReply(turn.replies), [turn.replies]);
   const unfolded = !settled || open;
   const replies = settled ? steps : turn.replies;
   return (
@@ -427,6 +428,13 @@ const TurnBlock = memo(function TurnBlock({
         <Steps turn={turn} open={open} onToggle={steps.length > 0 ? () => setOpen(!open) : undefined} />
       )}
       {unfolded && replies.map(({ index, m }) => <Reply key={index} m={m} toolRuns={toolRuns} />)}
+      {settled && suspect && (
+        <div className="px-6 py-2 text-[12.5px] flex items-center gap-2 text-warn">
+          <span className="min-w-0 [overflow-wrap:anywhere]">
+            This reply looks like provider text, not model output — the answer may be in the steps above.
+          </span>
+        </div>
+      )}
       {settled && answer && <Assistant m={answer} live={false} toolRuns={toolRuns} />}
       {streaming && <Assistant m={streaming} live toolRuns={toolRuns} />}
       {turn.markers.map((k) => (
