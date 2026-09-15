@@ -65,6 +65,23 @@ if [ "$mode" = "app" ]; then
   rm -rf /Applications/PID.app
   cp -R "$app" /Applications/PID.app
   ok "installed /Applications/PID.app"
+
+  # `open` on a running app only brings it forward: the old build stays in memory and every
+  # rebuild since the last launch silently does nothing. Stop it, wait for the quit, then open.
+  running() { pgrep -f "/Applications/PID.app/Contents/MacOS/PID" >/dev/null 2>&1; }
+  if running; then
+    warn "a PID is running — stopping it, or it would keep the old build loaded"
+    pkill -f "/Applications/PID.app/Contents/MacOS/PID" 2>/dev/null || true
+    for _ in $(seq 1 24); do
+      running || break
+      sleep 0.25
+    done
+    if running; then
+      warn "PID is still up (a quit dialog may be waiting) — the new build loads on its next launch"
+      exit 0
+    fi
+    ok "previous instance stopped"
+  fi
   open /Applications/PID.app
   exit 0
 fi
