@@ -22,7 +22,9 @@ import { describe, expect, it } from "vitest";
 
 const SRC = join(import.meta.dirname, "..", "src");
 const WORKER = join("src", "main", "pi", "session-worker.ts");
-const PI_BRIDGE_DIR = `src${"/"}main${"/"}pi${"/"}`;
+const SEP = "/";
+/** Only explicit compatibility shims may touch Pi's private layout. */
+const PI_COMPAT_DIR = `src${SEP}main${SEP}pi${SEP}compat${SEP}`;
 
 function sourceFiles(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -85,14 +87,14 @@ describe("north star boundary", () => {
   });
 
   /**
-   * Interim scope: only files under `src/main/pi/` may reach into Pi's
-   * private layout (currently the HTTP dispatcher deep import). Nothing
-   * outside the Pi bridge directory may do so. Phase C narrows this to
-   * `src/main/pi/compat/`.
+   * Only `src/main/pi/compat/` may reach into Pi's private layout (the HTTP
+   * dispatcher deep import). Every unavoidable use of Pi's unexported
+   * implementation lives behind that directory's UPSTREAM API GAP markers,
+   * so a hidden second coupling cannot grow anywhere else.
    */
-  it("reaches into no Pi private path outside the Pi bridge directory", () => {
+  it("reaches into no Pi private path outside the compat directory", () => {
     const offenders = files
-      .filter((f) => !normalizedRel(f.rel).startsWith(PI_BRIDGE_DIR))
+      .filter((f) => !normalizedRel(f.rel).startsWith(PI_COMPAT_DIR))
       .filter((f) => {
         const code = stripComments(f.text);
         return /pi-coding-agent\/dist\//.test(code) || /\bhttp-dispatcher\b/.test(code);
