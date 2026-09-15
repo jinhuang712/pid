@@ -1,20 +1,18 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { createRequire } from "node:module";
 import { delimiter, isAbsolute, join } from "node:path";
+import { VERSION } from "@earendil-works/pi-coding-agent";
 import { compareCompat, type PiDiagnostics } from "@shared/diagnostics";
 import { warmShellEnv } from "../shell-env";
 
-/** The Pi PID actually runs: the version pinned in package.json and loaded by every session worker. */
-const runtimeVersion = (): string => {
-  try {
-    return (
-      createRequire(import.meta.url)("@earendil-works/pi-coding-agent/package.json") as { version: string }
-    ).version;
-  } catch {
-    return "unknown";
-  }
-};
+/**
+ * The Pi PID actually runs: the version pinned in package.json and loaded by every session worker.
+ *
+ * Read through Pi's public entry. Reaching for its `package.json` instead throws
+ * `ERR_PACKAGE_PATH_NOT_EXPORTED` — the package's `exports` map does not expose that subpath —
+ * which used to leave this row permanently "unknown".
+ */
+const runtimeVersion = (): string => VERSION || "unknown";
 
 /** Resolve a command the way the shell would, against the login-shell PATH workers inherit. */
 export function resolveOnPath(cmd: string, env: NodeJS.ProcessEnv): string | undefined {
