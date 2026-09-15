@@ -413,7 +413,9 @@ function Diagnostics() {
       tested: { label: "same version", tone: "ok" },
       newer: { label: "your terminal's pi is newer", tone: "warn" },
       older: { label: "your terminal's pi is older", tone: "warn" },
-      unknown: { label: "no pi on PATH", tone: "muted" },
+      unknown: d?.terminalPath
+        ? { label: "can't compare versions", tone: "warn" }
+        : { label: "no pi on PATH", tone: "muted" },
     };
   return (
     <Group

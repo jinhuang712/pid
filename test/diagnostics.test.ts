@@ -1,3 +1,4 @@
+import { VERSION } from "@earendil-works/pi-coding-agent";
 import { compareCompat } from "@shared/diagnostics";
 import { describe, expect, it, vi } from "vitest";
 
@@ -34,5 +35,14 @@ describe("compareCompat", () => {
     expect(compareCompat(undefined, "0.85.1")).toBe("unknown");
     expect(compareCompat("dev", "0.85.1")).toBe("unknown");
     expect(compareCompat("0.85.1", "unknown")).toBe("unknown");
+  });
+});
+
+describe("runtime version source", () => {
+  it("reads Pi's version through its public entry, not its package.json", () => {
+    // The package's exports map blocks the package.json subpath, so requiring
+    // it throws ERR_PACKAGE_PATH_NOT_EXPORTED and the row stuck on "unknown".
+    expect(VERSION).toMatch(/^v?\d+\.\d+/);
+    expect(compareCompat("0.85.1", VERSION)).not.toBe("unknown");
   });
 });
