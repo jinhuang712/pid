@@ -161,8 +161,9 @@ Pi Coding Agent SDK
   page for one ecosystem were three versions of the same mistake;
   `test/protocol-boundary.test.ts` fails on any of them. It scans `src/`, not prose, so the docs
   are on their own — an extension named in a document is a name that will end up in code.
-- **Quota is not PID's**: PID neither fetches plan quota nor draws it. Whoever computes it for the terminal shows it there; an extension that wants it in PID
-  publishes through its own surface. The usage row shows only session context and cost, read off Pi's own messages.
+- **Quota is not PID's**: PID fetches no usage. Whoever already computes it for the terminal
+  publishes the same numbers, and PID draws them. PID owns the thresholds and the shape of the row,
+  nothing else.
 - **Fork**: Pi stamps a forked session with its parent. PID leaves that alone — the lineage is
   Pi's, and the file does not even exist until the next turn appends to it.
 - **Concurrency**: Pi has no session-file lock. PID owns one worker per session file it opens and
