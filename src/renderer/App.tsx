@@ -976,6 +976,7 @@ export function App() {
                   }
                   thinkingLevel={active?.piState.thinkingLevel}
                   usage={conv.lastUsage}
+                  providerUsage={only(active.published, "usage")}
                   sessionUsage={conv.sessionUsage}
                   compacting={conv.compacting}
                   loadModels={loadModels}

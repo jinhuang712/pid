@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, Model } from "@earendil-works/pi-ai";
+import type { ProviderUsage } from "@shared/usage";
 import {
   type ClipboardEvent,
   type KeyboardEvent,
@@ -16,7 +17,6 @@ import { collapseLinks, type LinkRef } from "../links";
 import type { SessionReference } from "../session-reference";
 import { useSettings } from "../settings";
 import { type ActiveToken, activeToken, replaceToken, type Sigil } from "../sigils";
-import type { Usage } from "../turn-summary";
 import { Autocomplete, type AutocompleteItem } from "./Autocomplete";
 import { ContextTray } from "./ContextTray";
 import { ModelPicker } from "./ModelPicker";
@@ -40,8 +40,10 @@ export interface ComposerProps {
   model?: { provider: string; id: string; contextWindow?: number };
   thinkingLevel?: ThinkingLevel;
   usage?: AssistantMessage["usage"];
+  /** Plan quota for the account behind the model, from the main process. */
+  providerUsage?: ProviderUsage;
   /** Everything this session has spent, for the running cost in the usage row. */
-  sessionUsage?: Usage;
+  sessionUsage?: AssistantMessage["usage"];
   compacting?: boolean;
   loadModels: () => Promise<AnyModel[]>;
   loadLevels: () => Promise<ThinkingLevel[]>;
@@ -75,11 +77,11 @@ export function Composer(p: ComposerProps) {
   const { text, setText, streaming, onSend, complete, pick, attachments } = p;
   const { settings } = useSettings();
   const { enterSends } = settings.conversation;
-  // The session row carries the context gauge and running cost; when it is off, the gauge stays
-  // in the toolbar, where it was before the row existed. Running both would put the same number
-  // on the card twice.
-  const sessionRow = settings.usageBar.enabled && settings.usageBar.sessionStats;
-  const contextInRow = sessionRow;
+  // The usage row exists only while an extension is filling it, and carries the context gauge when
+  // it does; running both would put the same number on the card twice. Unfilled, the gauge stays in
+  // the toolbar, where it was before any extension published anything.
+  const usageRow = settings.usageBar.enabled && p.providerUsage !== undefined;
+  const contextInRow = usageRow && settings.usageBar.sessionStats;
   const ref = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
   const [attachMenu, setAttachMenu] = useState(false);
@@ -382,7 +384,7 @@ export function Composer(p: ComposerProps) {
             className={`${EDITOR_BOX} relative w-full resize-none bg-transparent outline-none text-transparent caret-ink placeholder:text-ink-3 disabled:opacity-60`}
           />
         </div>
-        <div className={`flex items-center gap-0.5 pl-2.5 pr-2.5 pt-1 ${sessionRow ? "pb-1" : "pb-2.5"}`}>
+        <div className={`flex items-center gap-0.5 pl-2.5 pr-2.5 pt-1 ${usageRow ? "pb-1" : "pb-2.5"}`}>
           <span className="relative">
             <IconButton
               onClick={() => setAttachMenu((v) => !v)}
@@ -504,6 +506,7 @@ export function Composer(p: ComposerProps) {
           )}
         </div>
         <UsageBar
+          usage={p.providerUsage}
           lastUsage={p.usage}
           sessionUsage={p.sessionUsage}
           contextWindow={p.model?.contextWindow}
