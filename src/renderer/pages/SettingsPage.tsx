@@ -7,7 +7,6 @@ import {
   DEFAULT_SETTINGS,
   DENSITIES,
   type PidSettings,
-  RESET_DISPLAYS,
   type ThemeMode,
   UI_SCALES,
 } from "@shared/settings";
@@ -34,11 +33,6 @@ const SECTIONS: { id: SectionId; label: string; note: string }[] = [
     id: "conversation",
     label: "Conversation",
     note: "Composer and timeline behavior. Queue semantics stay Pi's.",
-  },
-  {
-    id: "usageBar",
-    label: "Usage bar",
-    note: "How much of your plan this account has spent, on one line under the composer.",
   },
   { id: "sessions", label: "Sessions", note: "Listing and search preferences for Pi session files." },
   {
@@ -292,8 +286,6 @@ export function SettingsPage({ initialSection }: { initialSection?: string }) {
             </Group>
           )}
 
-          {section === "usageBar" && <UsageSection />}
-
           {section === "sessions" && (
             <Group title="Session list">
               <Row label="Sort sessions by">
@@ -519,78 +511,6 @@ function AppendSystemPromptEditor() {
         </div>
       </Stacked>
     </Group>
-  );
-}
-
-/**
- * The Usage bar section. Two groups: what the row shows, and when a number
- * turns amber. Which accounts quota can be read for and how often it is asked
- * are the publishing extension's settings, not PID's — the Display note says so.
- */
-function UsageSection() {
-  const { settings, update } = useSettings();
-  const u = settings.usageBar;
-
-  return (
-    <div className="flex flex-col gap-5">
-      <Group
-        title="Display"
-        note="An extension publishes the quota. Which providers it can read, which windows they report and how often it asks are its settings, not PID's. Install one into Pi and both the terminal and PID show it."
-      >
-        <Row
-          label="Show the usage bar"
-          hint="One line under the composer toolbar. It hides itself when no extension publishes quota for the model's provider."
-        >
-          <Toggle value={u.enabled} onChange={(enabled) => update("usageBar", { enabled })} />
-        </Row>
-        <Row
-          label="Reset"
-          hint="When the window rolls over: the moment it happens (14:13), or how long is left (2h 13m)."
-        >
-          <Segmented
-            value={u.resetDisplay}
-            options={RESET_DISPLAYS}
-            labels={{ off: "Off", at: "Reset at", countdown: "Countdown" }}
-            onChange={(resetDisplay) => update("usageBar", { resetDisplay })}
-          />
-        </Row>
-        <Row label="Meters" hint="The small bar before each percentage.">
-          <Toggle value={u.meters} onChange={(meters) => update("usageBar", { meters })} />
-        </Row>
-        <Row
-          label="Session context and cost"
-          hint="The context gauge and running cost on the right. Off returns the gauge to the toolbar."
-        >
-          <Toggle value={u.sessionStats} onChange={(sessionStats) => update("usageBar", { sessionStats })} />
-        </Row>
-      </Group>
-
-      <Group
-        title="Quota thresholds"
-        note="A window the publisher itself reports as rate-limited stays amber whatever these say. The context gauge keeps its own thresholds."
-      >
-        <Row label="Warn at">
-          <Slider
-            value={u.warnPercent}
-            min={10}
-            max={99}
-            step={1}
-            format={(v) => `${v}%`}
-            onChange={(warnPercent) => update("usageBar", { warnPercent })}
-          />
-        </Row>
-        <Row label="Danger at">
-          <Slider
-            value={u.dangerPercent}
-            min={10}
-            max={100}
-            step={1}
-            format={(v) => `${v}%`}
-            onChange={(dangerPercent) => update("usageBar", { dangerPercent })}
-          />
-        </Row>
-      </Group>
-    </div>
   );
 }
 
