@@ -402,7 +402,11 @@ The underlying call remains a normal Pi tool call.
 
 PID core must not contain permanent special cases for every tool in the Pi ecosystem.
 
-Tool rendering therefore supports registration.
+Tool rendering therefore supports registration (`src/renderer/contributions/tools.tsx`):
+first match wins, the generic Tool Card is the fallback, and a throwing
+renderer degrades to the card rather than blanking the transcript. Today
+only built-ins register — third-party presentation code has no loader yet —
+but match order, fallback and failure isolation are decided and tested there.
 
 Conceptually:
 
