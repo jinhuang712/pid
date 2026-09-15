@@ -32,6 +32,7 @@ import { useSettings } from "./settings";
 import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
 import { emptyWorkspace, fromMessages, procForSession, workspaceReducer } from "./state/workspace";
+import { useTurnEndedSignal, useUsageWatch } from "./usage";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
@@ -59,6 +60,10 @@ export function App() {
   // any command sent there is an "unknown pi process" error in the main process.
   const liveKey = active && !active.pending && !active.exit ? active.key : undefined;
   const conv = active?.conv ?? emptyConversation();
+  // Plan quota is an account fact, so one watcher covers every open session: it follows whichever
+  // model is in front of the user and the main process does the fetching.
+  const usageSnapshot = useUsageWatch(active?.piState.model);
+  useTurnEndedSignal(conv.isStreaming);
   // Draft, $session refs, and attachments live per session; the entry view has its own scope.
   const composer = useComposer(active?.key ?? HOME_SCOPE);
   const { draft, refs, attachments, links, setDraft } = composer;
@@ -871,7 +876,7 @@ export function App() {
           />
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} />}
-        {page === "settings" && <SettingsPage initialSection={settingsSection} />}
+        {page === "settings" && <SettingsPage initialSection={settingsSection} usage={usageSnapshot} />}
         <div className={`flex-1 min-w-0 min-h-0 ${page === "sessions" ? "flex" : "hidden"}`}>
           <main className="flex-1 flex flex-col min-w-0">
             {/* two tiers: the title owns line one; folder and branch share line two */}
@@ -961,6 +966,8 @@ export function App() {
                   }
                   thinkingLevel={active?.piState.thinkingLevel}
                   usage={conv.lastUsage}
+                  providerUsage={usageSnapshot.usage}
+                  sessionUsage={conv.sessionUsage}
                   compacting={conv.compacting}
                   loadModels={loadModels}
                   loadLevels={loadLevels}

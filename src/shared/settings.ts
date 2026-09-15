@@ -3,6 +3,8 @@
  * Nothing in this file is agent state; deleting the file resets the GUI and nothing else.
  */
 
+import { USAGE_WINDOWS, type UsageWindowId } from "./usage";
+
 export type ThemeMode = "system" | "light" | "dark";
 export type Density = "compact" | "comfortable" | "spacious";
 export type ContentWidth = "narrow" | "medium" | "wide" | "full";
@@ -19,6 +21,20 @@ export const ACCENTS: readonly Accent[] = ["grey", "amber", "sage", "clay", "ind
  * icons, borders and text grow together — the one lever for "PID reads small on this display".
  */
 export const UI_SCALES = [0.9, 1, 1.1, 1.25, 1.5] as const;
+
+/**
+ * Two ways to say when a window rolls over, answering two different questions. `at` gives the
+ * moment — 14:13 — which is what you want when deciding whether to break for lunch. `countdown`
+ * gives the distance — 2h 13m — which is what you want when deciding whether to start a long run.
+ */
+export type ResetDisplay = "off" | "at" | "countdown";
+export const RESET_DISPLAYS: readonly ResetDisplay[] = ["off", "at", "countdown"];
+
+/**
+ * Refresh stops, in seconds. A quota that moves once per turn does not reward polling, and the
+ * providers are someone else's rate limit — so the slider offers stops rather than a free number.
+ */
+export const USAGE_REFRESH_STOPS = [15, 30, 60, 120, 300, 600, 900] as const;
 
 export interface PidSettings {
   appearance: {
@@ -43,6 +59,24 @@ export interface PidSettings {
     enterSends: boolean; // default false: Enter inserts a newline and ⌘Enter sends
     autoScroll: boolean;
     referencePreviewOpen: boolean; // expand $reference inspector by default
+  };
+  usageBar: {
+    /** The whole row. Off leaves the composer exactly as it was. */
+    enabled: boolean;
+    /** Which quota windows to show, in this order. Providers that lack one simply omit it. */
+    windows: UsageWindowId[];
+    resetDisplay: ResetDisplay;
+    /** The small bar before each percentage. Off leaves the number on its own. */
+    meters: boolean;
+    /** The context ring and running cost on the right of the row. */
+    sessionStats: boolean;
+    refreshSeconds: number;
+    /** Refetch shortly after each turn ends, on top of the interval. */
+    refreshAfterTurn: boolean;
+    /** On a failed refresh, keep the last reading and mark it stale rather than hiding the row. */
+    keepStale: boolean;
+    warnPercent: number;
+    dangerPercent: number;
   };
   sessions: {
     sort: "modified" | "created" | "name";
@@ -89,6 +123,18 @@ export const DEFAULT_SETTINGS: PidSettings = {
     autoScroll: true,
     referencePreviewOpen: false,
   },
+  usageBar: {
+    enabled: true,
+    windows: ["5h", "week"],
+    resetDisplay: "countdown",
+    meters: true,
+    sessionStats: true,
+    refreshSeconds: 30,
+    refreshAfterTurn: true,
+    keepStale: true,
+    warnPercent: 70,
+    dangerPercent: 90,
+  },
   sessions: {
     sort: "modified",
     previewLength: 160,
@@ -119,6 +165,9 @@ const NUMERIC: Record<string, [min: number, max: number]> = {
   "appearance.codeFontSize": [10, 18],
   "appearance.sidebarWidth": [200, 460],
   "sessions.previewLength": [40, 400],
+  "usageBar.refreshSeconds": [15, 900],
+  "usageBar.warnPercent": [1, 100],
+  "usageBar.dangerPercent": [1, 100],
 };
 
 const CHOICES: Record<string, readonly string[]> = {
@@ -128,12 +177,22 @@ const CHOICES: Record<string, readonly string[]> = {
   "appearance.accent": ACCENTS,
   "sessions.sort": ["modified", "created", "name"],
   "sessions.onQuitWhileRunning": ["ask", "finish", "quit"],
+  "usageBar.resetDisplay": RESET_DISPLAYS,
+};
+
+/** Same idea as CHOICES, for a list-valued setting: every member must be one of these. */
+const LIST_CHOICES: Record<string, readonly string[]> = {
+  "usageBar.windows": USAGE_WINDOWS,
 };
 
 /** True when `v` is a usable replacement for the default at `path`. */
 function acceptable(path: string, v: unknown, fallback: unknown): boolean {
   if (typeof v !== typeof fallback) return false;
-  if (Array.isArray(fallback)) return Array.isArray(v) && v.every((x) => typeof x === "string");
+  if (Array.isArray(fallback)) {
+    if (!Array.isArray(v) || !v.every((x) => typeof x === "string")) return false;
+    const members = LIST_CHOICES[path];
+    return !members || v.every((x) => members.includes(x as string));
+  }
   if (Array.isArray(v)) return false;
   if (typeof v === "number" && !Number.isFinite(v)) return false;
   const choices = CHOICES[path];
