@@ -95,7 +95,7 @@ const ACCENT_SWATCH: Record<Accent, string> = {
  * Fine-grained but restrained: PID's own preferences only. Skills, Extensions,
  * providers, and models are not settings and do not live here.
  */
-export function SettingsPage({ initialSection }: { initialSection?: string }) {
+export function SettingsPage({ initialSection, onClose }: { initialSection?: string; onClose?: () => void }) {
   const { settings, update } = useSettings();
   const [section, setSection] = useState<SectionId>(
     SECTIONS.some((s) => s.id === initialSection) ? (initialSection as SectionId) : "appearance",
@@ -107,6 +107,7 @@ export function SettingsPage({ initialSection }: { initialSection?: string }) {
     <PageShell
       title="Settings"
       note="PID preferences are stored in PID's own data directory, never in Pi's settings.json."
+      onClose={onClose}
     >
       <div className="flex gap-7">
         <nav className="w-44 shrink-0 flex flex-col gap-0.5 sticky top-0">

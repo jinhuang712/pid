@@ -10,7 +10,15 @@ import { useEcoScope } from "./scope";
  * Pi's skills, as Pi's own loader discovers them, with the on/off state `pi config` would show.
  * Toggles write Pi's settings; PID adds search and a way to open the file.
  */
-export function SkillsPage({ folder, onUse }: { folder?: string; onUse: (name: string) => void }) {
+export function SkillsPage({
+  folder,
+  onUse,
+  onClose,
+}: {
+  folder?: string;
+  onUse: (name: string) => void;
+  onClose?: () => void;
+}) {
   const [skills, setSkills] = useState<SkillView[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
@@ -80,6 +88,7 @@ export function SkillsPage({ folder, onUse }: { folder?: string; onUse: (name: s
       }
       search={q}
       onSearch={setQ}
+      onClose={onClose}
       actions={
         <button
           type="button"
