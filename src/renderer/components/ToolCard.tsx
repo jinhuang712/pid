@@ -3,37 +3,49 @@ import { useState } from "react";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
 import { label } from "../tool-label";
+import { DiffBlock } from "./DiffBlock";
 
 function resultText(run?: ToolRun): string {
   if (!run?.result) return "";
   return run.result.content.map((c) => (c.type === "text" ? c.text : "[image]")).join("\n");
 }
 
-function diffStats(patch?: string): string | undefined {
-  if (!patch) return undefined;
-  let add = 0;
-  let del = 0;
-  for (const line of patch.split("\n")) {
-    if (line.startsWith("+") && !line.startsWith("+++")) add++;
-    else if (line.startsWith("-") && !line.startsWith("---")) del++;
-  }
-  return `+${add} −${del}`;
-}
-
 /**
- * A tool call as one quiet line: chevron · verb · argument. Expanding shows the input and the
- * output (or the diff) behind a single left rule. Pi's tools and an extension's look the same.
+ * The pieces every tool card is made of: the collapsed line, the status, and the expandable body.
+ * The generic card and the built-in renderers differ only in how the body is drawn — the chrome is
+ * here once, so a registered renderer never re-answers "when does it show the output".
  */
-export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
+export function ToolCallFrame({
+  call,
+  run,
+  /** Extra text on the collapsed line, e.g. "+3 −1". */
+  meta,
+  /**
+   * How the body above the output is drawn. `args` is the default: the arguments as JSON, and
+   * nothing at all for `read`, whose path is already the whole story — the generic card's rule.
+   * `command` shows a shell command as typed. `none` leaves the body to the caller.
+   */
+  body = "args",
+}: {
+  call: ToolCall;
+  run?: ToolRun;
+  meta?: string;
+  body?: "args" | "command" | "none";
+}) {
   const { settings } = useSettings();
   const [open, setOpen] = useState(!settings.appearance.toolCardsCollapsed);
   const status = run?.status ?? "running";
   const isError = run?.isError === true;
-  const diff: string | undefined = call.name === "edit" ? run?.result?.details?.diff : undefined;
-  const stats = call.name === "edit" ? diffStats(run?.result?.details?.patch) : undefined;
-  const out = resultText(run);
   const lbl = label(call);
   const verb = status === "running" ? lbl.running : lbl.done;
+  const out = resultText(run);
+  const diff = run?.result?.details?.diff;
+  const args =
+    body === "command"
+      ? String((call.arguments as Record<string, unknown> | undefined)?.command ?? "")
+      : call.name === "read"
+        ? undefined
+        : JSON.stringify(call.arguments, null, 2);
 
   return (
     <div className="text-[12.5px]">
@@ -58,31 +70,18 @@ export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
         <span className="font-mono text-ink-3 truncate" title={lbl.detail}>
           {lbl.detail}
         </span>
-        {stats && <span className="text-ink-3 shrink-0">{stats}</span>}
+        {meta && <span className="text-ink-3 shrink-0">{meta}</span>}
         {isError && <span className="shrink-0">failed</span>}
       </button>
       {open && (
         <div className="ml-[5px] pl-3.5 border-l-2 border-line-2 my-1 flex flex-col gap-2">
-          {call.name !== "read" && (
+          {args !== undefined && (
             <pre className="font-mono whitespace-pre-wrap break-all text-ink-3 max-h-40 overflow-auto text-xs leading-relaxed">
-              {call.name === "bash"
-                ? String(call.arguments?.command ?? "")
-                : JSON.stringify(call.arguments, null, 2)}
+              {args}
             </pre>
           )}
           {diff ? (
-            <pre className="font-mono whitespace-pre max-h-96 overflow-auto text-xs leading-relaxed">
-              {diff.split("\n").map((line, i) => {
-                const kind =
-                  line[0] === "+" ? "bg-add text-ink" : line[0] === "-" ? "bg-del text-ink" : "text-ink-3";
-                return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: static diff lines
-                  <div key={i} className={`px-1 -mx-1 rounded-sm ${kind}`}>
-                    {line}
-                  </div>
-                );
-              })}
-            </pre>
+            <DiffBlock diff={diff} />
           ) : out ? (
             <pre
               className={`font-mono whitespace-pre-wrap break-all max-h-96 overflow-auto text-xs leading-relaxed ${
@@ -98,4 +97,16 @@ export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
       )}
     </div>
   );
+}
+
+/**
+ * A tool call as one quiet line: chevron · verb · argument. Expanding shows the input and the
+ * output (or the diff) behind a single left rule. Pi's tools and an extension's look the same.
+ *
+ * This is what a tool with no registration gets. The tools whose body needs its own presentation
+ * (a diff, a shell command) register renderers in `contributions/builtin-tools.tsx` and re-use
+ * this frame, so the chrome exists once.
+ */
+export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
+  return <ToolCallFrame call={call} run={run} />;
 }

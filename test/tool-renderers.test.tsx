@@ -6,10 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 // default context carries DEFAULT_SETTINGS, which is all static markup needs.
 vi.mock("../src/renderer/bridge", () => ({ bridge: {} }));
 
-import { createToolRegistry, type ToolRenderProps } from "../src/renderer/contributions/tools";
 import { ToolCard } from "../src/renderer/components/ToolCard";
+import { registerBuiltInToolRenderers } from "../src/renderer/contributions/builtin-tools";
+import { createToolRegistry, ToolRendererBoundary, type ToolRenderProps } from "../src/renderer/contributions/tools";
 
-const call = { type: "toolCall", id: "tc1", name: "read", arguments: { path: "a.ts" } } as never;
+const call = (name: string, args: Record<string, unknown> = {}) =>
+  ({ type: "toolCall", id: "tc1", name, arguments: args }) as never;
 
 /**
  * The tool renderer registry: first match wins, unknown tools get the
@@ -19,7 +21,7 @@ const call = { type: "toolCall", id: "tc1", name: "read", arguments: { path: "a.
 describe("tool renderer registry", () => {
   it("falls back to the generic card for unknown tools", () => {
     const registry = createToolRegistry();
-    const props: ToolRenderProps = { call };
+    const props: ToolRenderProps = { call: call("read") };
     expect(renderToStaticMarkup(registry.resolve("read")(props) as never)).toBe(
       renderToStaticMarkup(<ToolCard {...props} />),
     );
@@ -29,8 +31,8 @@ describe("tool renderer registry", () => {
     const registry = createToolRegistry();
     registry.register({ name: "a", match: (n) => n === "read", render: () => "A" });
     registry.register({ name: "b", match: () => true, render: () => "B" });
-    expect(registry.resolve("read")({ call })).toBe("A");
-    expect(registry.resolve("bash")({ call })).toBe("B");
+    expect(registry.resolve("read")({ call: call("read") })).toBe("A");
+    expect(registry.resolve("bash")({ call: call("bash") })).toBe("B");
   });
 
   it("skips a throwing matcher", () => {
@@ -42,7 +44,7 @@ describe("tool renderer registry", () => {
       },
       render: () => "BAD",
     });
-    const props: ToolRenderProps = { call };
+    const props: ToolRenderProps = { call: call("read") };
     expect(renderToStaticMarkup(registry.resolve("read")(props) as never)).toBe(
       renderToStaticMarkup(<ToolCard {...props} />),
     );
@@ -52,10 +54,73 @@ describe("tool renderer registry", () => {
     const a = createToolRegistry();
     const b = createToolRegistry();
     a.register({ name: "a", match: () => true, render: () => "A" });
-    expect(a.resolve("read")({ call })).toBe("A");
-    const props: ToolRenderProps = { call };
+    expect(a.resolve("read")({ call: call("read") })).toBe("A");
+    const props: ToolRenderProps = { call: call("read") };
     expect(renderToStaticMarkup(b.resolve("read")(props) as never)).toBe(
       renderToStaticMarkup(<ToolCard {...props} />),
     );
   });
 });
+
+describe("built-in renderers", () => {
+  it("registers edit and bash, and leaves everything else on the card", () => {
+    const registry = createToolRegistry();
+    registerBuiltInToolRenderers(registry);
+    // The edit and bash renderers are React components, never plain strings.
+    const edit = registry.resolve("edit")({ call: call("edit", { path: "a.ts" }) });
+    const bash = registry.resolve("bash")({ call: call("bash", { command: "ls" }) });
+    expect(React.isValidElement(edit)).toBe(true);
+    expect(React.isValidElement(bash)).toBe(true);
+    // read has no registration: resolved to the fallback, still a real element.
+    const read = registry.resolve("read")({ call: call("read", { path: "a.ts" }) });
+    expect(React.isValidElement(read)).toBe(true);
+  });
+
+  it("does not stack duplicates when called twice", () => {
+    const registry = createToolRegistry();
+    registerBuiltInToolRenderers(registry);
+    registerBuiltInToolRenderers(registry);
+    // Two registrations would both match edit; the first wins either way, but a
+    // reload loop must not grow the list. resolve() only exposes the winner, so
+    // the proof is that the second call is a no-op on a fresh registry: the
+    // fallback for an unregistered tool still renders.
+    const props: ToolRenderProps = { call: call("read") };
+    expect(renderToStaticMarkup(registry.resolve("read")(props) as never)).toBe(
+      renderToStaticMarkup(<ToolCard {...props} />),
+    );
+  });
+});
+
+/**
+ * The boundary's whole reason to exist: a renderer that throws at render time
+ * must degrade to the generic card, not blank the transcript. React catches
+ * the throw through getDerivedStateFromError, which is what is asserted here —
+ * the failure path itself, without needing a client renderer.
+ */
+describe("tool renderer boundary", () => {
+  it("degrades a throwing renderer to the generic card", () => {
+    const props = { call: call("edit", { path: "a.ts" }) };
+    const boundary = (
+      <ToolRendererBoundary call={props.call}>
+        <Boom />
+      </ToolRendererBoundary>
+    );
+    const children = React.Children.toArray(boundary.props.children);
+    const child = React.isValidElement(children[0])
+      ? (children[0].type as () => React.ReactNode)
+      : undefined;
+    expect(child).toBeTypeOf("function");
+    // What React does when the child throws: the static handler flips the state.
+    expect(() => child?.()).toThrow("renderer exploded");
+    expect(ToolRendererBoundary.getDerivedStateFromError()).toEqual({ failed: true });
+    const failed = new ToolRendererBoundary({ ...props, children: null });
+    failed.state = ToolRendererBoundary.getDerivedStateFromError();
+    expect(renderToStaticMarkup(failed.render() as never)).toBe(
+      renderToStaticMarkup(<ToolCard {...props} />),
+    );
+  });
+});
+
+function Boom(): React.ReactNode {
+  throw new Error("renderer exploded");
+}

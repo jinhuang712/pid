@@ -9,7 +9,13 @@ import {
   type SentSkill,
   segment,
 } from "../attachments";
+import { registerBuiltInToolRenderers } from "../contributions/builtin-tools";
 import { RenderTool, ToolRendererBoundary, toolRenderers } from "../contributions/tools";
+
+// The built-ins are the registry's first registrants; importing the module is not enough,
+// the call is the registration. Idempotent, so a hot reload cannot stack duplicates.
+registerBuiltInToolRenderers();
+
 import { CwdContext } from "../cwd-context";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
