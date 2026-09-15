@@ -20,19 +20,6 @@ export const ACCENTS: readonly Accent[] = ["grey", "amber", "sage", "clay", "ind
  */
 export const UI_SCALES = [0.9, 1, 1.1, 1.25, 1.5] as const;
 
-/**
- * Two ways to say when a window rolls over, answering two different questions. `at` gives the
- * moment — 14:13 — which is what you want when deciding whether to break for lunch. `countdown`
- * gives the distance — 2h 13m — which is what you want when deciding whether to start a long run.
- */
-export type ResetDisplay = "off" | "at" | "countdown";
-export const RESET_DISPLAYS: readonly ResetDisplay[] = ["off", "at", "countdown"];
-
-/**
- * Refresh stops, in seconds. A quota that moves once per turn does not reward polling, and the
- * providers are someone else's rate limit — so the slider offers stops rather than a free number.
- */
-
 export interface PidSettings {
   appearance: {
     theme: ThemeMode;
@@ -56,17 +43,6 @@ export interface PidSettings {
     enterSends: boolean; // default false: Enter inserts a newline and ⌘Enter sends
     autoScroll: boolean;
     referencePreviewOpen: boolean; // expand $reference inspector by default
-  };
-  usageBar: {
-    /** The whole row. Off leaves the composer exactly as it was. */
-    enabled: boolean;
-    resetDisplay: ResetDisplay;
-    /** The small bar before each percentage. Off leaves the number on its own. */
-    meters: boolean;
-    /** The context ring and running cost on the right of the row. */
-    sessionStats: boolean;
-    warnPercent: number;
-    dangerPercent: number;
   };
   sessions: {
     sort: "modified" | "created" | "name";
@@ -109,14 +85,6 @@ export const DEFAULT_SETTINGS: PidSettings = {
     autoScroll: true,
     referencePreviewOpen: false,
   },
-  usageBar: {
-    enabled: true,
-    resetDisplay: "countdown",
-    meters: true,
-    sessionStats: true,
-    warnPercent: 70,
-    dangerPercent: 90,
-  },
   sessions: {
     sort: "modified",
     previewLength: 160,
@@ -143,8 +111,6 @@ const NUMERIC: Record<string, [min: number, max: number]> = {
   "appearance.codeFontSize": [10, 18],
   "appearance.sidebarWidth": [200, 460],
   "sessions.previewLength": [40, 400],
-  "usageBar.warnPercent": [1, 100],
-  "usageBar.dangerPercent": [1, 100],
 };
 
 const CHOICES: Record<string, readonly string[]> = {
@@ -154,7 +120,6 @@ const CHOICES: Record<string, readonly string[]> = {
   "appearance.accent": ACCENTS,
   "sessions.sort": ["modified", "created", "name"],
   "sessions.onQuitWhileRunning": ["ask", "finish", "quit"],
-  "usageBar.resetDisplay": RESET_DISPLAYS,
 };
 
 /** True when `v` is a usable replacement for the default at `path`. */

@@ -6,18 +6,16 @@
  * branches on one being there. Supporting a new kind is an entry here plus something to draw it —
  * not a condition threaded through the window.
  *
- * A kind is a shape of data, never a product: `usage` is "how much of the plan is gone", whoever
- * fetched it; `page` is "here is a list of things, with switches and buttons", whoever wants one.
+ * A kind is a shape of data, never a product: `page` is "here is a list of things, with switches
+ * and buttons", whoever wants one; `binding` is "this session belongs to that working tree".
  */
 
 import { type ExtensionPage, parseExtensionPage } from "./extension-page";
 import { parseWidgetKey } from "./extension-widgets";
-import { type ProviderUsage, parseProviderUsage } from "./usage";
 import { parseWorktree, type WorktreeBinding } from "./worktree";
 
 /** What each kind parses to. Adding a member here is what makes a kind exist. */
-export interface KindData {
-  usage: ProviderUsage;
+interface KindData {
   binding: WorktreeBinding;
   page: ExtensionPage;
 }
@@ -27,7 +25,6 @@ export type Kind = keyof KindData;
 type Parsers = { [K in Kind]: (lines: string[] | undefined) => KindData[K] | undefined };
 
 const PARSE: Parsers = {
-  usage: parseProviderUsage,
   binding: parseWorktree,
   page: parseExtensionPage,
 };
@@ -37,7 +34,7 @@ export const KINDS = Object.keys(PARSE) as Kind[];
 /**
  * Everything a session has published, by kind and then by publisher.
  *
- * Two extensions may both publish a kind — two pages, or a quota each — so the namespace from the
+ * Two extensions may both publish a kind — two pages — so the namespace from the
  * widget key is kept. PID reads the namespace as an opaque key and never matches on it.
  */
 export type Published = { [K in Kind]?: Record<string, KindData[K]> };

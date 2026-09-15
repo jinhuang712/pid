@@ -388,8 +388,8 @@ A widget key is an identity, the way Pi defines it: PID replaces and clears by k
 meaning into the key or the lines.
 
 An extension that wants graphical presentation rather than a line of text currently names its widget
-`<ns>:<kind>/v<n>` and sends JSON, and PID renders the kinds it knows — a provider quota under the
-composer, a worktree binding in the session header, a described page as a navigation entry.
+`<ns>:<kind>/v<n>` and sends JSON, and PID renders the kinds it knows —
+ a worktree binding in the session header, a described page as a navigation entry.
 Unclaimed kinds show as their payload, so an author can see what arrived. `[Extension]`
 
 This is an interim with a ceiling: an extension can say only what PID's field list already allows,

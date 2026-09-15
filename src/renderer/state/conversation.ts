@@ -45,13 +45,12 @@ export interface ConversationState {
   isStreaming: boolean;
   /** Wall clock at agent_start; drives the live elapsed counter while running. */
   turnStartedAt?: number;
-  /** Usage summed over the assistant messages of the running turn. */
-  turnUsage?: Usage;
   /**
-   * Usage summed over every assistant message in the session, loaded history included. What this
-   * conversation has cost so far, as opposed to `turnUsage`'s current turn.
+   * Usage summed over the assistant messages of the running turn. There is
+   * deliberately no session total: with no usage row nothing reads one, and
+   * an unread accumulator is dead state waiting to mislead.
    */
-  sessionUsage?: Usage;
+  turnUsage?: Usage;
   toolRuns: Record<string, ToolRun>;
   queue: { steering: readonly string[]; followUp: readonly string[] };
   lastError?: string;
@@ -89,7 +88,6 @@ export function fromMessages(messages: AgentMessage[]): ConversationState {
     if (m.role === "assistant") {
       s.lastUsage = m.usage;
       turn = addUsage(turn ?? emptyUsage(), m.usage);
-      s.sessionUsage = addUsage(s.sessionUsage ?? emptyUsage(), m.usage);
       endedAt = m.timestamp;
     }
     if (m.role === "toolResult") {
@@ -222,7 +220,6 @@ export function reduce(
       if (m.role === "assistant") {
         next.streaming = undefined;
         next.lastUsage = m.usage;
-        next.sessionUsage = addUsage(state.sessionUsage ?? emptyUsage(), m.usage);
         if (state.turnUsage) next.turnUsage = addUsage(state.turnUsage, m.usage);
         if (m.stopReason === "error" && m.errorMessage) next.lastError = m.errorMessage;
       }
