@@ -651,32 +651,41 @@ PID also has an extensibility layer of its own.
 
 Its purpose is presentation and interaction, not agent semantics.
 
-The extension host may expose capabilities such as:
+**The contribution is code, not a description.** This is settled by how the upstream does it, twice:
+a Pi extension hands pi-tui a factory that returns a `Component` it built out of pi-tui's own
+widgets, and the browser frontend Pi used to ship took a renderer function returning that host's own
+view type. Neither asks the extension to fill in a schema. A host that accepts only a description
+caps every extension at what the host author thought of first, which is the wrong way round and the
+reason the interim `<ns>:<kind>/v<n>` channel is an interim.
+
+So: the host supplies the component library, the theme and the mount points; the extension supplies
+the composition.
+
+Mount points, each one a place PID already puts something of its own:
 
 ```text
-registerToolRenderer()
-registerArtifactViewer()
-registerPanel()
-registerInspector()
-registerCommand()
-registerStatusContribution()
-registerNavigationContribution()
-registerComposerContribution()
+nav        a navigation entry, and the page behind it
+page       a full page
+header     the session title bar's second line
+entry      a transcript entry, by customType
+strip      the line above the composer
+composer   the line inside the composer card
+modal      a dialog
+toast      a notification
+overlay    the whole window, unconstrained
 ```
 
-The exact API may evolve.
+The exact registration signature may evolve. The architectural boundary should not.
 
-The architectural boundary should not.
-
-A PID presentation extension receives controlled access to:
+A presentation contribution receives:
 
 * Pi state snapshots relevant to presentation
+* whatever its own agent half published
+* the ability to run a command in the session it belongs to
 * PID navigation
-* selected session context
-* presentation events
-* invocation of permitted Pi actions
 
-It should not become an alternative owner of the AgentSession.
+It should not become an alternative owner of the AgentSession. It runs commands the way a user
+types them; it does not write session files.
 
 ---
 
@@ -714,9 +723,17 @@ Presentation extensions must not compromise Pi session integrity.
 
 They should not directly mutate Pi persistence or bypass Pi runtime semantics.
 
-Where practical, PID should expose capability-oriented APIs rather than unrestricted internal application access.
+Isolation is not a sandbox, and pretending otherwise would be dishonest. Pi states its own boundary
+plainly — extensions are modules that run with the user's full permissions, and installing one is
+the trust decision. A presentation half is the same package as an agent half that already has the
+filesystem, so a wall between the window and that code would protect nothing while costing the
+extension the freedom that makes it worth writing.
 
-Extension failures should degrade the extension before they degrade the session.
+What PID does owe:
+
+* a failure in one contribution degrades that contribution, not the window
+* a failure surfaces where the author will find it, next to the errors its agent half already raises
+* a way to start with nothing loaded, so a broken contribution cannot lock the user out
 
 PID core should always retain a generic fallback presentation.
 
@@ -739,24 +756,20 @@ It may show:
 
 Changes to Pi skill configuration should use Pi-compatible configuration mechanisms.
 
-## MCP
+## Pages an Extension Contributes
 
-The MCP page reflects the MCP extension/runtime used by Pi.
+Skills and Extensions are PID's own, because they read Pi's configuration and exist whatever is
+installed. Everything else in the navigation was put there by an extension, and is there only while
+one is.
 
-It may show:
+PID renders such a page and learns nothing about its subject. Whether the rows are MCP servers,
+build targets or open pull requests is the publisher's business; PID knows it was handed rows.
 
-* servers
-* transport state
-* authentication
-* errors
-* tools
-* active tool visibility
-* cache state
-* reconnect / refresh operations
+Every affordance on the page is a command string PID runs the way a typed slash command runs, so the
+same switch works in the terminal and needs no PID-specific code behind it.
 
-The page is a control and inspection surface.
-
-It is not an MCP host.
+No extension, no page, and no navigation entry. A PID with nothing installed has neither the page
+nor any code that knows the page could exist.
 
 ## Extensions
 
@@ -776,29 +789,29 @@ A terminal-dependent extension may be marked partially compatible without being 
 
 ---
 
-# 27. MCP
+# 27. Presentation Primitives
 
-MCP is implemented through Pi's extension/tool layer.
+PID draws its own window out of a small set of primitives that know nothing about sessions, tools or
+IPC: rows, icon buttons, toggles, segmented controls, badges, dots, tabular numerals, modals,
+popovers, menus, panels, dividers, scroll regions, and one table mapping five tones to classes.
 
-With `pid-mcp`:
+They live in `src/renderer/ui/`. Everything that knows what a session or a tool call is lives in
+`src/renderer/components/`.
 
-```text
-MCP Server
-    ↓
-pid-mcp
-    ↓
-native Pi Tool
-    ↓
-AgentSession
-    ↓
-PID Tool Presentation
-```
+Two properties matter and only hold together:
 
-PID should not introduce a permanent generic MCP proxy between the model and the server.
+* **PID uses them itself.** A primitive nothing draws with is a primitive nobody has checked. This is
+  also how pi-tui works — its own interactive mode is built from the same `Text`, `VStack` and
+  `SelectList` an extension imports.
+* **They are the hand-out set.** When an extension contributes desktop presentation, these are what
+  it composes. A host that offers a component library it does not use itself is offering a guess.
 
-Tool discovery and activation remain Pi-side concerns.
+The export surface is deliberately smaller than the implementation, again following pi-tui, which
+keeps its layout engine and abstract bases out of its public index.
 
-PID provides graphical discovery, state, OAuth interaction, and rendering where useful.
+Theme is not a parameter here. A terminal has no cascade, so pi-tui threads a `theme` object through
+every factory; the window has CSS custom properties, so a primitive written against `text-ink-3`
+follows the user's theme and type scale without being told.
 
 ---
 
@@ -878,7 +891,7 @@ PID may inspect:
 
 A Git worktree is a real directory and may therefore be opened as another Folder.
 
-If a Pi extension such as `pi-worktree` binds a session to a different working tree, PID displays that binding from extension/runtime state.
+If an extension binds a session to a different working tree, PID displays that binding from what the extension publishes, not from a model of its own.
 
 PID does not create a parallel source-control database.
 

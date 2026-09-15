@@ -2,14 +2,14 @@
 
 A desktop graphical frontend for [Pi](https://github.com/earendil-works/pi).
 
-PID is not another coding agent. It drives the `pi` you already have installed, uses the same
-sessions, models, providers, skills, extensions, and tools, and adds the things a terminal
+PID is not another coding agent. It hosts Pi's own runtime, reads the same `~/.pi/agent`, and uses
+the same sessions, models, providers, skills, extensions and tools — then adds what a terminal
 cannot give a long coding session: hierarchy, navigation, search, and explicit cross-session
 reference.
 
-PID leaves Pi's session files exactly as Pi writes them. Quit PID and open the same session in
-the Pi terminal; it resumes where you left it. (PID's own `pi` child processes stop when PID
-quits; if a turn is still running you are asked whether to wait for it.)
+PID leaves Pi's session files exactly as Pi writes them. Quit PID and open the same session in the
+Pi terminal; it resumes where you left it. (PID's session processes stop when PID quits; if a turn
+is still running you are asked whether to wait for it.)
 
 ## What it does
 
@@ -20,16 +20,26 @@ quits; if a turn is still running you are asked whether to wait for it.)
 - Composer sigils: `/` skill · `@` file · `#` Pi action · `$` session reference.
 - `$reference` attaches a chosen session's content as visible prompt text, with size shown up front.
 - Search every session by title, content, folder. Indexes user and assistant text on the active
-  branch (not thinking, tool calls, or tool output). Index is derived and rebuildable.
+  branch (not thinking, tool calls, or tool output). The index is derived and rebuildable.
 - Git worktrees as Folders: list, open, create, remove safely.
-- First-class Skills, MCP, and Extensions pages. Extensions are labelled by compatibility.
+- Skills and Extensions pages, plus any page an installed extension contributes. Each extension is
+  labelled with how much of it this host can run, per `ctx.ui` member.
 - Settings that belong to a GUI, and nothing else. Provider and model config stays in Pi.
+
+## What it does not do
+
+PID ships no extension and bundles none. A session loads exactly what Pi resolves for its
+directory, which is what the terminal loads too. If MCP is not installed in your Pi, PID has no MCP
+page and no line of code that knows what MCP is.
 
 ## Requirements
 
 - macOS (the window shell is macOS-first; other platforms untested)
 - Node ≥ 22.19 and pnpm
-- `pi` ≥ 0.85 on your login shell PATH (`npm i -g @earendil-works/pi-coding-agent`)
+
+PID runs the Pi version it pins (`@earendil-works/pi-coding-agent` in `package.json`), so a `pi` on
+your PATH is not required. Keep the two equal anyway when you have both: they read the same
+`~/.pi/agent`, and Settings › Advanced reports the drift.
 
 ## Run
 
@@ -50,7 +60,7 @@ pnpm dist       # macOS app + dmg in release/
 Verification:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
 Headless smoke test hooks (used in development):
@@ -59,27 +69,29 @@ Headless smoke test hooks (used in development):
 PID_OPEN_FOLDER=/path/to/repo PID_PROMPT="say hi" PID_SCREENSHOT=/tmp/pid.png pnpm exec electron .
 ```
 
+`PID_PAGE` opens a page directly; `PID_SCREENSHOT_DELAY` waits before capturing.
+
 ## How it talks to Pi
 
-One `pi --mode rpc` child process per open session, JSON lines over stdio. The renderer rebuilds
-the streaming assistant message from Pi's deltas. Read-only discovery (session lists, skills)
-uses the Pi SDK from the same pinned version. PID keeps no provider, model, auth, or session
-configuration of its own. The only writes to Pi's configuration are the ones you make explicitly
-in the Skills, Extensions, and MCP pages; those toggles edit the same `settings.json` and
-`mcp.json` entries that `/skill`, `/reload`, and `/mcp` would.
+One Electron utility process per open session, hosting Pi's own `AgentSessionRuntime` — the layer
+the Pi terminal itself runs on. One session per process keeps Pi's process-global state per session
+and contains a crashing extension.
 
-Two small extensions ride along in every `pi --mode rpc` PID starts, passed with `-e` so nothing
-is added to your Pi packages:
+Between the window and that process is PID's own protocol (`src/shared/protocol.ts`), shaped from
+`AgentSession` and `AgentSessionEvent` so a field cannot drift from what the agent returns. One file
+drives Pi's API; a test fails if any other file touches it.
 
-- `resources/pid-bridge`: relays the MCP extension's status and OAuth events into the RPC stream so
-  the MCP page can show what is connected and which tools the model can see right now.
-- [`pid-mcp`](../pid-mcp), pinned in `package.json`: every MCP tool becomes a native Pi tool, held
-  out of the model's view until `mcp_search` activates it. Loaded only when your Pi does not already
-  have an MCP extension (pid-mcp or pi-mcp-adapter). A user-installed one always wins, so the
-  terminal and PID agree on MCP behaviour.
+Discovery is Pi's: session lists, skills, and skill/extension enablement all come from Pi's own
+resolver, so what PID lists is what `pi config` lists. The only writes PID makes under `~/.pi/agent`
+are the switches on the Skills and Extensions pages, in Pi's own `+pattern` / `-pattern` format, and
+the append-system-prompt file — the same entries the terminal would write. PID keeps no provider,
+model, auth or session configuration of its own.
 
-Settings › Advanced › Diagnostics shows which `pi` binary and version PID drives, the SDK version
-it bundles, and which MCP extension loads.
+Extensions reach the window through Pi's `ExtensionUIContext`: dialogs become desktop dialogs,
+`setStatus` and `setWidget` become the strip above the composer. `src/shared/extension-ui.ts` is the
+one table saying which members PID serves, which it accepts and ignores, and which need a terminal;
+the Extensions page reports it per member, and a test fails when the table and the implementation
+disagree.
 
 ## Documents
 

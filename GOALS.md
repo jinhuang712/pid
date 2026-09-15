@@ -209,9 +209,9 @@ These are ecosystem surfaces, not miscellaneous settings.
 
 ### 13. Carry No Ecosystem
 
-A capability that reaches Pi through an extension — MCP is the clearest example — must not put code
-for itself inside PID. Its tools flow through Pi's normal tool system, and its page, if it wants
-one, is a description it publishes and PID renders.
+A capability that reaches Pi through an extension must not put code for itself inside PID. Its tools
+flow through Pi's normal tool system, and its page, if it wants one, comes from the extension — not
+from a branch inside PID that knows the extension exists.
 
 A PID without that extension installed has no page for it, no navigation entry, and no lines of
 code that know it exists. Installing the extension adds all three, to the terminal and to PID

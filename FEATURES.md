@@ -328,18 +328,16 @@ An ecosystem surface belongs to whatever provides it. A capability that reaches 
 extension brings its page from that extension too: a PID without it installed has no such page, no
 navigation entry, and no code for one.
 
-An extension describes its page and PID renders the shape `[Extension]` `[Presentation]`:
-
-* rows with a title, a subtitle and badges
-* a switch, as two commands
-* buttons, each a command
-* one level of nested rows
-* key/value detail behind an expander
+PID renders the page and learns nothing about its subject `[Extension]` `[Presentation]`. Whether
+the rows are servers, build targets or open pull requests stays with whoever published them.
 
 Every switch and button is a command PID runs the way a typed slash command runs, so the same
 affordance works in the Pi terminal and needs no PID-specific code.
 
-PID renders the shape and learns nothing about the subject.
+The page crosses as a description today — rows with a title, a subtitle and badges; a switch as two
+commands; buttons; one level of nesting; key/value detail behind an expander. That caps an extension
+at the fields PID declared in advance, which is the wrong way round. §18 is where it goes: the
+extension composes PID's own primitives instead of filling in PID's form.
 
 ---
 
@@ -386,22 +384,20 @@ Examples:
 * status → the extension strip above the composer `[Presentation]`
 * widget → the same strip, any key, no allowlist `[Presentation]`
 
-An extension that wants graphical presentation rather than a line of text names its widget
-`<ns>:<kind>/v<n>` and sends JSON. PID renders the kinds it knows and shows the rest as their
-payload; the terminal shows the same extension's plain widget. One extension, both hosts, no PID
-code loaded. `[Extension]`
+A widget key is an identity, the way Pi defines it: PID replaces and clears by key, and reads no
+meaning into the key or the lines.
 
-Kinds PID renders today:
+An extension that wants graphical presentation rather than a line of text currently names its widget
+`<ns>:<kind>/v<n>` and sends JSON, and PID renders the kinds it knows — a provider quota under the
+composer, a worktree binding in the session header, a described page as a navigation entry.
+Unclaimed kinds show as their payload, so an author can see what arrived. `[Extension]`
 
-```text
-usage     provider quota      → the bar under the composer
-binding   worktree binding    → the branch line in the session header
-page      a described page    → a navigation entry and the page itself
-```
+This is an interim with a ceiling: an extension can say only what PID's field list already allows,
+and widening that list is how the ceiling gets rebuilt rather than removed. §18 is the replacement —
+the extension ships its desktop presentation as code and composes PID's primitives, which is how a
+Pi extension already works against pi-tui's.
 
-`page` is the general one: a list of rows with badges, a switch and buttons, each carrying a command
-PID runs the way a typed slash command runs. An extension that wants a page in PID sends one; PID
-renders the shape and learns nothing about the subject. No extension, no entry. `[Extension]`
+No extension, no entry, either way. `[Extension]`
 
 Terminal implementation details without a meaningful graphical mapping degrade to nothing, and the
 Extensions page names which ones for each extension.

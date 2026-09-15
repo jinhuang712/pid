@@ -63,6 +63,13 @@ to fake a terminal.
 `ctx.hasUI` is not a terminal check: PID has a UI, so it is true here. Only `ctx.mode === "tui"`
 stands an extension's terminal parts down.
 
+"Cannot serve" is a choice, not a wall. A pi-tui `Component` is `render(width): string[]` and
+`Terminal` is an interface with more than one implementation upstream — Pi's own test suite drives
+the whole TUI against an xterm-backed double. PID could therefore host those members by becoming a
+terminal emulator in a window, and does not, because a character grid is not a desktop interface.
+Anyone reopening this should reopen it as "how does an extension get native desktop presentation",
+which is DESIGN §23–25, not as "how does PID fake a terminal".
+
 ## Ecosystem Boundary
 
 An extension's tools end up as Pi Tools and flow through Pi's agent loop. PID runs no second tool
@@ -134,28 +141,29 @@ Pi Coding Agent SDK
 - **Extension UI**: the worker implements Pi's `ExtensionUIContext` and forwards each served call as
   a dialog request; the window answers and the extension's await resolves. Members PID does not
   serve are stubs, not events nothing reads. `src/shared/extension-ui.ts` holds the classification.
-- **Extension presentation** (`src/shared/extension-widgets.ts`): `setStatus` and `setWidget` from
-  any extension reach the strip above the composer — no allowlist, the same as the terminal. An
-  extension wanting more than a line names its widget `<ns>:<kind>/v<n>` and sends JSON; PID routes
-  claimed kinds to their renderer and shows the rest as their payload. PID's own bridge
-  core has no private channel an extension author cannot use.
-- **Kinds, as a table**: `@shared/extension-kinds` maps a published kind to how PID reads it, and is
-  the whole of PID's knowledge about extension presentation. A kind is a shape of data, never a
-  product: `usage` is "how much of the plan is gone", `page` is "a list of things with switches and
-  buttons". Every parser is defensive — the payload crosses from code PID does not own, so a bad
-  reading reads as nothing rather than painting nonsense.
-- **Pages an extension describes** (`@shared/extension-page`): PID cannot load an extension's code,
-  so an extension that wants a page sends one as data and PID renders the shape. Each switch and
-  button carries a command string PID runs the way a typed slash command runs — the same command
-  that works in the terminal. Navigation is derived from what is published
-  (`src/renderer/surfaces.ts`): no extension, no entry.
-- **PID names no extension, and no ecosystem of one.** Not `pi-worktree`, not MCP. Whatever a row
-  means stays with whoever published it. A hardcoded widget key, a check for one extension being
-  installed, and a built-in page for one ecosystem were three versions of the same mistake;
-  `test/protocol-boundary.test.ts` fails on any of them.
-- **Quota is not PID's**: PID fetches no usage. An extension that already computes it for the
-  terminal — pi-x-footer does — publishes the same numbers as a `usage` widget, and PID draws them.
-  PID owns the thresholds and the shape of the row, nothing else.
+- **Extension presentation**: `setStatus` and `setWidget` from any extension reach the strip above
+  the composer — no allowlist, the same as the terminal. Pi defines a widget key as an identity for
+  replace-and-clear and nothing more, so PID reads no meaning into it.
+- **Structured widgets are an interim** (`@shared/extension-widgets`, `@shared/extension-kinds`,
+  `@shared/extension-page`): an extension wanting more than a line names its widget
+  `<ns>:<kind>/v<n>`, sends JSON, and PID renders the kinds it knows. The ceiling is the field list
+  in `extension-page.ts` — an extension can say only what PID thought of first, which is the wrong
+  way round. DESIGN §23–25 is where this goes: the extension ships its desktop presentation as code
+  and composes PID's primitives, the way a Pi extension already composes pi-tui's. Do not widen the
+  kind table to get around the ceiling; that is the mistake, not the fix.
+- **Primitives** (`src/renderer/ui/`): `Row` `IconButton` `Toggle` `Segmented` `Trigger` `Badge`
+  `Dot` `Num` `Eyebrow` `Modal` `Popover` `ContextMenu` `Floating` `Panel` `Divider` `Scroll`, plus
+  the five-tone table every one of them colours from. PID draws its own window with these, which is
+  the only thing that makes them fit to hand out later. Nothing in here knows what a session or a
+  tool call is; that belongs in `components/`.
+- **PID names no extension, and no ecosystem of one.** Whatever a row means stays with whoever
+  published it. A hardcoded widget key, a check for one extension being installed, and a built-in
+  page for one ecosystem were three versions of the same mistake;
+  `test/protocol-boundary.test.ts` fails on any of them. It scans `src/`, not prose, so the docs
+  are on their own — an extension named in a document is a name that will end up in code.
+- **Quota is not PID's**: PID fetches no usage. Whoever already computes it for the terminal
+  publishes the same numbers, and PID draws them. PID owns the thresholds and the shape of the row,
+  nothing else.
 - **Fork**: Pi stamps a forked session with its parent. PID leaves that alone — the lineage is
   Pi's, and the file does not even exist until the next turn appends to it.
 - **Concurrency**: Pi has no session-file lock. PID owns one worker per session file it opens and
@@ -173,6 +181,7 @@ src/main/pi/        Pi bridge: session-worker (the only file that drives Pi), se
                     registry, sessions, search, session-read, ecosystem
 src/preload/        typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
 src/renderer/       React UI: components/, pages/, state/, settings, completion, sigils
+src/renderer/ui/    presentation primitives; no session, no IPC, no domain type
 src/shared/         types shared by all three processes
 test/               vitest unit tests (real-environment tests are opt-in via env vars)
 docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README
