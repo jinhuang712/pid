@@ -52,10 +52,24 @@ export interface PathParts {
 }
 
 const KEEP_DIRS = 2;
+/**
+ * Extensions that name a folder even though they read as a file name. Not a filesystem check —
+ * rendering is synchronous — but these spellings are unambiguous: nobody puts "PID.app" in a file.
+ */
+const DIRECTORY_RE =
+  /(?:^|\.)(?:app|framework|bundle|kext|plugin|prefpane|xcodeproj|xcworkspace|playground)$/i;
+
+/** True when the token points at a folder rather than a file: a trailing slash or a known bundle. */
+export function isDirectoryPath(path: string): boolean {
+  const clean = path.replace(/\/$/, "");
+  return /\/$/.test(path) || DIRECTORY_RE.test(clean.split("/").pop() ?? "");
+}
 
 /** "/Users/jin/dev/docs/html/x.html" → { dir: "…/docs/html/", name: "x.html" }. */
 export function splitPath(path: string): PathParts {
-  const clean = fromFileUrl(path).replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
+  const clean = fromFileUrl(path)
+    .replace(/\/$/, "")
+    .replace(/^\/Users\/[^/]+(?=\/|$)/, "~");
   const parts = clean.split("/");
   const name = parts.pop() ?? "";
   if (parts.length === 0) return { dir: "", name };
@@ -73,9 +87,12 @@ const escapeHtml = (s: string) =>
 export function filePathHtml(path: string, labelHtml?: string): string {
   const full = fromFileUrl(path);
   const { dir, name } = splitPath(full);
+  // A folder token opens in Finder and a file token in its app. They are the same click path
+  // (see Markdown.tsx), so only the glyph and the CSS differ — hence the data-kind.
+  const kind = isDirectoryPath(full) ? "dir" : "file";
   const body =
     labelHtml !== undefined && labelHtml !== "" && labelHtml !== path
       ? `<span class="file-name">${labelHtml}</span>`
       : `<span class="file-dir">${escapeHtml(dir)}</span><span class="file-name">${escapeHtml(name)}</span>`;
-  return `<a class="file-link" href="#" data-path="${escapeHtml(full)}" title="${escapeHtml(full)}">${body}</a>`;
+  return `<a class="file-link" href="#" data-path="${escapeHtml(full)}" data-kind="${kind}" title="${escapeHtml(full)}">${body}</a>`;
 }

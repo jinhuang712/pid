@@ -54,6 +54,10 @@
   --pid-code-font: var(--font-mono);
   --pid-code-size: 12.5px;
   --pid-measure: 48rem; /* conversation column */
+  /* Outline glyphs for file tokens in prose, drawn as masks so `currentColor` survives theme
+     changes. A token showing a folder is a folder; showing a document is a file. */
+  --pid-glyph-file: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14' fill='none' stroke='%23000' stroke-width='1.2'%3E%3Cpath d='M2 1.6h5.2L10 4.4V12.4H2z'/%3E%3Cpath d='M7 1.8V4.8H10'/%3E%3C/svg%3E");
+  --pid-glyph-folder: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 12' fill='none' stroke='%23000' stroke-width='1.2'%3E%3Cpath d='M1.6 10.4V1.6h4.1l1.2 1.9h5.5v6.9z'/%3E%3C/svg%3E");
 }
 body {
   font-size: var(--pid-font-size);
@@ -244,16 +248,24 @@ code {
   white-space: nowrap;
   overflow-wrap: normal;
 }
+/* file token: a document outline. Folder token: a folder outline instead, so a bundle like
+   PID.app does not read as a document. Inline SVG rather than a drawn box with pseudo-elements:
+   one element, no margins to tune, and the shape is unmistakable at 12px. */
 .prose a.file-link::before {
   content: "";
   display: inline-block;
-  width: 0.8em;
-  height: 0.95em;
-  margin: 0 0.3em -0.12em 0;
-  border: 1.5px solid currentColor;
-  border-radius: 2px;
-  opacity: 0.55;
+  width: 0.78em;
+  height: 0.9em;
+  margin: 0 0.32em -0.1em 0;
+  background-color: currentColor;
+  opacity: 0.5;
   vertical-align: baseline;
+  -webkit-mask: var(--pid-glyph-file) center / contain no-repeat;
+  mask: var(--pid-glyph-file) center / contain no-repeat;
+}
+.prose a.file-link[data-kind="dir"]::before {
+  -webkit-mask-image: var(--pid-glyph-folder);
+  mask-image: var(--pid-glyph-folder);
 }
 .prose a.file-link .file-dir {
   color: var(--color-ink-3);

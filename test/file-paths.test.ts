@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filePathHtml, fromFileUrl, isFilePath, splitPath } from "../src/renderer/file-paths";
+import { filePathHtml, fromFileUrl, isDirectoryPath, isFilePath, splitPath } from "../src/renderer/file-paths";
 import { marked } from "../src/renderer/marked-setup";
 
 const HTML = "/Users/jin.huang/dev/repository/dev-docs/product/sdk/html/ttd-sdk-api.html";
@@ -18,11 +18,28 @@ describe("isFilePath", () => {
   });
 });
 
+describe("isDirectoryPath", () => {
+  it("reads bundles and project folders as folders, not documents", () => {
+    expect(isDirectoryPath("/Applications/PID.app")).toBe(true);
+    expect(isDirectoryPath("/Users/a/Library/Frameworks/X.framework")).toBe(true);
+    expect(isDirectoryPath("/Users/a/dev/app/ChatApp.xcodeproj")).toBe(true);
+    expect(isDirectoryPath("/Users/a/dev/thing/")).toBe(true);
+  });
+  it("leaves files, and file names that merely mention a bundle extension", () => {
+    expect(isDirectoryPath("/Users/a/dev/pid/README.md")).toBe(false);
+    expect(isDirectoryPath("~/dev/x.swift")).toBe(false);
+    expect(isDirectoryPath("/Users/a/notes.app.txt")).toBe(false);
+  });
+});
+
 describe("splitPath", () => {
   it("collapses the home folder and keeps the last two directories", () => {
     expect(splitPath(HTML)).toEqual({ dir: "…/sdk/html/", name: "ttd-sdk-api.html" });
     expect(splitPath("~/dev/x.md")).toEqual({ dir: "~/dev/", name: "x.md" });
     expect(splitPath("/tmp/out.txt")).toEqual({ dir: "/tmp/", name: "out.txt" });
+  });
+  it("drops a trailing slash so a folder token has a name", () => {
+    expect(splitPath("/Users/a/dev/repo/")).toEqual({ dir: "~/dev/", name: "repo" });
   });
   it("decodes file urls", () => {
     expect(fromFileUrl("file:///Users/a/my%20doc.md")).toBe("/Users/a/my doc.md");
@@ -31,6 +48,13 @@ describe("splitPath", () => {
 });
 
 describe("file tokens in markdown", () => {
+  it("marks a bundle as a folder token, so the glyph matches what a click opens", () => {
+    const html = filePathHtml("/Applications/PID.app");
+    expect(html).toContain('data-kind="dir"');
+    expect(html).toContain('<span class="file-dir">/Applications/</span><span class="file-name">PID.app</span>');
+    expect(filePathHtml("/Users/a/dev/x.md")).toContain('data-kind="file"');
+    expect(filePathHtml("/Users/a/dev/x.md")).not.toContain('data-kind="dir"');
+  });
   it("turns a bare path in prose into a token and leaves the sentence period out", () => {
     const html = marked.parse(`打开 ${HTML}.`) as string;
     expect(html).toContain(`data-path="${HTML}"`);
