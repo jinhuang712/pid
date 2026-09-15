@@ -110,7 +110,7 @@ export function useCompletion(opts: {
           const items: AutocompleteItem[] = [
             { id: "compact", label: "compact", detail: "Compact context now (Pi compaction)" },
             { id: "fork", label: "fork", detail: "Fork from a user message" },
-            { id: "new", label: "new", detail: "New session in this folder" },
+            { id: "new", label: "new", detail: "New session in the active folder" },
             { id: "abort", label: "abort", detail: "Abort the current run" },
             {
               id: "clear-queue",

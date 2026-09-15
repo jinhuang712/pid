@@ -2,6 +2,7 @@ import { app, type BrowserWindow, Menu, type MenuItemConstructorOptions, shell }
 
 export type MenuCommand =
   | "new-session"
+  | "home"
   | "open-folder"
   | "search"
   | "fork"
@@ -46,7 +47,9 @@ export function installMenu(win: () => BrowserWindow | undefined, onScale: (step
     {
       label: "File",
       submenu: [
-        { label: "New Session", accelerator: "CmdOrCtrl+N", click: send("new-session") },
+        // Cmd+T is the tab gesture and Cmd+N the window one; PID has tabs, so new-session is Cmd+T.
+        { label: "New Session", accelerator: "CmdOrCtrl+T", click: send("new-session") },
+        { label: "Home", accelerator: "CmdOrCtrl+N", click: send("home") },
         { label: "Open Folder…", accelerator: "CmdOrCtrl+O", click: send("open-folder") },
         { type: "separator" },
         { label: "Search Sessions…", accelerator: "CmdOrCtrl+K", click: send("search") },
