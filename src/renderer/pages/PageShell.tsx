@@ -1,6 +1,6 @@
 import type { ProjectState, ToggleScope } from "@shared/ecosystem";
 import type { ReactNode } from "react";
-import { Badge, Segmented } from "@/ui";
+import { Badge, Scroll, Segmented } from "@/ui";
 
 /** Common frame for the ecosystem pages: title, one-line note, search box, content. */
 export function PageShell({
@@ -65,7 +65,7 @@ export function PageShell({
           />
         )}
       </div>
-      <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
+      <Scroll className="px-6 py-4">{children}</Scroll>
     </div>
   );
 }
