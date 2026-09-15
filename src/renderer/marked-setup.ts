@@ -1,5 +1,12 @@
 import { marked } from "marked";
-import { FILE_PATH_RE, FILE_PATH_START_RE, filePathHtml, isFilePath, TRAILING_PUNCT_RE } from "./file-paths";
+import {
+  FILE_PATH_RE,
+  FILE_PATH_START_RE,
+  filePathHtml,
+  isFilePath,
+  startsAtBoundary,
+  TRAILING_PUNCT_RE,
+} from "./file-paths";
 import { highlight, resolveLanguage } from "./highlight";
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -38,7 +45,8 @@ marked.use({
 
 /**
  * Local file paths become clickable tokens in three places: bare in prose, as a whole inline
- * code span, and as the target of a markdown link. Fenced blocks are left alone — code is code.
+ * code span, and as the target of a markdown link. The bare form starts a word, so the tokens
+ * already emitted decide whether this position qualifies. Fenced blocks are left alone — code is code.
  */
 marked.use({
   extensions: [
@@ -49,7 +57,8 @@ marked.use({
         const m = FILE_PATH_START_RE.exec(src);
         return m ? m.index + m[0].length : undefined;
       },
-      tokenizer(src: string) {
+      tokenizer(src, tokens) {
+        if (!startsAtBoundary(tokens[tokens.length - 1]?.raw ?? "")) return undefined;
         const m = FILE_PATH_RE.exec(src);
         if (!m) return undefined;
         const raw = m[0].replace(TRAILING_PUNCT_RE, "");

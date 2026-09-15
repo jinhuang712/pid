@@ -52,6 +52,16 @@ describe("file tokens in markdown", () => {
     expect(marked.parse("read and/or write, 3/4 of it")).toBe("<p>read and/or write, 3/4 of it</p>\n");
     expect(marked.parse("```\n/Users/a/b\n```")).toBe("<pre><code>/Users/a/b\n</code></pre>\n");
   });
+  it("leaves a slash-joined enumeration alone", () => {
+    const html = marked.parse("- C/D/E partially ✗ (the rename didn't happen)") as string;
+    expect(html).not.toContain("file-link");
+    expect(html).toContain("C/D/E partially");
+    expect(marked.parse("v1/v2/v3 差异")).toBe("<p>v1/v2/v3 差异</p>\n");
+  });
+  it("still takes a path at the start of a line or after an opening bracket", () => {
+    expect(marked.parse("/tmp/out.txt is the file")).toContain('data-path="/tmp/out.txt"');
+    expect(marked.parse("see (/tmp/out.txt)")).toContain('data-path="/tmp/out.txt"');
+  });
   it("escapes the path in attributes", () => {
     expect(filePathHtml('/tmp/a"b/c.txt')).toContain('data-path="/tmp/a&quot;b/c.txt"');
   });
