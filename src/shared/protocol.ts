@@ -84,7 +84,12 @@ export interface PiExtensionErrorEvent {
 // Dialogs an extension opens
 // ---------------------------------------------------------------------------
 
-/** A question from an extension that PID answers with a real dialog. */
+/**
+ * What an extension's `ctx.ui` call becomes on the way to the window.
+ *
+ * Only the members PID actually serves are here. `src/shared/extension-ui.ts` is the list of which
+ * those are, and the worker keeps the rest inert rather than sending traffic nothing reads.
+ */
 export type PiDialogRequest =
   | { type: "dialog"; id: string; method: "select"; title: string; options: string[]; timeout?: number }
   | { type: "dialog"; id: string; method: "confirm"; title: string; message: string; timeout?: number }
@@ -105,9 +110,7 @@ export type PiDialogRequest =
       widgetKey: string;
       widgetLines: string[] | undefined;
       widgetPlacement?: "aboveEditor" | "belowEditor";
-    }
-  | { type: "dialog"; id: string; method: "setTitle"; title: string }
-  | { type: "dialog"; id: string; method: "setEditorText"; text: string };
+    };
 
 /** The answer, correlated by the request's id. */
 export type PiDialogResponse =

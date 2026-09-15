@@ -1,12 +1,10 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { WIDGET_MCP_OAUTH, WIDGET_MCP_STATUS } from "@shared/extension-widgets";
 import {
-  isPidWidget,
   type McpOAuthOutcome,
   type McpStatusSnapshot,
   parseMcpOAuth,
   parseMcpStatus,
-  WIDGET_MCP_OAUTH,
-  WIDGET_MCP_STATUS,
 } from "@shared/mcp-status";
 import type { PiEvent, PiHandle, PiSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
@@ -28,9 +26,10 @@ export interface Proc {
   cwd: string;
   piState: PiSessionState;
   conv: ConversationState;
+  /** setStatus text by key, from any extension. */
   statuses: Record<string, string>;
-  /** setWidget lines by widget key, e.g. pi-worktree's "🌲 branch → main · ↑2 · 1 dirty". */
-  widgets: Record<string, string>;
+  /** setWidget lines by key, from any extension; PID shows them all. */
+  widgets: Record<string, string[]>;
   dialogs: DialogRequest[];
   /** Live MCP server status from the MCP extension (pid-mcp), via pid-bridge. Undefined until the first snapshot. */
   mcp?: McpStatusSnapshot;
@@ -156,16 +155,14 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
             case "editor":
               return { ...p, dialogs: [...p.dialogs, ev] };
             case "setStatus":
-              return { ...p, statuses: { ...p.statuses, [ev.statusKey]: ev.statusText ?? "" } };
+              return { ...p, statuses: setOrClear(p.statuses, ev.statusKey, ev.statusText || undefined) };
             case "setWidget":
-              // `pid:*` widgets are data from PID's own bridge extension, never something to render.
-              if (isPidWidget(ev.widgetKey)) {
-                if (ev.widgetKey === WIDGET_MCP_STATUS) return { ...p, mcp: parseMcpStatus(ev.widgetLines) };
-                if (ev.widgetKey === WIDGET_MCP_OAUTH)
-                  return { ...p, mcpOAuth: parseMcpOAuth(ev.widgetLines) };
-                return p;
-              }
-              return { ...p, widgets: { ...p.widgets, [ev.widgetKey]: (ev.widgetLines ?? []).join(" ") } };
+              // A `<ns>:<kind>/v<n>` key whose renderer PID has goes to that renderer. Everything
+              // else — plain keys and structured keys nothing claims — reaches the strip, which is
+              // what the terminal does with a widget too.
+              if (ev.widgetKey === WIDGET_MCP_STATUS) return { ...p, mcp: parseMcpStatus(ev.widgetLines) };
+              if (ev.widgetKey === WIDGET_MCP_OAUTH) return { ...p, mcpOAuth: parseMcpOAuth(ev.widgetLines) };
+              return { ...p, widgets: setOrClear(p.widgets, ev.widgetKey, ev.widgetLines) };
             default:
               return p;
           }
@@ -179,6 +176,16 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     default:
       return ws;
   }
+}
+
+/** Pi clears a status or a widget by setting it to undefined, so the key goes away rather than empty. */
+function setOrClear<T>(map: Record<string, T>, key: string, value: T | undefined): Record<string, T> {
+  if (value === undefined) {
+    if (!(key in map)) return map;
+    const { [key]: _gone, ...rest } = map;
+    return rest;
+  }
+  return { ...map, [key]: value };
 }
 
 function patch(ws: Workspace, key: string, f: (p: Proc) => Proc): Workspace {

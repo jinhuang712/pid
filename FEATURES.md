@@ -358,18 +358,18 @@ Pi Extensions are a first-class ecosystem surface.
 * scope `[Pi]`
 * enabled state `[Pi]`
 * enable / disable where Pi supports it `[Pi]`
-* compatibility state `[Presentation]`
 * contributed tools `[Pi]`
 * contributed commands `[Pi]`
-* contributed UI capability where observable `[Pi]` `[Presentation]`
+* per-interface-call support, this host against the terminal `[Presentation]`
 
-Compatibility presentation may include:
+Behavior runs in both hosts. The interface is where they differ, so the page reports that per
+`ctx.ui` member rather than as one verdict:
 
 ```text
-Compatible
-Partially Compatible
-TUI-specific
-Unavailable
+Full                         everything it asks for, PID does
+Reduced                      PID runs it; some calls have no effect here
+Terminal parts, stood down   it checks ctx.mode and skips them here
+Terminal parts, attempted    it does not check, so those calls do nothing
 ```
 
 PID does not fork Pi extension behavior.
@@ -386,9 +386,16 @@ Examples:
 * select → graphical selector `[Presentation]`
 * input → desktop input dialog `[Presentation]`
 * notification → native/in-app notification `[Presentation]`
-* status → status contribution `[Presentation]`
+* status → the extension strip above the composer `[Presentation]`
+* widget → the same strip, any key, no allowlist `[Presentation]`
 
-Terminal implementation details without a meaningful graphical mapping may degrade gracefully.
+An extension that wants graphical presentation rather than a line of text names its widget
+`<ns>:<kind>/v<n>` and sends JSON. PID renders the kinds it knows and shows the rest as their
+payload; the terminal shows the same extension's plain widget. One extension, both hosts, no PID
+code loaded. `[Extension]`
+
+Terminal implementation details without a meaningful graphical mapping degrade to nothing, and the
+Extensions page names which ones for each extension.
 
 ---
 

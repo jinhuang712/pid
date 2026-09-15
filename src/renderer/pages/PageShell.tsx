@@ -46,9 +46,11 @@ export function PageShell({
 
 export function Badge({
   tone,
+  title,
   children,
 }: {
   tone: "ok" | "warn" | "danger" | "muted" | "accent";
+  title?: string;
   children: ReactNode;
 }) {
   const cls = {
@@ -58,7 +60,11 @@ export function Badge({
     muted: "bg-paper-3 text-ink-2",
     accent: "bg-accent-soft text-accent",
   }[tone];
-  return <span className={`inline-flex items-center h-5 px-1.5 rounded text-xs ${cls}`}>{children}</span>;
+  return (
+    <span title={title} className={`inline-flex items-center h-5 px-1.5 rounded text-xs ${cls}`}>
+      {children}
+    </span>
+  );
 }
 
 export function PathLink({ path, label }: { path: string; label?: string }) {

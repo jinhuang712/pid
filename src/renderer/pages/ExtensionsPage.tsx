@@ -1,22 +1,55 @@
-import type { Compat, ExtensionView } from "@shared/ecosystem";
+import type { ExtensionView } from "@shared/ecosystem";
+import { type PidSupport, pidSupport, type UiSupport } from "@shared/extension-ui";
 import { useEffect, useMemo, useState } from "react";
 import { bridge } from "../bridge";
 import { fuzzyFilter } from "../fuzzy";
 import { Badge, OverrideBadge, PageShell, PathLink, ScopeBar, Toggle } from "./PageShell";
 import { useEcoScope } from "./scope";
 
-const COMPAT: Record<Compat, { label: string; tone: "ok" | "warn" | "danger" }> = {
-  // Labels hedge on purpose: this is a source-code scan for TUI-only APIs, not a runtime check.
-  compatible: { label: "Likely compatible", tone: "ok" },
-  partial: { label: "Partial", tone: "warn" },
-  unsupported: { label: "Likely TUI-only", tone: "danger" },
+/**
+ * Pi extensions as Pi resolves them, and how much of each one this host can run.
+ *
+ * A Pi extension's behaviour — its tools, commands and hooks — runs the same in both hosts. What
+ * differs is its interface: the terminal serves every `ctx.ui` member, and PID serves the ones whose
+ * payload is data rather than a terminal. Each card says which, per member, from the same table
+ * `session-worker.ts` implements.
+ */
+
+const SUPPORT: Record<PidSupport, { label: string; tone: "ok" | "warn" | "danger"; note: string }> = {
+  full: { label: "Full", tone: "ok", note: "Everything it asks the interface for, PID does." },
+  reduced: {
+    label: "Reduced",
+    tone: "ok",
+    note: "PID runs it, and some interface calls have no effect here.",
+  },
+  guarded: {
+    label: "Terminal parts, stood down",
+    tone: "warn",
+    note: "It needs a terminal for part of itself and checks ctx.mode first, so it skips that part here and the rest still runs.",
+  },
+  terminal: {
+    label: "Terminal parts, attempted",
+    tone: "danger",
+    note: "It needs a terminal for part of itself and does not check ctx.mode, so those calls happen here and do nothing.",
+  },
 };
 
-/**
- * Pi extensions as Pi resolves them from settings.json packages and the extensions directories.
- * Switches write the same +/- patterns as `pi config`. Compatibility is a static scan for
- * terminal-only UI APIs; PID does not adapt them.
- */
+const CELL: Record<UiSupport, { pid: string; tone: string; why: string }> = {
+  served: { pid: "✓", tone: "text-ok", why: "PID does the real thing" },
+  inert: { pid: "—", tone: "text-ink-3", why: "PID accepts the call and nothing happens" },
+  terminal: { pid: "✗", tone: "text-danger", why: "needs a terminal; PID has nothing to pass" },
+};
+
+/** Every `ctx.ui` member the extension reaches for, worst support first so the gaps read first. */
+function members(e: ExtensionView): { name: string; support: UiSupport }[] {
+  const order: UiSupport[] = ["terminal", "inert", "served"];
+  return [
+    ...e.ui.terminal.map((name) => ({ name, support: "terminal" as const })),
+    ...e.ui.inert.map((name) => ({ name, support: "inert" as const })),
+    ...e.ui.served.map((name) => ({ name, support: "served" as const })),
+  ].sort((a, b) => order.indexOf(a.support) - order.indexOf(b.support) || a.name.localeCompare(b.name));
+}
+
 export function ExtensionsPage({ folder }: { folder?: string }) {
   const [list, setList] = useState<ExtensionView[]>([]);
   const [q, setQ] = useState("");
@@ -45,9 +78,12 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
     [list, q],
   );
   const counts = useMemo(() => {
-    const c = { compatible: 0, partial: 0, unsupported: 0, off: 0 };
+    const c = { headless: 0, reduced: 0, terminal: 0, off: 0 };
     for (const e of list) {
-      c[e.compat]++;
+      const s = pidSupport(e.ui);
+      if (s === "full") c.headless++;
+      else if (s === "reduced") c.reduced++;
+      else c.terminal++;
       if (!e.enabled) c.off++;
     }
     return c;
@@ -58,11 +94,12 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
       title="Extensions"
       note={
         <>
-          {list.length} extensions · {counts.compatible} likely compatible · {counts.partial} partial ·{" "}
-          {counts.unsupported} likely TUI-only{counts.off > 0 ? ` · ${counts.off} off` : ""}. Labels come from
-          scanning each extension's source for TUI-only APIs, not from running it. Switches write the same
-          settings as <span className="font-mono">pi config</span>; new sessions pick them up, running ones
-          after <span className="font-mono">/reload</span>.
+          {list.length} extensions · {counts.headless + counts.reduced} run fully here · {counts.terminal}{" "}
+          need a terminal for part of themselves
+          {counts.off > 0 ? ` · ${counts.off} off` : ""}. Tools, commands and hooks run the same in both
+          hosts; the difference is the interface, read from each extension's source rather than from running
+          it. Switches write the same settings as <span className="font-mono">pi config</span>; new sessions
+          pick them up, running ones after <span className="font-mono">/reload</span>.
         </>
       }
       toolbar={
@@ -90,7 +127,8 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
       {error && <div className="mb-3 text-xs text-danger">{error}</div>}
       <div className="flex flex-col gap-2">
         {filtered.map((e) => {
-          const c = COMPAT[e.compat];
+          const support = SUPPORT[pidSupport(e.ui)];
+          const used = members(e);
           const key = e.baseDir + e.name;
           const isOpen = open === key;
           const projectOnly = e.scope === "project" && sc.scope === "global";
@@ -125,7 +163,9 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
                   <Badge tone="muted">{e.scope}</Badge>
                   <span className="flex-1" />
                   {sc.scope === "project" && <OverrideBadge state={e.projectState} />}
-                  <Badge tone={c.tone}>{c.label}</Badge>
+                  <Badge tone={support.tone} title={support.note}>
+                    in PID: {support.label}
+                  </Badge>
                   <span className="text-ink-3 text-xs">{isOpen ? "▾" : "▸"}</span>
                 </button>
                 {sc.scope === "project" && e.projectState && e.projectState !== "inherit" && (
@@ -140,7 +180,7 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
                 )}
               </div>
               {isOpen && (
-                <div className="px-3 pb-3 text-xs flex flex-col gap-1.5 border-t border-line pt-2">
+                <div className="px-3 pb-3 text-xs flex flex-col gap-2 border-t border-line pt-2">
                   {e.description && <p className="text-ink-2">{e.description}</p>}
                   <div className="text-ink-3">
                     source <span className="font-mono text-ink-2">{e.source}</span>
@@ -151,16 +191,44 @@ export function ExtensionsPage({ folder }: { folder?: string }) {
                     file
                     {e.files.length === 1 ? "" : "s"}
                   </div>
-                  {e.uiApis.length > 0 && (
-                    <div className="text-ink-3">
-                      UI via RPC: <span className="font-mono text-ink-2">{e.uiApis.join(", ")}</span>
-                    </div>
+                  <p className="text-ink-3">{support.note}</p>
+                  {used.length === 0 ? (
+                    <p className="text-ink-3">
+                      It asks the interface for nothing, so both hosts run all of it.
+                    </p>
+                  ) : (
+                    <table className="w-full text-left">
+                      <thead className="text-ink-3">
+                        <tr>
+                          <th className="font-normal pb-1">interface call</th>
+                          <th className="font-normal pb-1 w-16">Pi TUI</th>
+                          <th className="font-normal pb-1 w-16">PID</th>
+                          <th className="font-normal pb-1">in PID</th>
+                        </tr>
+                      </thead>
+                      <tbody className="font-mono">
+                        {used.map((m) => {
+                          const cell = CELL[m.support];
+                          return (
+                            <tr key={m.name} className="border-t border-line/50">
+                              <td className="py-0.5 text-ink-2">{m.name}</td>
+                              {/* The terminal is the reference host: it serves every member. */}
+                              <td className="py-0.5 text-ok">✓</td>
+                              <td className={`py-0.5 ${cell.tone}`}>{cell.pid}</td>
+                              <td className="py-0.5 font-sans text-ink-3">{cell.why}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   )}
-                  {e.tuiApis.length > 0 && (
-                    <div className="text-warn">
-                      Terminal-only APIs: <span className="font-mono">{e.tuiApis.join(", ")}</span>
-                      {e.compat === "partial" && " (guarded by a mode check, so the rest should work)"}
-                    </div>
+                  {e.ui.terminal.length > 0 && !e.ui.guarded && (
+                    <p className="text-warn">
+                      Nothing in the source compares <span className="font-mono">ctx.mode</span> to{" "}
+                      <span className="font-mono">"tui"</span>, so those calls happen here and do nothing. A{" "}
+                      <span className="font-mono">ctx.hasUI</span> check would not help: PID has a UI, so it
+                      is true here too.
+                    </p>
                   )}
                 </div>
               )}

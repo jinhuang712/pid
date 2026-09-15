@@ -50,7 +50,18 @@ Use Pi's native session tree and fork semantics. PID keeps no fork database of i
 
 ## Extension Boundary
 
-Not every terminal extension will work in PID. Extensions that depend on terminal widgets or terminal layout are labeled unsupported. Do not build an adapter framework to change that.
+A Pi extension's behaviour — tools, commands, hooks, providers — runs the same in both hosts. Its
+interface does not: PID serves the `ctx.ui` members whose payload is data, and cannot serve the ones
+whose signature carries a terminal (`custom`, `setFooter`, `setHeader`, `setEditorComponent`,
+`onTerminalInput`, and the pi-tui renderer registrations).
+
+`src/shared/extension-ui.ts` is the single answer to which is which. The worker implements it, the
+Extensions page reports it, and `test/extension-ui.test.ts` fails when they disagree. Classify a new
+member there rather than adding a special case anywhere else, and do not build an adapter framework
+to fake a terminal.
+
+`ctx.hasUI` is not a terminal check: PID has a UI, so it is true here. Only `ctx.mode === "tui"`
+stands an extension's terminal parts down.
 
 ## MCP Boundary
 
@@ -117,9 +128,15 @@ Pi Coding Agent SDK
   `SYSTEM.md` or a project's `.pi/APPEND_SYSTEM.md`.
 - **Renderer state**: the streaming assistant message is rebuilt from `message_update` deltas;
   `message_end` is authoritative. Everything else is a projection of Pi events.
-- **Extension UI**: the worker implements Pi's `ExtensionUIContext` and forwards each call as a
-  dialog request; the window answers and the extension's await resolves. Fire-and-forget methods
-  become toasts and a status strip. TUI-only APIs are not adapted.
+- **Extension UI**: the worker implements Pi's `ExtensionUIContext` and forwards each served call as
+  a dialog request; the window answers and the extension's await resolves. Members PID does not
+  serve are stubs, not events nothing reads. `src/shared/extension-ui.ts` holds the classification.
+- **Extension presentation** (`src/shared/extension-widgets.ts`): `setStatus` and `setWidget` from
+  any extension reach the strip above the composer — no allowlist, the same as the terminal. An
+  extension wanting more than a line names its widget `<ns>:<kind>/v<n>` and sends JSON; PID routes
+  claimed kinds to their renderer and shows the rest as their payload. PID's own bridge
+  (`resources/pid-bridge`) publishes MCP status through that contract, not a private channel, so the
+  core has no shortcut an extension author cannot take.
 - **Fork**: Pi stamps a forked session with its parent. PID leaves that alone — the lineage is
   Pi's, and the file does not even exist until the next turn appends to it.
 - **Concurrency**: Pi has no session-file lock. PID owns one worker per session file it opens and
