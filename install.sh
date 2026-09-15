@@ -37,13 +37,13 @@ pinned=$(node -p 'require("./package.json").packageManager.split("@")[1].split("
 if command -v pi >/dev/null; then
   ok "pi $(pi --version 2>/dev/null | head -1) at $(command -v pi)"
 else
-  warn "pi not on PATH — PID launches sessions through the pi binary: npm i -g @earendil-works/pi-coding-agent"
+  warn "pi not on PATH — optional: PID runs its pinned runtime itself, a terminal pi only matters for TUI round-trips"
 fi
 
 want=$(node -p 'require("./package.json").dependencies["@earendil-works/pi-coding-agent"]')
 have=$(pi --version 2>/dev/null | head -1 || true)
 if [ -n "$have" ] && [ "$want" != "$have" ]; then
-  warn "installed pi is $have, PID's pinned SDK types are $want — keep them equal (see AGENTS.md)"
+  warn "installed pi is $have, PID's pinned runtime is $want — keep them equal (see AGENTS.md)"
 fi
 
 if [ ! -d node_modules ] || [ package.json -nt node_modules/.modules.yaml ]; then
