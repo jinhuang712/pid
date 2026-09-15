@@ -259,13 +259,12 @@ export function SettingsPage({ initialSection }: { initialSection?: string }) {
 
           {section === "conversation" && (
             <Group title="Composer and timeline">
-              <Row
-                label="Enter sends"
-                hint="Off (default): ⌘Enter sends and Enter inserts a newline. On: Enter sends and ⇧Enter inserts a newline."
-              >
-                <Toggle
-                  value={settings.conversation.enterSends}
-                  onChange={(enterSends) => update("conversation", { enterSends })}
+              <Row label="Send with">
+                <Segmented
+                  value={settings.conversation.enterSends ? "enter" : "mod"}
+                  options={["mod", "enter"] as const}
+                  labels={{ mod: "⌘⏎", enter: "⏎" }}
+                  onChange={(v) => update("conversation", { enterSends: v === "enter" })}
                 />
               </Row>
               <Row label="Auto-scroll while streaming">
