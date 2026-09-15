@@ -1,9 +1,8 @@
 import type { ToolCall } from "@earendil-works/pi-ai";
 import { useState } from "react";
-import { useMcpServers } from "../mcp-servers-context";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
-import { label, MCP_PREFIX } from "../tool-label";
+import { label } from "../tool-label";
 
 function resultText(run?: ToolRun): string {
   if (!run?.result) return "";
@@ -23,18 +22,17 @@ function diffStats(patch?: string): string | undefined {
 
 /**
  * A tool call as one quiet line: chevron · verb · argument. Expanding shows the input and the
- * output (or the diff) behind a single left rule. Pi, extension, and MCP tools all look like this.
+ * output (or the diff) behind a single left rule. Pi's tools and an extension's look the same.
  */
 export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
   const { settings } = useSettings();
-  const mcpServers = useMcpServers();
   const [open, setOpen] = useState(!settings.appearance.toolCardsCollapsed);
   const status = run?.status ?? "running";
   const isError = run?.isError === true;
   const diff: string | undefined = call.name === "edit" ? run?.result?.details?.diff : undefined;
   const stats = call.name === "edit" ? diffStats(run?.result?.details?.patch) : undefined;
   const out = resultText(run);
-  const lbl = label(call, mcpServers);
+  const lbl = label(call);
   const verb = status === "running" ? lbl.running : lbl.done;
 
   return (
@@ -69,13 +67,7 @@ export function ToolCard({ call, run }: { call: ToolCall; run?: ToolRun }) {
             <pre className="font-mono whitespace-pre-wrap break-all text-ink-3 max-h-40 overflow-auto text-xs leading-relaxed">
               {call.name === "bash"
                 ? String(call.arguments?.command ?? "")
-                : JSON.stringify(
-                    call.name.startsWith(MCP_PREFIX) && call.arguments?.args
-                      ? call.arguments.args
-                      : call.arguments,
-                    null,
-                    2,
-                  )}
+                : JSON.stringify(call.arguments, null, 2)}
             </pre>
           )}
           {diff ? (

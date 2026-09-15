@@ -9,7 +9,7 @@ import {
   type SessionStatus,
   type Workspace,
 } from "../state/workspace";
-import type { PageSurface } from "../surfaces";
+import type { Surface } from "../surfaces";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { Keys } from "./Key";
 import { Logo } from "./Logo";
@@ -66,7 +66,7 @@ export function SessionTree({
 }: {
   page: Page;
   /** Ecosystem pages that exist right now; see src/renderer/surfaces.ts. */
-  pages: PageSurface[];
+  pages: Surface[];
   onPage: (p: Page) => void;
   folders: string[];
   sessionsByFolder: Record<string, SessionSummary[]>;

@@ -98,7 +98,7 @@ This includes:
 
 * built-in Pi tools
 * Pi extension tools
-* MCP tools
+* tools an extension registered
 
 Common capabilities:
 
@@ -322,27 +322,24 @@ PID has no separate skill ecosystem.
 
 ---
 
-# 15. MCP Page
+# 15. Pages an Extension Brings
 
-MCP is a first-class ecosystem surface.
+An ecosystem surface belongs to whatever provides it. A capability that reaches Pi through an
+extension brings its page from that extension too: a PID without it installed has no such page, no
+navigation entry, and no code for one.
 
-* configured servers `[Pi]`
-* runtime-registered servers `[Pi]`
-* connection state `[Pi]`
-* authentication state `[Pi]`
-* tools per server `[Pi]`
-* tool metadata `[Pi]`
-* last error `[Pi]`
-* refresh `[Pi]`
-* reconnect `[Pi]`
-* enable / disable where supported `[Pi]`
-* OAuth interaction `[Pi]` `[Desktop]`
-* active / inactive tool visibility `[Pi]` `[Presentation]`
-* unified Tool Card execution `[Presentation]`
+An extension describes its page and PID renders the shape `[Extension]` `[Presentation]`:
 
-With `pid-mcp`, MCP tools remain native Pi tools.
+* rows with a title, a subtitle and badges
+* a switch, as two commands
+* buttons, each a command
+* one level of nested rows
+* key/value detail behind an expander
 
-PID is not an MCP execution platform.
+Every switch and button is a command PID runs the way a typed slash command runs, so the same
+affordance works in the Pi terminal and needs no PID-specific code.
+
+PID renders the shape and learns nothing about the subject.
 
 ---
 
@@ -399,11 +396,12 @@ Kinds PID renders today:
 ```text
 usage     provider quota      → the bar under the composer
 binding   worktree binding    → the branch line in the session header
+page      a described page    → a navigation entry and the page itself
 ```
 
-Both are published by extensions that also serve the Pi terminal: pi-x-footer draws the same
-numbers as a footer, pi-worktree as a status line. Neither ships inside PID — they are installed
-into Pi, and then both interfaces have them. `[Extension]` `[Pi]`
+`page` is the general one: a list of rows with badges, a switch and buttons, each carrying a command
+PID runs the way a typed slash command runs. An extension that wants a page in PID sends one; PID
+renders the shape and learns nothing about the subject. No extension, no entry. `[Extension]`
 
 Terminal implementation details without a meaningful graphical mapping degrade to nothing, and the
 Extensions page names which ones for each extension.
@@ -515,7 +513,7 @@ PID-owned categories may include:
 * Extensions UI `[PID]`
 * Advanced `[PID]`
 
-Skills, MCP, and Pi Extensions remain first-class pages rather than being buried inside Settings.
+Skills and Pi Extensions remain first-class pages rather than being buried inside Settings, as does any page an extension brings.
 
 PID does not build an alternate provider or model configuration system.
 

@@ -7,20 +7,19 @@ import type {
   ResolvedResource,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { McpToggle, ProjectState, ResourceToggle, ToggleScope } from "@shared/ecosystem";
+import type { ProjectState, ResourceToggle, ToggleScope } from "@shared/ecosystem";
 import { agentDir } from "./ecosystem";
 
 /**
- * On/off switches for skills, extensions, and MCP servers.
+ * On/off switches for skills and extensions.
  *
  * Skills and extensions: the same `+pattern` / `-pattern` entries `pi config` writes, through Pi's
  * own SettingsManager (file lock, only modified fields persisted). Global scope edits
  * ~/.pi/agent/settings.json; project scope edits <cwd>/.pi/settings.json exactly like
  * `pi config --local`, including the three-state load / unload / inherit override.
  *
- * MCP servers: the `disabled` flag pid-mcp (and pi-mcp-adapter) reads. Global scope edits the entry in
- * ~/.pi/agent/mcp.json; project scope writes a `{ disabled }`-only override to <cwd>/.pi/mcp.json,
- * the way the adapter's own /mcp panel does. No server definition or credential is ever copied.
+ * These are the only writes PID makes under Pi's directories, and they are Pi's own formats through
+ * Pi's own code paths. An extension's own configuration is the extension's to write.
  */
 
 const sdk = () => import("@earendil-works/pi-coding-agent");
@@ -298,81 +297,9 @@ export async function setResourceState(req: ResourceToggle): Promise<void> {
   await t.flush();
 }
 
-// ---- MCP ------------------------------------------------------------------------------------
-
-function readJsonObject(path: string): Record<string, unknown> {
-  if (!existsSync(path)) return {};
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-    throw new Error(`${path}: root must be an object`);
-  return parsed as Record<string, unknown>;
-}
-
 function writeJsonAtomic(path: string, value: unknown) {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   renameSync(tmp, path);
-}
-
-function serversKey(raw: Record<string, unknown>) {
-  return raw.mcpServers !== undefined
-    ? "mcpServers"
-    : raw["mcp-servers"] !== undefined
-      ? "mcp-servers"
-      : "mcpServers";
-}
-
-export function mcpGlobalPath() {
-  return join(agentDir(), "mcp.json");
-}
-export function mcpProjectPaths(cwd: string) {
-  return { shared: join(cwd, ".mcp.json"), pi: join(cwd, ".pi", "mcp.json") };
-}
-
-export function setMcpDisabled(req: McpToggle): void {
-  if (req.scope === "global") {
-    const path = mcpGlobalPath();
-    const raw = readJsonObject(path);
-    const key = serversKey(raw);
-    const servers = (raw[key] ?? {}) as Record<string, unknown>;
-    const entry = servers[req.name];
-    if (!entry || typeof entry !== "object") throw new Error(`${req.name} is not defined in ${path}`);
-    const next = { ...(entry as Record<string, unknown>) };
-    if (req.disabled) next.disabled = true;
-    else delete next.disabled;
-    servers[req.name] = next;
-    raw[key] = servers;
-    writeJsonAtomic(path, raw);
-    return;
-  }
-  if (!req.cwd) throw new Error("Project scope needs a project directory");
-  const { shared, pi } = mcpProjectPaths(req.cwd);
-  const raw = readJsonObject(pi);
-  const key = serversKey(raw);
-  const servers = (raw[key] ?? {}) as Record<string, unknown>;
-  const existing = (servers[req.name] ?? undefined) as Record<string, unknown> | undefined;
-  let next: Record<string, unknown>;
-  if (req.disabled) next = { ...existing, disabled: true };
-  else {
-    next = Object.fromEntries(Object.entries(existing ?? {}).filter(([k]) => k !== "disabled"));
-    // Lower layers disabled it → an explicit false is needed to re-enable.
-    let lowerDisabled = false;
-    for (const p of [mcpGlobalPath(), shared]) {
-      try {
-        const lower = readJsonObject(p);
-        const e = (lower[serversKey(lower)] as Record<string, Record<string, unknown>> | undefined)?.[
-          req.name
-        ];
-        if (e && "disabled" in e) lowerDisabled = e.disabled === true;
-      } catch {
-        // unreadable layer: treat as not disabling
-      }
-    }
-    if (lowerDisabled) next.disabled = false;
-  }
-  if (Object.keys(next).length === 0) delete servers[req.name];
-  else servers[req.name] = next;
-  raw[key] = servers;
-  writeJsonAtomic(pi, raw);
 }

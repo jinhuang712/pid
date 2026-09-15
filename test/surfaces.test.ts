@@ -1,11 +1,11 @@
 import type { PiSessionState } from "@shared/protocol";
-import { availablePages, liveKinds, PAGE_SURFACES } from "../src/renderer/surfaces";
-import type { Proc, Workspace } from "../src/renderer/state/workspace";
 import { describe, expect, it } from "vitest";
+import type { Proc, Workspace } from "../src/renderer/state/workspace";
+import { extensionPages, pageId, surfaces } from "../src/renderer/surfaces";
 
 /**
- * PID must not know which extension fills which surface — only that a surface is filled. These
- * tests fail if a page starts depending on a particular extension being installed.
+ * PID must not know which extension contributes which page — only that one described a page. These
+ * tests fail if a surface starts depending on a particular extension being installed.
  */
 
 const proc = (over: Partial<Proc> = {}): Proc => ({
@@ -24,44 +24,33 @@ const ws = (...procs: Proc[]): Workspace => ({
   procs: Object.fromEntries(procs.map((p, i) => [`${p.key}${i}`, p])),
 });
 
-describe("page surfaces", () => {
+const page = (title: string) => ({ title, sections: [{ rows: [{ id: "a", title: "A" }] }] });
+
+describe("surfaces", () => {
   it("keeps PID's own pages whatever is installed", () => {
-    const pages = availablePages(new Set()).map((s) => s.id);
-    expect(pages).toContain("skills");
-    expect(pages).toContain("extensions");
+    expect(surfaces(ws()).map((s) => s.id)).toEqual(["skills", "extensions"]);
   });
 
-  it("drops a page nothing fills", () => {
-    // A fresh PID with no MCP extension has no MCP page: an empty frame with a heading is worse
-    // than no menu entry.
-    expect(availablePages(new Set()).map((s) => s.id)).not.toContain("mcp");
-    expect(availablePages(new Set(["mcp-status"])).map((s) => s.id)).toContain("mcp");
+  it("adds a page an extension described, labelled as the extension named it", () => {
+    const list = surfaces(ws(proc({ published: { page: { "some-ext": page("Servers") } } })));
+    expect(list.map((s) => s.id)).toEqual(["skills", "extensions", pageId("some-ext")]);
+    expect(list.at(-1)?.label).toBe("Servers");
+    expect(list.at(-1)?.sessionKey).toBe("k");
   });
 
-  it("names a kind for every page it does not always show", () => {
-    // The table is the only place a surface is tied to data. A page with neither a kind nor a
-    // permanent home would be a hidden special case.
-    for (const s of PAGE_SURFACES) expect(s.kind === undefined || typeof s.kind === "string").toBe(true);
-  });
-});
-
-describe("liveKinds", () => {
-  it("reports what open sessions have published", () => {
-    expect(liveKinds(ws(proc({ published: { usage: { provider: "x", state: "fresh", windows: [] } } })))).toEqual(
-      new Set(["usage"]),
-    );
-    expect(liveKinds(ws(proc()))).toEqual(new Set());
+  it("gives every publisher its own page", () => {
+    const p = proc({ published: { page: { a: page("A"), b: page("B") } } });
+    expect(extensionPages(ws(p)).map((s) => s.label)).toEqual(["A", "B"]);
   });
 
   it("ignores a session that is starting or gone", () => {
-    const published: Proc["published"] = { usage: { provider: "x", state: "fresh", windows: [] } };
-    expect(liveKinds(ws(proc({ published, pending: true })))).toEqual(new Set());
-    expect(liveKinds(ws(proc({ published, exit: "pi exited" })))).toEqual(new Set());
+    const published = { page: { x: page("X") } };
+    expect(extensionPages(ws(proc({ published, pending: true })))).toEqual([]);
+    expect(extensionPages(ws(proc({ published, exit: "pi exited" })))).toEqual([]);
   });
 
-  it("unions across sessions, so one folder's extension is enough", () => {
-    const a = proc({ published: { usage: { provider: "x", state: "fresh", windows: [] } } });
-    const b = proc({ published: { binding: { children: [{ branch: "wt", worktreePath: "/w" }] } } });
-    expect(liveKinds(ws(a, b))).toEqual(new Set(["usage", "binding"]));
+  it("shows one page when two sessions publish the same one", () => {
+    const published = { page: { x: page("X") } };
+    expect(extensionPages(ws(proc({ published }), proc({ published })))).toHaveLength(1);
   });
 });

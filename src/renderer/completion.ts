@@ -93,7 +93,7 @@ export function useCompletion(opts: {
               detail: "Drop queued steers and follow-ups",
             },
             { id: "export", label: "export", detail: "Export session to HTML" },
-            { id: "reload", label: "reload", detail: "Reload skills, extensions and MCP servers" },
+            { id: "reload", label: "reload", detail: "Reload extensions, skills, prompts and themes" },
             ...levels.current.list.map((l) => ({
               id: `thinking:${l}`,
               label: `thinking:${l}`,
