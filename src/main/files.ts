@@ -1,42 +1,65 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readdir, stat, writeFile } from "node:fs/promises";
+import { readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { PathInfo } from "@shared/files";
+import { gitRootRelative, ignoredDir, ignoredFile, type ListOptions } from "@shared/glob";
 import { nativeImage } from "electron";
 
 const execFileP = promisify(execFile);
-const IGNORED = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "out",
-  "release",
-  ".next",
-  "target",
-  ".venv",
-  "__pycache__",
-]);
+/** A pathological tree should not freeze the renderer's fuzzy filter; git's own listings stop here too. */
 const LIMIT = 20000;
 
-/** Files under a folder, relative paths. Git repos use git's own view (tracked + untracked, not ignored). */
-export async function listFiles(cwd: string): Promise<string[]> {
+/**
+ * Files under a folder, as relative posix paths, narrowed by the user's file-search settings.
+ * A git repo answers through git's own view — tracked plus untracked, `.gitignore` respected —
+ * because that is the list a person sees in their editor. Anything else walks the tree.
+ */
+export async function listFiles(cwd: string, opts: ListOptions = {}): Promise<string[]> {
+  // Canonicalised once: macOS reports /tmp and /var as their /private twins, git answers with the
+  // resolved spelling, and comparing the two would look like a repo somewhere else entirely.
+  const abs = await canonical(cwd);
+  const files = await gitFiles(abs, opts);
+  if (files !== undefined) return files.slice(0, LIMIT);
+  return await walkFiles(abs, opts);
+}
+
+/** A path that exists resolves; one that does not (or is denied) is left as told. */
+async function canonical(path: string): Promise<string> {
   try {
-    const { stdout } = await execFileP(
-      "git",
-      ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-      {
-        cwd,
-        maxBuffer: 64 * 1024 * 1024,
-      },
-    );
-    const files = stdout.split("\0").filter(Boolean);
-    if (files.length > 0) return files.slice(0, LIMIT);
+    return await realpath(path);
   } catch {
-    // not a git repo, fall through
+    return resolve(path);
   }
+}
+
+/** `undefined` means "not a repo (or git failed)", which sends the caller to the walker. */
+async function gitFiles(abs: string, opts: ListOptions): Promise<string[] | undefined> {
+  let toplevel: string;
+  let stdout: string;
+  try {
+    const r = await execFileP("git", ["rev-parse", "--show-toplevel"], { cwd: abs });
+    toplevel = r.stdout.trim();
+    if (!toplevel) return undefined;
+    const listed = await execFileP("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
+      cwd: toplevel,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    stdout = listed.stdout;
+  } catch {
+    return undefined;
+  }
+  // Paths arrive relative to the repo root; the caller can only open paths under its own folder.
+  const prefix = relative(await canonical(toplevel), abs)
+    .split("\\")
+    .join("/");
+  return gitRootRelative(prefix, stdout.split("\0").filter(Boolean)).filter((f) => !ignoredFile(f, opts));
+}
+
+/** The non-git path: everything readable under the folder except the ignored subtrees. */
+async function walkFiles(root: string, opts: ListOptions): Promise<string[]> {
   const out: string[] = [];
   const walk = async (dir: string) => {
     if (out.length >= LIMIT) return;
@@ -48,14 +71,23 @@ export async function listFiles(cwd: string): Promise<string[]> {
     }
     for (const e of entries) {
       if (out.length >= LIMIT) return;
-      if (IGNORED.has(e.name)) continue;
-      const full = join(dir, e.name);
-      if (e.isDirectory()) await walk(full);
-      else if (e.isFile()) out.push(relative(cwd, full));
+      const rel = relative(root, join(dir, e.name)).split("\\").join("/");
+      if (e.isDirectory() || (e.isSymbolicLink() && (await isDirectory(join(dir, e.name))))) {
+        if (!ignoredDir(rel, opts)) await walk(join(dir, e.name));
+      } else if (e.isFile() || e.isSymbolicLink()) {
+        if (!ignoredFile(rel, opts)) out.push(rel);
+      }
     }
   };
-  await walk(cwd);
+  await walk(root);
   return out;
+}
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /** What the composer needs to draw a chip: exists, directory or file, size. Never reads content. */

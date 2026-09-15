@@ -69,6 +69,13 @@ export function App() {
   const composerRef = useRef(composer);
   composerRef.current = composer;
   const run = <T,>(p: Promise<T>) => p.catch((e) => setStatus(String(e)));
+  /**
+   * The directory the window is about: the active session's cwd, or the folder the sidebar
+   * highlights when there is no session. One expression, because the title bar, the timeline,
+   * `@` and every "new session here" affordance have to mean the same folder — a folder you
+   * selected and a session you are typing in can differ, and only one of them is what Pi reads.
+   */
+  const activeDir = active?.cwd ?? folder;
 
   // ---- folders and their sessions (read-only projections of disk) ----
   const loaded = useRef(new Set<string>());
@@ -565,7 +572,7 @@ export function App() {
         () => undefined, // compaction_end draws its own row
         (r) => `compact failed · ${r}`,
       ),
-    newSession: () => folder && void start(folder),
+    newSession: () => activeDir && void start(activeDir),
     abort: () =>
       liveKey &&
       void command(
@@ -631,7 +638,7 @@ export function App() {
   );
   const { complete, pick } = useCompletion({
     key: liveKey,
-    folder,
+    folder: activeDir,
     sessions: allSessions,
     actions,
     commandsEpoch,
@@ -714,7 +721,7 @@ export function App() {
       if (cmd.startsWith("page:")) return setPage(cmd.slice(5) as Page);
       if (cmd === "search") return setPaletteOpen(true);
       if (cmd === "open-folder") return sessionActions.openFolder("");
-      if (cmd === "new-session") return folder && sessionActions.newSession(folder);
+      if (cmd === "new-session") return activeDir && sessionActions.newSession(activeDir);
       if (cmd === "fork") return key && setForkKey(key);
       if (cmd === "compact") return actions.compact();
       if (cmd === "abort") return abort();

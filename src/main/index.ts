@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ResourceToggle } from "@shared/ecosystem";
+import type { ListOptions } from "@shared/glob";
 import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
@@ -160,7 +161,7 @@ ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(expandHome
 ipcMain.handle("shell:openExternal", async (_e, url: string) => {
   if (isWebUrl(url)) await shell.openExternal(url);
 });
-ipcMain.handle("files:list", (_e, cwd: string) => listFiles(cwd));
+ipcMain.handle("files:list", (_e, cwd: string, opts?: ListOptions) => listFiles(cwd, opts));
 ipcMain.handle("files:stat", (_e, paths: string[]) => statPaths(paths));
 ipcMain.handle("files:thumbnail", (_e, path: string) => thumbnail(path));
 ipcMain.handle("files:saveClipboardImage", (_e, bytes: Uint8Array, mime: string) =>
