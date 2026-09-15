@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveLink } from "../src/renderer/components/Markdown";
+import { isWebUrl } from "../src/shared/url";
 
 const CWD = "/Users/me/dev/app";
 
@@ -56,5 +57,24 @@ describe("resolveLink", () => {
 
   it("drops a relative href when no folder is known", () => {
     expect(resolveLink("x.html", undefined, undefined)).toBeUndefined();
+  });
+});
+
+// The renderer decides with isWebUrl which anchors go to the browser and the main process re-checks
+// it before shell.openExternal; one definition keeps the safety net from drifting from the rule.
+describe("isWebUrl", () => {
+  it("accepts the schemes a click may hand to the OS", () => {
+    expect(isWebUrl("https://example.com/a/b")).toBe(true);
+    expect(isWebUrl("http://example.com")).toBe(true);
+    expect(isWebUrl("mailto:a@b.com")).toBe(true);
+    expect(isWebUrl("HTTPS://EXAMPLE.COM")).toBe(true);
+  });
+
+  it("rejects everything else, the app's own page included", () => {
+    expect(isWebUrl("file:///Users/me/dev/app/out/renderer/report.html")).toBe(false);
+    expect(isWebUrl("vscode://file/Users/me/x")).toBe(false);
+    expect(isWebUrl("javascript:alert(1)")).toBe(false);
+    expect(isWebUrl("report.html")).toBe(false);
+    expect(isWebUrl("/Users/me/notes.md")).toBe(false);
   });
 });
