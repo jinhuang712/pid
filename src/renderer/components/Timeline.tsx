@@ -9,6 +9,7 @@ import {
   type SentSkill,
   segment,
 } from "../attachments";
+import { RenderTool, ToolRendererBoundary, toolRenderers } from "../contributions/tools";
 import { CwdContext } from "../cwd-context";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
@@ -16,7 +17,6 @@ import { describeTurn, groupTurns, splitReply, type Turn } from "../state/turns"
 import { fmtDuration } from "../turn-summary";
 import { AttachmentChip, Chip, Glyph } from "./Chips";
 import { Markdown } from "./Markdown";
-import { ToolCard } from "./ToolCard";
 
 /** Turns rendered at first; older ones mount as you scroll up. Long sessions run to hundreds. */
 const WINDOW = 40;
@@ -308,7 +308,15 @@ const Assistant = memo(function Assistant({
           return (
             <Markdown key={key} source={c.text} live={live} className="text-[14px] leading-[1.7] text-ink" />
           );
-        if (c.type === "toolCall") return <ToolCard key={key} call={c} run={toolRuns[c.id]} />;
+        if (c.type === "toolCall") {
+          const render = toolRenderers.resolve(c.name);
+          const run = toolRuns[c.id];
+          return (
+            <ToolRendererBoundary key={key} call={c} run={run}>
+              <RenderTool call={c} run={run} render={render} />
+            </ToolRendererBoundary>
+          );
+        }
         return null;
       })}
       {m.stopReason === "error" && m.errorMessage && (

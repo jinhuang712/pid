@@ -5,5 +5,5 @@ export default defineConfig({
   resolve: {
     alias: { "@shared": resolve(__dirname, "src/shared"), "@": resolve(__dirname, "src/renderer") },
   },
-  test: { include: ["test/**/*.test.ts"] },
+  test: { include: ["test/**/*.test.ts", "test/**/*.test.tsx"] },
 });
