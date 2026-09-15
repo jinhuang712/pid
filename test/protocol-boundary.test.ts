@@ -43,7 +43,7 @@ describe("protocol boundary", () => {
 
   it("names none of Pi's RPC wire types", () => {
     const offenders = files
-      .filter((f) => /\bRpc(Command|Response|SessionState|ExtensionUI\w*|SlashCommand)\b/.test(f.text))
+      .filter((f) => /\bRpc(Command|Response|SessionState|ExtensionUI\w*|SlashCommand|Client|EventListener)|\bJsonAgentSessionEvent\b/.test(f.text))
       .map((f) => f.rel);
     expect(offenders).toEqual([]);
   });
