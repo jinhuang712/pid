@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../src/renderer/bridge", () => ({ bridge: {} }));
 
 import { ToolCard, ResultImages } from "../src/renderer/components/ToolCard";
+import { callBrief } from "../src/renderer/components/ToolCard";
 import { registerBuiltInToolRenderers } from "../src/renderer/contributions/builtin-tools";
 import { createToolRegistry, ToolRendererBoundary, type ToolRenderProps } from "../src/renderer/contributions/tools";
 
@@ -151,5 +152,28 @@ describe("tool result images", () => {
     const run = runWith([{ type: "text", text: "Viewed image [image/png] a.png" }]);
     expect(renderToStaticMarkup(<ToolCard call={call("view")} run={run} />)).not.toContain("[image]");
     expect(renderToStaticMarkup(<ResultImages run={run} />)).toBe("");
+  });
+});
+
+/**
+ * `brief` is the model's own one-liner, added to the schema by an extension (pi-briefly) that wants
+ * a readable row. It lives in the arguments, so the row reads it out instead of hiding it there.
+ */
+describe("the model's brief", () => {
+  it("reads a trimmed brief from the arguments", () => {
+    expect(callBrief(call("read", { path: "a.ts", brief: "  查看配置解析逻辑  " }))).toBe("查看配置解析逻辑");
+  });
+
+  it("ignores a missing, empty or non-string brief", () => {
+    expect(callBrief(call("read", { path: "a.ts" }))).toBeUndefined();
+    expect(callBrief(call("read", { brief: "   " }))).toBeUndefined();
+    expect(callBrief(call("read", { brief: 42 }))).toBeUndefined();
+  });
+
+  it("draws it in the call row, and keeps the raw arguments expandable", () => {
+    const html = renderToStaticMarkup(
+      <ToolCard call={call("read", { path: "a.ts", brief: "查看配置解析逻辑" })} />,
+    );
+    expect(html).toContain("查看配置解析逻辑");
   });
 });
