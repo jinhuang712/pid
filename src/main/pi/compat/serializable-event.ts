@@ -2,7 +2,12 @@ import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { PiAgentEvent, PiDelta } from "@shared/protocol";
 
 /**
- * Reduce one session event to what can cross a process boundary.
+ * UPSTREAM API GAP — host-boundary serialization shim. Lives here so the one
+ * place PID reshapes Pi's event stays visible.
+ *
+ * This exists because Pi does not yet expose a host-safe serialized
+ * `AgentSessionEvent`. Reduce one session event to what can cross a process
+ * boundary:
  *
  * In-process a `message_update` carries the whole partial message on every delta: large, repeated
  * per token, and full of values structured clone rejects. The window rebuilds the message from the
@@ -10,6 +15,9 @@ import type { PiAgentEvent, PiDelta } from "@shared/protocol";
  *
  * A tool call's id and name are lifted out of the partial before it goes, because they are the one
  * thing `toolcall_start` does not carry on its own.
+ *
+ * This must never grow into PID-specific agent event semantics: it strips
+ * transport-unsuitable weight, nothing more.
  */
 export function toJsonEvent(event: AgentSessionEvent): PiAgentEvent {
   if (event.type !== "message_update") return event;

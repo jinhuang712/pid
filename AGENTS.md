@@ -178,7 +178,8 @@ the Settings page reports the drift.
 ```text
 src/main/           Electron main: window, menu, IPC, settings, git, ecosystem discovery
 src/main/pi/        Pi bridge: session-worker (the only file that drives Pi), session-process,
-                    registry, sessions, search, session-read, ecosystem
+                    registry, sessions, search, session-read, ecosystem, compat/
+                    (upstream-gap shims; the only place Pi private layout is touched)
 src/preload/        typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
 src/renderer/       React UI: components/, pages/, state/, settings, completion, sigils
 src/renderer/ui/    presentation primitives; no session, no IPC, no domain type

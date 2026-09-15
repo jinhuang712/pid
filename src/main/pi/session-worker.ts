@@ -34,8 +34,7 @@ import type {
   PiSessionState,
   ResponseDataOf,
 } from "@shared/protocol";
-import { applyPiHttpSettings } from "./http-config";
-import { toJsonEvent } from "./json-event";
+import { applyPiHttpSettings, toJsonEvent } from "./compat";
 import type { MainToWorker, WorkerStartOptions, WorkerToMain } from "./worker-protocol";
 
 type ParentPort = {
