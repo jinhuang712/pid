@@ -3,6 +3,7 @@ import type { PiDiagnostics } from "@shared/diagnostics";
 import type { AppendSystemPrompt, ExtensionView, PiHome, ResourceToggle, SkillView } from "@shared/ecosystem";
 import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
+import type { ListOptions } from "@shared/glob";
 import type {
   PiCommand,
   PiDialogResponse,
@@ -53,7 +54,8 @@ export interface Bridge {
     save(open: { cwd: string; path: string }[], active?: string): Promise<void>;
   };
   files: {
-    list(cwd: string): Promise<string[]>;
+    /** Relative posix paths under `cwd`; `opts` carries the Settings that narrow the list. */
+    list(cwd: string, opts?: ListOptions): Promise<string[]>;
     /** Existence, kind and size for attachment chips. Content is never read. */
     stat(paths: string[]): Promise<PathInfo[]>;
     /** Small data-URL preview (images, and PDFs where the OS renders them); undefined when it cannot. */

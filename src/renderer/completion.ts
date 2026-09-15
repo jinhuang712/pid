@@ -4,6 +4,7 @@ import { bridge } from "./bridge";
 import type { AutocompleteItem } from "./components/Autocomplete";
 import { fuzzyFilter } from "./fuzzy";
 import { refDisplay, refToken, type SessionReference } from "./session-reference";
+import { useSettings } from "./settings";
 import type { Sigil } from "./sigils";
 
 const RANK: Record<string, number> = { skill: 0, prompt: 1, extension: 2 };
@@ -26,6 +27,12 @@ export interface PiActions {
  */
 export function useCompletion(opts: {
   key?: string;
+  /**
+   * Root of the `@` file list: the active session's cwd, not whatever folder the sidebar
+   * happens to highlight. They can differ — switching to a session that is already running
+   * activates its tab without moving the folder — and the composer sends to the session, so
+   * the file list has to be the session's too.
+   */
   folder?: string;
   sessions: SessionSummary[];
   actions: PiActions;
@@ -34,7 +41,13 @@ export function useCompletion(opts: {
   onReference: (ref: SessionReference) => void;
 }) {
   const { key, folder, sessions, actions, commandsEpoch, onReference } = opts;
-  const files = useRef<{ folder: string; list: string[] } | undefined>(undefined);
+  const { settings } = useSettings();
+  const { ignorePatterns, showHidden } = settings.files;
+  const files = useRef<
+    { root: string; showHidden: boolean; ignorePatterns: string[]; list: string[] } | undefined
+  >(undefined);
+  /** One filter pass at a time: a response for a folder or setting the user has left is dropped. */
+  const filesRequest = useRef(0);
   const [allSessions, setAllSessions] = useState<SessionSummary[]>([]);
   const commands = useRef<{ key: string; list: AutocompleteItem[] } | undefined>(undefined);
   const levels = useRef<{ key: string; list: string[] } | undefined>(undefined);
@@ -48,9 +61,21 @@ export function useCompletion(opts: {
       switch (sigil) {
         case "@": {
           if (!folder) return [];
-          if (files.current?.folder !== folder)
-            files.current = { folder, list: await bridge.files.list(folder) };
-          const list = fuzzyFilter(files.current.list, query, (f) => f).slice(0, 50);
+          const request = ++filesRequest.current;
+          // Re-list only when the folder or the narrowing settings changed: a keystroke reuses it.
+          const cached = files.current;
+          const fresh =
+            cached?.root === folder &&
+            cached.showHidden === showHidden &&
+            cached.ignorePatterns.join("\u0000") === ignorePatterns.join("\u0000");
+          if (!fresh) {
+            const list = await bridge.files.list(folder, { ignorePatterns, showHidden });
+            if (request !== filesRequest.current) return [];
+            files.current = { root: folder, showHidden, ignorePatterns, list };
+          }
+          const cache = files.current;
+          if (!cache) return [];
+          const list = fuzzyFilter(cache.list, query, (f) => f).slice(0, 50);
           return list.map((f) => ({ id: f, label: f.split("/").pop() ?? f, detail: f }));
         }
         case "/": {
@@ -120,7 +145,7 @@ export function useCompletion(opts: {
           return [];
       }
     },
-    [key, folder, sessions, allSessions],
+    [key, folder, sessions, allSessions, ignorePatterns, showHidden],
   );
 
   const pick = useCallback(
