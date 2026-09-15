@@ -186,9 +186,34 @@ test/               vitest unit tests (real-environment tests are opt-in via env
 docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README
 ```
 
-Dev hooks for headless verification: `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`,
-`PID_FOLLOWUP`, `PID_DRAFT`, `PID_ATTACH` (colon-separated absolute paths), `PID_SEARCH`, `PID_PAGE`,
-`PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`.
+Dev hooks for headless runs: `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`, `PID_FOLLOWUP`,
+`PID_DRAFT`, `PID_ATTACH` (colon-separated absolute paths), `PID_SEARCH`, `PID_PAGE`,
+`PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`, `PID_DUMP_DIR`, `PID_HEADLESS`.
+
+### Proving a change in the running app without a human
+
+A terminal usually has neither macOS Assistive Access (to click or type) nor Screen Recording (to
+screenshot). Do not conclude "needs the user to try it" before this: `PID_DUMP_DIR` writes what the
+window actually painted, and the window stays hidden — `PID_HEADLESS=1` does the same on its own, so
+a run never pops a window in someone's face.
+
+```bash
+# Silent run: open a folder, then read what the picker and the menu really are.
+rm -rf /tmp/pid-dump && mkdir -p /tmp/pid-dump
+PID_DUMP_DIR=/tmp/pid-dump PID_OPEN_FOLDER=/abs/path/to/repo pnpm dev &
+sleep 40
+cat /tmp/pid-dump/menu.txt        # accelerators Electron actually installed
+cat /tmp/pid-dump/window.json     # renderer probe: active folder, sessions, the `@` list
+cat /tmp/pid-dump/window.txt      # rendered window text
+```
+
+The renderer probe is `window.__pidDump`, filled only when `PID_DUMP_DIR` is set (see the probe
+effect in `src/renderer/App.tsx`); the dump is written repeatedly, at ~5s through ~60s, because a
+resumed session keeps replaying while the window settles. Add fields to the probe rather than
+guessing from `window.txt`. `pnpm dev` reuses userData (`~/Library/Application Support/Electron`),
+so a smoke run inherits whatever sessions were open — write `pid-state.json` there (or delete it)
+to control what is restored. Kill the run when done (`pkill -f electron/dist/Electron.app`); never
+leave a dev app running against real user state.
 
 ## Verification
 
