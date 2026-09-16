@@ -21,8 +21,15 @@ import { CwdContext } from "../cwd-context";
 import { usePluginTool } from "../plugins/tools";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
-import { describeTurn, groupTurns, splitReply, type Turn } from "../state/turns";
-import { fmtDuration } from "../turn-summary";
+import {
+  describeTurn,
+  describeTurnLive,
+  groupTurns,
+  liveAnswer,
+  splitReply,
+  type Turn,
+} from "../state/turns";
+import { fmtDuration, type Usage } from "../turn-summary";
 import { AttachmentChip, Chip, Glyph } from "./Chips";
 import { Markdown } from "./Markdown";
 
@@ -373,10 +380,25 @@ function MarkerRow({ kind, text, live }: Pick<Marker, "kind" | "text"> & { live?
 }
 
 /**
- * The step line of a settled turn: chevron · "Worked for 12s · 4 tool calls · …". Hover shows the
- * token breakdown. Without steps there is nothing to unfold and the chevron is omitted.
+ * The step line of a turn whose steps are folded: chevron · "Worked for 12s · 4 tool calls · …",
+ * or "Working for …" while the turn is still running and the answer is streaming below it. Hover
+ * shows the token breakdown once the turn has settled. Without steps there is nothing to unfold
+ * and the chevron is omitted.
  */
-function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?: () => void }) {
+function Steps({
+  turn,
+  open,
+  onToggle,
+  live,
+  streaming,
+}: {
+  turn: Turn;
+  open: boolean;
+  onToggle?: () => void;
+  live?: { startedAt?: number; usage?: Usage };
+  /** The in-flight message, so its tool calls count on the live line. */
+  streaming?: AssistantMessage;
+}) {
   return (
     <div className="px-6 pt-1">
       <button
@@ -387,7 +409,9 @@ function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?:
         title={turn.summary?.detail}
       >
         {onToggle && <Chevron open={open} />}
-        <span className="tabular-nums">{describeTurn(turn)}</span>
+        <span className="tabular-nums">
+          {turn.summary ? describeTurn(turn) : describeTurnLive(turn, { ...live, streaming })}
+        </span>
       </button>
     </div>
   );
@@ -395,31 +419,54 @@ function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?:
 
 /**
  * One exchange. While Pi is still working every step stays open so output can be read as it
- * arrives; once the turn settles the steps fold behind the step line and only the answer remains.
+ * arrives; when the model starts typing the answer — and again when the turn settles — the steps
+ * fold behind the step line and only the answer remains. Work resuming after a burst of text
+ * (a tool call following it) unfolds them again, so the fold tracks what the model is doing
+ * rather than guessing which text is final.
  */
 const TurnBlock = memo(function TurnBlock({
   turn,
   toolRuns,
   streaming,
+  live,
 }: {
   turn: Turn;
   toolRuns: Record<string, ToolRun>;
   /** The in-flight assistant message when this is the open turn. */
   streaming?: AssistantMessage;
+  /** Live turn stats for the step line while the turn is open. */
+  live?: { startedAt?: number; usage?: Usage };
 }) {
   const { settings } = useSettings();
   const { steps, answer, suspect } = useMemo(() => splitReply(turn.replies), [turn.replies]);
   // A suspect answer starts unfolded: what the user came for is in the steps, not the answer slot.
   const [open, setOpen] = useState(!settings.appearance.stepsCollapsed || suspect === true);
   const settled = turn.summary !== undefined;
-  const unfolded = !settled || open;
+  // The answer of the in-flight message; when none is in flight, the last completed reply's
+  // answer stands in, so the fold holds through the breath between the final message and the
+  // turn marker instead of flashing the steps open for one render.
+  const answerNow = streaming ? liveAnswer(streaming) : undefined;
+  const answering = answerNow !== undefined || (!settled && streaming === undefined && answer !== undefined);
+  const folded = settled || (answering && !open);
+  const unfolded = settled ? open : !answering || open;
   const replies = settled ? steps : turn.replies;
+  // Anything to unfold: the completed steps, or the lead of the in-flight message when the fold
+  // hid it. A turn with neither has nothing behind its line.
+  const foldable = settled
+    ? steps.length > 0
+    : turn.replies.length > 0 || (streaming?.content.length ?? 0) > (answerNow?.content.length ?? 0);
   return (
     // data-turn anchors the jump buttons: the block's top is the prompt, its bottom the end of the reply
     <div data-turn={turn.start}>
       {turn.user && <User m={turn.user.m} />}
-      {settled && (
-        <Steps turn={turn} open={open} onToggle={steps.length > 0 ? () => setOpen(!open) : undefined} />
+      {folded && (
+        <Steps
+          turn={turn}
+          open={open}
+          onToggle={foldable ? () => setOpen(!open) : undefined}
+          live={live}
+          streaming={streaming}
+        />
       )}
       {unfolded && replies.map(({ index, m }) => <Reply key={index} m={m} toolRuns={toolRuns} />)}
       {settled && suspect && (
@@ -429,8 +476,10 @@ const TurnBlock = memo(function TurnBlock({
           </span>
         </div>
       )}
-      {settled && answer && <Assistant m={answer} live={false} toolRuns={toolRuns} />}
-      {streaming && <Assistant m={streaming} live toolRuns={toolRuns} />}
+      {(settled || answering) && answer && !answerNow && (
+        <Assistant m={answer} live={false} toolRuns={toolRuns} />
+      )}
+      {streaming && <Assistant m={folded && answerNow ? answerNow : streaming} live toolRuns={toolRuns} />}
       {turn.markers.map((k) => (
         <MarkerRow key={`${k.kind}-${k.afterIndex}-${k.text}`} kind={k.kind} text={k.text} />
       ))}
@@ -471,6 +520,12 @@ export function Timeline({
   const last = turns[turns.length - 1];
   /** The streaming message belongs to the last turn unless that turn has already settled. */
   const tailOpen = last !== undefined && last.summary === undefined;
+  /** Live turn stats for the open turn's step line. Identity-stable between state churn so the
+   *  memoized blocks of settled turns do not re-render on every streamed token. */
+  const liveInfo = useMemo(
+    () => (tailOpen ? { startedAt: state.turnStartedAt, usage: state.turnUsage } : undefined),
+    [tailOpen, state.turnStartedAt, state.turnUsage],
+  );
 
   // Follow the stream: the tail grows on every event, so this runs per event by design.
   // It runs before paint so a new row never shows unscrolled, and it reads `follow` through a ref
@@ -624,6 +679,7 @@ export function Timeline({
                 turn={t}
                 toolRuns={state.toolRuns}
                 streaming={t === last && tailOpen ? state.streaming : undefined}
+                live={t === last ? liveInfo : undefined}
               />
             ))}
             {state.compacting && <MarkerRow kind="compaction" text="Compacting context…" live />}
