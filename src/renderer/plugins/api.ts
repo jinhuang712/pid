@@ -1,11 +1,15 @@
+import type { ToolCall } from "@earendil-works/pi-ai";
 import type { ReactNode } from "react";
+import type { FrameProps } from "../components/ToolCard";
+import type { ToolRun } from "../state/conversation";
 
 /**
  * What a plugin registers, and what it is handed when it draws.
  *
  * Every mount point is somewhere PID already puts something of its own — the navigation list, the
- * session title bar, the line above the composer. None of them was invented for plugins, which is
- * the check that keeps the list honest: a slot nothing occupies is a slot nobody has looked at.
+ * session title bar, the line above the composer, a tool call in the transcript. None of them was
+ * invented for plugins, which is the check that keeps the list honest: a slot nothing occupies is a
+ * slot nobody has looked at.
  */
 
 export type Mount = "page" | "header" | "strip";
@@ -30,6 +34,29 @@ export interface LineSpec {
 }
 
 /**
+ * What a tool renderer is handed.
+ *
+ * `Frame` is the row PID's own tools are drawn in, with this call already in it — chevron, status,
+ * output, images — so a plugin says what is different about its tool and inherits the rest. Pi does
+ * the same thing in the terminal, where a tool's `renderCall` composes pi-tui's widgets rather than
+ * painting a row from scratch.
+ */
+export interface ToolDraw {
+  call: ToolCall;
+  run: ToolRun | undefined;
+  Frame: (props: FrameProps) => ReactNode;
+}
+
+export interface ToolSpec {
+  /**
+   * The tools this draws. They are the plugin's own, and PID does not check that: an extension
+   * claiming a name it never registered draws a row for a call that never arrives.
+   */
+  names: string[];
+  render: (draw: ToolDraw, ctx: PluginContext) => ReactNode;
+}
+
+/**
  * The object a plugin's default export receives.
  *
  * Deliberately small. A plugin that needs something not here should say so — widening this is a
@@ -41,6 +68,8 @@ export interface PluginApi {
   page: (spec: PageSpec) => void;
   header: (spec: LineSpec) => void;
   strip: (spec: LineSpec) => void;
+  /** Called more than once when a plugin ships more than one tool. */
+  tool: (spec: ToolSpec) => void;
 }
 
 export type PluginModule = (api: PluginApi) => void;
@@ -51,6 +80,7 @@ export interface Registered {
   page?: PageSpec;
   header?: LineSpec;
   strip?: LineSpec;
+  tools?: ToolSpec[];
   /** Set when the module threw on import or during registration. */
   error?: string;
 }

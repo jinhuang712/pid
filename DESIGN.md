@@ -665,19 +665,25 @@ reason the interim `<ns>:<kind>/v<n>` channel is an interim.
 So: the host supplies the component library, the theme and the mount points; the extension supplies
 the composition.
 
-Mount points, each one a place PID already puts something of its own:
+Mount points, each one a place PID already puts something of its own. A slot nothing occupies is a
+slot nobody has looked at, so the list grows when an extension needs one, not before:
 
 ```text
-nav        a navigation entry, and the page behind it
-page       a full page
-header     the session title bar's second line
-entry      a transcript entry, by customType
-strip      the line above the composer
-composer   the line inside the composer card
-modal      a dialog
-toast      a notification
-overlay    the whole window, unconstrained
+page     a navigation entry and the page behind it   api.page({ label, render })
+header   the session title bar's second line          api.header({ render })
+strip    the line above the composer                  api.strip({ render })
+tool     a tool call in the transcript, by name       api.tool({ names, render })
 ```
+
+The first three hand a place over wholesale and are drawn from the plugin's own published state.
+`tool` is a lookup instead: a tool call arrives in the middle of the transcript and nothing above it
+knows which extension owns the name, so the timeline asks per call and falls through to PID's own
+card when nobody claims it. Its renderer is handed PID's own row frame with the call already in it —
+the chevron, the status, the output and any images the tool returned — so an extension says what is
+different about its tool and inherits the rest, the way a Pi tool's `renderCall` composes pi-tui's
+widgets rather than painting a row from scratch.
+
+Not implemented, and not promised: a composer line, a modal, a toast, an unconstrained overlay.
 
 The exact registration signature may evolve. The architectural boundary should not.
 

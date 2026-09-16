@@ -24,7 +24,14 @@ export function usePlugins(cwd: string | undefined): Registered[] {
   return plugins;
 }
 
-function parse(lines: string[] | undefined): unknown {
+/**
+ * What a plugin's agent half last published, as its desktop half sees it.
+ *
+ * The lines crossed as whatever `setWidget` was handed. JSON is the shape every extension so far
+ * publishes, so it is parsed; anything else is passed through as the lines themselves rather than
+ * being dropped, because a plugin that publishes plain text still wrote it on purpose.
+ */
+export function pluginState(lines: string[] | undefined): unknown {
   if (!lines || lines.length === 0) return undefined;
   try {
     return JSON.parse(lines.join("\n"));
@@ -41,5 +48,5 @@ export function usePluginContext(
 ): PluginContext {
   const lines = proc?.widgets[id];
   const cwd = proc?.cwd;
-  return useMemo(() => ({ state: parse(lines), run, cwd }), [lines, cwd, run]);
+  return useMemo(() => ({ state: pluginState(lines), run, cwd }), [lines, cwd, run]);
 }

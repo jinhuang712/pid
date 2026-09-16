@@ -21,6 +21,7 @@ import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { PluginSlot, PluginSlots } from "./plugins/PluginSlot";
+import { PluginTools } from "./plugins/tools";
 import { usePlugins } from "./plugins/usePlugins";
 import {
   DISPLAY_RE,
@@ -973,7 +974,9 @@ export function App() {
               <>
                 {/* keyed per session file (stable across the pending → live handover): scroll position
                     and the rendered window start fresh for each session */}
-                <Timeline key={active.piState.sessionFile ?? key} state={conv} cwd={active.cwd} />
+                <PluginTools plugins={plugins} proc={active} run={runCommand}>
+                  <Timeline key={active.piState.sessionFile ?? key} state={conv} cwd={active.cwd} />
+                </PluginTools>
                 {status && <div className="px-6 py-1 text-xs text-warn">{status}</div>}
                 <QueuePanel
                   streaming={conv.isStreaming}

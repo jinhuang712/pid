@@ -17,6 +17,7 @@ import { RenderTool, ToolRendererBoundary, toolRenderers } from "../contribution
 registerBuiltInToolRenderers();
 
 import { CwdContext } from "../cwd-context";
+import { usePluginTool } from "../plugins/tools";
 import { useSettings } from "../settings";
 import type { ConversationState, Marker, ToolRun } from "../state/conversation";
 import { describeTurn, groupTurns, splitReply, type Turn } from "../state/turns";
@@ -305,6 +306,9 @@ const Assistant = memo(function Assistant({
   live: boolean;
   toolRuns: Record<string, ToolRun>;
 }) {
+  // The tool's own extension draws it when one is loaded and claims the name; PID's registry
+  // answers for everything else, and the generic card answers for everything after that.
+  const byPlugin = usePluginTool();
   return (
     <div className="timeline-item px-6 py-2 flex flex-col gap-2">
       {m.content.map((c, i) => {
@@ -315,7 +319,7 @@ const Assistant = memo(function Assistant({
             <Markdown key={key} source={c.text} live={live} className="text-[14px] leading-[1.7] text-ink" />
           );
         if (c.type === "toolCall") {
-          const render = toolRenderers.resolve(c.name);
+          const render = byPlugin(c.name) ?? toolRenderers.resolve(c.name);
           const run = toolRuns[c.id];
           return (
             <ToolRendererBoundary key={key} call={c} run={run}>

@@ -11,9 +11,13 @@ export interface Label {
 }
 
 /**
- * A tool PID has no line for keeps its own name. Pi's built-in tools are named below; everything
- * else came from an extension, and reading its name back is the honest thing to show — PID
- * reverse-engineering one extension's naming to prettify it was PID knowing that extension.
+ * A tool PID has no line for keeps its own name.
+ *
+ * The list below is Pi's own tools and stops there — `bash`, `edit`, `find`, `grep`, `ls`, `read`,
+ * `write`. Everything else came from an extension, and reading its name back is the honest thing to
+ * show: PID reverse-engineering one extension's naming to prettify it was PID knowing that
+ * extension. An extension that wants better draws its own row, which is the whole point of the
+ * `tool` mount.
  */
 export function label(call: ToolCall): Label {
   const a = (call.arguments ?? {}) as Record<string, unknown>;
@@ -33,14 +37,6 @@ export function label(call: ToolCall): Label {
       return { running: "Finding", done: "Found", detail: str("pattern") };
     case "ls":
       return { running: "Listing", done: "Listed", detail: str("path") || "." };
-    case "websearch":
-    case "web_search":
-    case "search":
-      return { running: "Searching the web", done: "Searched the web", detail: str("query") };
-    case "fetch":
-    case "webfetch":
-    case "web_fetch":
-      return { running: "Fetching", done: "Fetched", detail: str("url") };
     default: {
       const first = Object.values(a).find((v) => typeof v === "string") as string | undefined;
       return { running: `Calling ${call.name}`, done: `Called ${call.name}`, detail: first ?? "" };
