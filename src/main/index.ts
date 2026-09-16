@@ -276,6 +276,9 @@ ipcMain.handle("plugins:list", async (_e, cwd: string | undefined, names: string
 });
 
 app.whenReady().then(() => {
+  // A headless run hides the window, but on macOS the Dock icon alone steals focus from whatever
+  // the user is doing — which is the popup, as far as they are concerned. Hide that too.
+  if (process.env.PID_HEADLESS || process.env.PID_DUMP_DIR) void app.dock?.hide();
   installDebugDump();
   applyTheme(); // decide the theme before the first frame
   serveApp();

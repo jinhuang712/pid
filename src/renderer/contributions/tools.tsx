@@ -10,10 +10,12 @@ import type { ToolRun } from "../state/conversation";
  * default every tool falls back to, so if it cannot live behind this contract
  * the contract is wrong — that is the dogfood test, and it runs on every render.
  *
- * Today only built-ins register; third-party presentation code has no loader
- * yet (that is the rest of Phase F). The registry still earns its keep: match
- * order, fallback and failure isolation are decided here once, with tests,
- * instead of growing as conditions inside the timeline.
+ * Only built-ins register here. An extension's own rows come from its desktop
+ * half through the `tool` mount, which the timeline consults first — those are
+ * keyed by name and rebuilt when the folder changes, so they cannot live in a
+ * module-level list that only grows. Match order, fallback and failure
+ * isolation are still decided here once, with tests, rather than growing as
+ * conditions inside the timeline.
  */
 
 /** What a renderer receives: the call Pi made and its run state, nothing else. */

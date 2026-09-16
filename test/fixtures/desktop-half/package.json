@@ -1,0 +1,7 @@
+{
+  "name": "desktop-half-fixture",
+  "private": true,
+  "type": "module",
+  "pi": { "extensions": ["./index.ts"] },
+  "pid": { "ui": "./ui.tsx" }
+}

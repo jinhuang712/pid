@@ -127,9 +127,9 @@ function Boom(): React.ReactNode {
 }
 
 /**
- * A tool that returns an image — pi-view's `view`, or Pi's `read` on a picture — must reach the
- * transcript as the picture, not as a `[image]` placeholder. The bytes are already in the message
- * that crossed IPC; this is the part that shows them.
+ * A tool that returns an image must reach the transcript as the picture, not as a `[image]`
+ * placeholder. The bytes are already in the message that crossed IPC; this is the part that shows
+ * them, and it is keyed off the content block rather than off any tool's name.
  */
 describe("tool result images", () => {
   const runWith = (content: unknown[]) =>

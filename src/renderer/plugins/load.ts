@@ -34,6 +34,9 @@ function register(id: string): { api: PluginApi; out: Registered } {
     strip: (spec) => {
       out.strip = spec;
     },
+    tool: (spec) => {
+      out.tools = [...(out.tools ?? []), spec];
+    },
   };
   return { api, out };
 }

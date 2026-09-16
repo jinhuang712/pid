@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
@@ -295,11 +295,4 @@ export async function setResourceState(req: ResourceToggle): Promise<void> {
     else t.setGlobal(r, req.state === "load");
   }
   await t.flush();
-}
-
-function writeJsonAtomic(path: string, value: unknown) {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  renameSync(tmp, path);
 }

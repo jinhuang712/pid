@@ -1,5 +1,5 @@
 import type { ToolCall } from "@earendil-works/pi-ai";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
 import { label } from "../tool-label";
@@ -14,14 +14,9 @@ function resultText(run?: ToolRun): string {
 }
 
 /**
- * Image blocks a tool returned: pi-view's `view`, or Pi's own `read` on a picture. The bytes are
- * already in the message that crossed IPC, so the card can show the picture instead of a
- * `[image]` placeholder — which is the whole point of asking a model to look at one.
- */
-/**
- * Image blocks a tool returned: pi-view's `view`, or Pi's own `read` on a picture. The bytes are
- * already in the message that crossed IPC, so the card can show the picture instead of a
- * `[image]` placeholder — which is the whole point of asking a model to look at one.
+ * Image blocks a tool returned — whichever tool it was. The bytes are already in the message that
+ * crossed IPC, so the card shows the picture instead of an `[image]` placeholder, which is the
+ * whole point of asking a model to look at one.
  *
  * A component of its own because the card's body only mounts when expanded: this is the part a
  * test can render and assert without clicking.
@@ -64,34 +59,48 @@ export function callBrief(call: ToolCall): string | undefined {
   return typeof brief === "string" && brief.trim() ? brief.trim() : undefined;
 }
 
-/**
- * The pieces every tool card is made of: the collapsed line, the status, and the expandable body.
- * The generic card and the built-in renderers differ only in how the body is drawn — the chrome is
- * here once, so a registered renderer never re-answers "when does it show the output".
- */
-export function ToolCallFrame({
-  call,
-  run,
-  /** Extra text on the collapsed line, e.g. "+3 −1". */
-  meta,
+/** What a caller may say about a row without re-answering "when does it show the output". */
+export interface FrameProps {
+  /** Replaces the verb on the collapsed line. The caller reads `run.status` to pick a tense. */
+  verb?: string;
+  /** Replaces the text after the verb — the argument the row is about. */
+  detail?: string;
+  /** Extra text at the end of the collapsed line, e.g. "+3 −1" or "exa · 5 results". */
+  meta?: string;
   /**
    * How the body above the output is drawn. `args` is the default: the arguments as JSON, and
    * nothing at all for `read`, whose path is already the whole story — the generic card's rule.
    * `command` shows a shell command as typed. `none` leaves the body to the caller.
    */
+  body?: "args" | "command" | "none";
+  /** Drawn at the top of the expanded body, above whatever `body` and the output add. */
+  children?: ReactNode;
+}
+
+/**
+ * The pieces every tool card is made of: the collapsed line, the status, and the expandable body.
+ * The generic card, the built-in renderers and an extension's own differ only in what they put in
+ * it — the chrome is here once, so nobody re-answers "when does it show the output".
+ */
+export function ToolCallFrame({
+  call,
+  run,
+  verb,
+  detail,
+  meta,
   body = "args",
-}: {
+  children,
+}: FrameProps & {
   call: ToolCall;
   run?: ToolRun;
-  meta?: string;
-  body?: "args" | "command" | "none";
 }) {
   const { settings } = useSettings();
   const [open, setOpen] = useState(!settings.appearance.toolCardsCollapsed);
   const status = run?.status ?? "running";
   const isError = run?.isError === true;
   const lbl = label(call);
-  const verb = status === "running" ? lbl.running : lbl.done;
+  const shownVerb = verb ?? (status === "running" ? lbl.running : lbl.done);
+  const shownDetail = detail ?? lbl.detail;
   const out = resultText(run);
   const diff = run?.result?.details?.diff;
   const brief = callBrief(call);
@@ -121,9 +130,9 @@ export function ToolCallFrame({
           <title>{open ? "collapse" : "expand"}</title>
           <path d="m6 4 4 4-4 4" />
         </svg>
-        <span className={`shrink-0 ${status === "running" ? "animate-pulse" : ""}`}>{verb}</span>
-        <span className="font-mono text-ink-3 truncate" title={lbl.detail}>
-          {lbl.detail}
+        <span className={`shrink-0 ${status === "running" ? "animate-pulse" : ""}`}>{shownVerb}</span>
+        <span className="font-mono text-ink-3 truncate" title={shownDetail}>
+          {shownDetail}
         </span>
         {brief && (
           <span className="min-w-0 truncate text-ink-3 italic" title={brief}>
@@ -135,6 +144,7 @@ export function ToolCallFrame({
       </button>
       {open && (
         <div className="ml-[5px] pl-3.5 border-l-2 border-line-2 my-1 flex flex-col gap-2">
+          {children}
           {args !== undefined && (
             <pre className="font-mono whitespace-pre-wrap break-all text-ink-3 max-h-40 overflow-auto text-xs leading-relaxed">
               {args}
