@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessage as AM } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import { fromMessages, type Marker } from "../src/renderer/state/conversation";
-import { describeTurn, describeTurnLive, groupTurns, liveAnswer, splitReply } from "../src/renderer/state/turns";
+import { describeTurn, groupTurns, splitReply } from "../src/renderer/state/turns";
 import { emptyUsage } from "../src/renderer/turn-summary";
 
 const user = (timestamp = 0): AgentMessage => ({ role: "user", content: "hi", timestamp }) as never;
@@ -87,43 +87,6 @@ describe("splitReply", () => {
     expect(splitReply([{ index: 0, m: placeholder }]).suspect).toBe(true);
     // A leading horizontal rule is markdown, not a banner.
     expect(splitReply([{ index: 0, m: assistant([text("---\n\nheading")]) }]).suspect).toBeUndefined();
-  });
-});
-
-describe("liveAnswer", () => {
-  it("is the trailing text of an in-flight message, once a character has arrived", () => {
-    const working = assistant([text(""), { type: "thinking", thinking: "hm" }]);
-    expect(liveAnswer(working)).toBeUndefined();
-    const speaking = assistant([
-      { type: "thinking", thinking: "hm" },
-      call("1", "bash", {}),
-      text("so here is what I found"),
-    ]);
-    expect(liveAnswer(speaking)?.content).toEqual([text("so here is what I found")]);
-  });
-
-  it("is undefined while the last block is work — a text block may yet be followed by one", () => {
-    expect(liveAnswer(assistant([text("narration"), call("1", "bash", {})]) )).toBeUndefined();
-    expect(liveAnswer(assistant([{ type: "thinking", thinking: ""}]))).toBeUndefined();
-  });
-});
-
-describe("describeTurnLive", () => {
-  it("says Working with the ticking duration, counts the in-flight message's calls, and accrues usage", () => {
-    const usage = { ...emptyUsage(), input: 1000, output: 500, cacheRead: 3000, cacheWrite: 0 };
-    const turn = groupTurns(
-      [user(), assistant([call("1", "edit", { path: "a.ts" })]), result("1")],
-      [],
-    )[0];
-    const streaming = assistant([call("2", "edit", { path: "b.ts" }), text("answering now")]);
-    expect(
-      describeTurnLive(turn, { startedAt: 0, usage, streaming }, () => 113_000),
-    ).toBe("Working for 1m 53s · 2 tool calls · edited 2 files · 4.5k tokens (75% cached)");
-  });
-
-  it("drops what it does not know, like the settled line", () => {
-    const bare = groupTurns([user(), assistant([text("ok")])], [])[0];
-    expect(describeTurnLive(bare, {}, () => 0)).toBe("Working");
   });
 });
 
