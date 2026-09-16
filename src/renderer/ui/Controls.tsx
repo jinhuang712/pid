@@ -141,6 +141,35 @@ export function Trigger({
   );
 }
 
+/** A small text button: the ordinary affordance on a row, next to a name. */
+export function Action({
+  tone = "soft",
+  disabled,
+  title,
+  onClick,
+  children,
+}: {
+  tone?: "soft" | "danger" | "accent";
+  disabled?: boolean;
+  title?: string;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  const t =
+    tone === "danger" ? "text-danger" : tone === "accent" ? "text-accent" : "text-ink-2 hover:text-ink";
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`h-6 px-1.5 shrink-0 rounded-md text-xs hover:bg-paper-3 disabled:opacity-40 ${t}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** A switch. Off is the paper ramp, on is the accent — the window's only saturated state. */
 export function Toggle({
   value,

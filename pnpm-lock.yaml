@@ -178,6 +178,9 @@ importers:
       dompurify:
         specifier: ^3.4.15
         version: 3.4.15
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       highlight.js:
         specifier: ^11.12.0
         version: 11.12.0

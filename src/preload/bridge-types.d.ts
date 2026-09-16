@@ -86,6 +86,13 @@ export interface Bridge {
     /** Write the file in place; empty text removes it. Applies to new sessions. */
     setAppendSystemPrompt(text: string): Promise<AppendSystemPrompt>;
   };
+  plugins: {
+    /**
+     * Ids of the enabled extensions that brought a desktop half, for the given folder. The window
+     * passes the primitive names it exports so the `@pid/ui` shim matches what it actually has.
+     */
+    list(cwd: string | undefined, uiNames: string[]): Promise<string[]>;
+  };
   shell: {
     reveal(path: string): Promise<void>;
     openPath(path: string): Promise<string>;

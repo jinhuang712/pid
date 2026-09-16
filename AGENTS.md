@@ -73,8 +73,8 @@ which is DESIGN §23–25, not as "how does PID fake a terminal".
 ## Ecosystem Boundary
 
 An extension's tools end up as Pi Tools and flow through Pi's agent loop. PID runs no second tool
-system, and carries no code for any particular ecosystem: a page for one arrives as a description
-its extension published, or does not exist.
+system, and carries no code for any particular ecosystem: a page for one is drawn by that
+extension's own desktop half, or does not exist.
 
 ## Model Boundary
 
@@ -144,18 +144,27 @@ Pi Coding Agent SDK
 - **Extension presentation**: `setStatus` and `setWidget` from any extension reach the strip above
   the composer — no allowlist, the same as the terminal. Pi defines a widget key as an identity for
   replace-and-clear and nothing more, so PID reads no meaning into it.
-- **Structured widgets are an interim** (`@shared/extension-widgets`, `@shared/extension-kinds`,
-  `@shared/extension-page`): an extension wanting more than a line names its widget
-  `<ns>:<kind>/v<n>`, sends JSON, and PID renders the kinds it knows. The ceiling is the field list
-  in `extension-page.ts` — an extension can say only what PID thought of first, which is the wrong
-  way round. DESIGN §23–25 is where this goes: the extension ships its desktop presentation as code
-  and composes PID's primitives, the way a Pi extension already composes pi-tui's. Do not widen the
-  kind table to get around the ceiling; that is the mistake, not the fix.
-- **Primitives** (`src/renderer/ui/`): `Row` `IconButton` `Toggle` `Segmented` `Trigger` `Badge`
-  `Dot` `Num` `Eyebrow` `Modal` `Popover` `ContextMenu` `Floating` `Panel` `Divider` `Scroll`, plus
-  the five-tone table every one of them colours from. PID draws its own window with these, which is
-  the only thing that makes them fit to hand out later. Nothing in here knows what a session or a
-  tool call is; that belongs in `components/`.
+- **Desktop presentation is the extension's own code** (`src/main/pi/plugins.ts`,
+  `src/renderer/plugins/`): an extension that declares `"pid": { "ui": "./src/ui.tsx" }` ships a
+  second entry point beside the one Pi loads. PID bundles it on demand with esbuild, serves it at
+  `pid://app/plugin/<id>.js`, and calls its default export with a small registration API. It
+  composes PID's own primitives — the same relationship a Pi extension has with pi-tui's widgets.
+  There is no description language and no schema: a host that accepts only a description caps every
+  extension at what the host author thought of first.
+- **One origin, and that is not an implementation detail.** A `file:` document has an opaque origin
+  and Chromium refuses to import a module into one from anywhere else — the request never reaches a
+  handler. A second scheme does not help; the import is still cross-origin. So the window is served
+  from `pid://app` and a plugin from a path under it. Do not "simplify" this back to `loadFile`.
+- **A plugin cannot use a utility class.** The stylesheet is built from PID's own sources, so a
+  class no PID file uses does not exist by the time a plugin loads. Layout is therefore a primitive
+  like everything else (`Line`, `Stack`, `Inline`, `Spread`, `Say`). When a plugin needs a shape the
+  library lacks, add the primitive — a safelist would be the same mistake as the kind table.
+- **Primitives** (`src/renderer/ui/`): `Row` `Action` `IconButton` `Toggle` `Segmented` `Trigger`
+  `Badge` `Dot` `Num` `Eyebrow` `Say` `Line` `Stack` `Inline` `Spread` `Modal` `Popover`
+  `ContextMenu` `Floating` `Panel` `Divider` `Scroll`, plus the five-tone table every one of them
+  colours from. PID draws its own window with these, and hands the same set to plugins — a library
+  the host does not use itself is a guess. Nothing in here knows what a session or a tool call is;
+  that belongs in `components/`.
 - **PID names no extension, and no ecosystem of one.** Whatever a row means stays with whoever
   published it. A hardcoded widget key, a check for one extension being installed, and a built-in
   page for one ecosystem were three versions of the same mistake;
@@ -181,6 +190,7 @@ src/main/pi/        Pi bridge: session-worker (the only file that drives Pi), se
 src/preload/        typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
 src/renderer/       React UI: components/, pages/, state/, settings, completion, sigils
 src/renderer/ui/    presentation primitives; no session, no IPC, no domain type
+src/renderer/plugins/  loading an extension's desktop half and mounting what it registers
 src/shared/         types shared by all three processes
 test/               vitest unit tests (real-environment tests are opt-in via env vars)
 docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README

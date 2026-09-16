@@ -66,12 +66,12 @@ describe("protocol boundary", () => {
   });
 
   /**
-   * PID renders kinds of data, not products.
+   * PID renders what a plugin composed, not a product it knows about.
    *
    * `widgets["pi-worktree"]` and `if (hasMcp)` are the same mistake twice: the core deciding what
-   * to show by the name of one extension. A surface exists because something filled it — the tables
-   * in `@shared/extension-kinds` and `src/renderer/surfaces.ts` say which — so no other file needs
-   * to name an extension to decide what to draw.
+   * to show by the name of one extension. A surface exists because a plugin registered it —
+   * `src/renderer/surfaces.ts` derives the list from what loaded — so no file needs to name an
+   * extension to decide what to draw.
    */
   it("names no extension, and no ecosystem of one, anywhere in its own code", () => {
     // Product names, and the domains that arrive with a product. PID renders kinds of data: a page

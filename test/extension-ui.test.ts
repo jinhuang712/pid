@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PID_UI_SUPPORT, pidSupport, type UiMember } from "@shared/extension-ui";
-import { parseWidgetKey, widgetKey } from "@shared/extension-widgets";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -82,23 +81,6 @@ describe("extension UI support table", () => {
     expect(pidSupport({ ...usage, inert: ["setWorkingMessage"] })).toBe("reduced");
     expect(pidSupport({ ...usage, terminal: ["custom"] })).toBe("terminal");
     expect(pidSupport({ ...usage, terminal: ["custom"], guarded: true })).toBe("guarded");
-  });
-});
-
-describe("widget keys", () => {
-  it("reads a structured key and rejects a plain one", () => {
-    expect(parseWidgetKey("pid:mcp-status/v1")).toEqual({ ns: "pid", kind: "mcp-status", version: 1 });
-    expect(parseWidgetKey("x-usage:quota/v2")).toEqual({ ns: "x-usage", kind: "quota", version: 2 });
-    // A plain key is a line of text, not a payload: the strip shows it as written.
-    expect(parseWidgetKey("pi-worktree")).toBeUndefined();
-    expect(parseWidgetKey("pid:mcp-status")).toBeUndefined();
-    expect(parseWidgetKey("Pid:Mcp/v1")).toBeUndefined();
-    expect(parseWidgetKey("pid:mcp-status/v")).toBeUndefined();
-  });
-
-  it("round-trips", () => {
-    const k = { ns: "x-footer", kind: "quota", version: 1 };
-    expect(parseWidgetKey(widgetKey(k))).toEqual(k);
   });
 });
 

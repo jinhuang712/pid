@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ResourceToggle } from "@shared/ecosystem";
@@ -7,7 +7,7 @@ import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protoc
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
 import { isWebUrl } from "@shared/url";
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { installDebugDump } from "./debug-dump";
 import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
@@ -16,6 +16,7 @@ import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { runDiagnostics } from "./pi/diagnostics";
 import { configureAgentDir, listExtensions, listSkills, readPiHome } from "./pi/ecosystem";
+import { bundlePlugin, discoverPlugins, JSX_SHIM, uiShim } from "./pi/plugins";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
 import { readSessionBranch, readSessionMessages } from "./pi/session-read";
@@ -111,7 +112,7 @@ function createWindow(): BrowserWindow {
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void win.loadFile(join(__dirname, "../renderer/index.html"));
+    void win.loadURL("pid://app/index.html");
   }
   return win;
 }
@@ -192,9 +193,92 @@ ipcMain.handle("pi:uiResponse", (_e, key: string, response: PiDialogResponse) =>
 ipcMain.handle("pi:stop", (_e, key: string) => pi.stop(key));
 ipcMain.handle("pi:diagnostics", () => runDiagnostics());
 
+/**
+ * Where a plugin's code is fetched from.
+ *
+ * Privileged so the renderer can `import()` it: an ES module will not load from a scheme the
+ * browser does not consider standard and secure, and `file:` is refused across origins.
+ */
+/**
+ * The window's own origin.
+ *
+ * A `file:` document has an opaque origin and Chromium refuses to import a module into one from
+ * anywhere else — the request never reaches a handler. A second scheme does not help either: the
+ * import is still cross-origin. So the app and everything it imports share one origin, and a
+ * plugin is served from a path under it.
+ */
+protocol.registerSchemesAsPrivileged([
+  { scheme: "pid", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
+
+/** Plugin entries by id, refreshed whenever the window asks for the list. */
+const pluginEntries = new Map<string, string>();
+
+/** Primitive names the shim re-exports; the window reports its own list so the two cannot drift. */
+let uiNames: string[] = [];
+
+const MEDIA: Record<string, string> = {
+  html: "text/html",
+  js: "text/javascript",
+  css: "text/css",
+  json: "application/json",
+  svg: "image/svg+xml",
+  png: "image/png",
+  woff2: "font/woff2",
+};
+
+/**
+ * Everything the window loads: its own build under `/`, and a plugin's bundle under `/plugin/<id>`.
+ * Nothing outside `out/renderer` is reachable by path, and a plugin is reachable only by an id the
+ * last discovery put in the map.
+ */
+function serveApp(): void {
+  const root = join(__dirname, "../renderer");
+  const js = (body: string) =>
+    new Response(body, { headers: { "content-type": "text/javascript; charset=utf-8" } });
+  protocol.handle("pid", async (req) => {
+    const rel = new URL(req.url).pathname.replace(/^\/+/, "") || "index.html";
+    if (rel === "plugin/jsx-runtime") return js(JSX_SHIM);
+    if (rel === "plugin/ui") return js(uiShim(uiNames));
+    if (rel.startsWith("plugin/")) {
+      const id = rel.slice("plugin/".length).replace(/\.js$/, "");
+      const entry = pluginEntries.get(id);
+      if (!entry) return new Response("no such plugin", { status: 404 });
+      try {
+        return js(await bundlePlugin(entry));
+      } catch (e) {
+        // A plugin that will not build must say so in the window rather than fail silently: the
+        // module throws on import, and the slot around it reports the message to its author.
+        const message = e instanceof Error ? e.message : String(e);
+        return js(`throw new Error(${JSON.stringify(`${id}: ${message}`)});`);
+      }
+    }
+    const file = join(root, rel);
+    if (!file.startsWith(root)) return new Response("no", { status: 403 });
+    try {
+      const body = await readFile(file);
+      const ext = rel.split(".").pop() ?? "";
+      return new Response(body, { headers: { "content-type": MEDIA[ext] ?? "application/octet-stream" } });
+    } catch {
+      return new Response("not found", { status: 404 });
+    }
+  });
+}
+
+ipcMain.handle("plugins:list", async (_e, cwd: string | undefined, names: string[]) => {
+  uiNames = names;
+  // Safe mode: hold Shift at launch, or set the variable, and nothing third-party is loaded.
+  if (process.env.PID_SAFE_MODE) return [];
+  const found = await discoverPlugins(cwd);
+  pluginEntries.clear();
+  for (const p of found) pluginEntries.set(p.id, p.entry);
+  return found.map((p) => p.id);
+});
+
 app.whenReady().then(() => {
   installDebugDump();
   applyTheme(); // decide the theme before the first frame
+  serveApp();
   installMenu(
     () => mainWindow,
     (steps) => {
