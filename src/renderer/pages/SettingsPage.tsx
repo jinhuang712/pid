@@ -234,8 +234,8 @@ export function SettingsPage({ initialSection, onClose }: { initialSection?: str
                   />
                 </Row>
                 <Row
-                  label="Fold steps as the answer starts"
-                  hint="Thinking and tool calls stay open while Pi works and fold behind one line when the answer starts; work resuming unfolds them again."
+                  label="Fold steps when a turn finishes"
+                  hint="Thinking and tool calls stay open while Pi works, then collapse behind one line."
                 >
                   <Toggle
                     value={a.stepsCollapsed}
