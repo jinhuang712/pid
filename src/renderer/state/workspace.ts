@@ -1,5 +1,4 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { type Published, readKind } from "@shared/extension-kinds";
 import type { PiEvent, PiHandle, PiSessionState } from "@shared/protocol";
 import type { DialogRequest } from "../components/ExtensionUI";
 import {
@@ -22,14 +21,13 @@ export interface Proc {
   conv: ConversationState;
   /** setStatus text by key, from any extension. */
   statuses: Record<string, string>;
-  /** setWidget lines by key, from any extension; PID shows them all. */
+  /**
+   * `setWidget` lines by key, from any extension. Pi defines the key as an identity for
+   * replace-and-clear and nothing more, so PID reads no meaning into it: a plugin registered under
+   * the same id as its extension reads its own lines back and decides what they mean.
+   */
   widgets: Record<string, string[]>;
   dialogs: DialogRequest[];
-  /**
-   * Structured widgets this session's extensions have published, by kind. A kind that is absent is
-   * one no extension filled, which is how PID decides a surface does not exist.
-   */
-  published: Published;
   /** Set when the process exited; the entry stays until dismissed so the user sees why. */
   exit?: string;
   /**
@@ -88,7 +86,6 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         conv: placeholder?.conv ?? emptyConversation(),
         statuses: {},
         widgets: {},
-        published: {},
         dialogs: [],
       };
       const { [a.replaces ?? ""]: _placeholder, ...rest } = ws.procs;
@@ -112,7 +109,6 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         conv: a.messages ? fromMessages(a.messages) : emptyConversation(),
         statuses: {},
         widgets: {},
-        published: {},
         dialogs: [],
         pending: true,
       };
@@ -153,26 +149,8 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
               return { ...p, dialogs: [...p.dialogs, ev] };
             case "setStatus":
               return { ...p, statuses: setOrClear(p.statuses, ev.statusKey, ev.statusText || undefined) };
-            case "setWidget": {
-              // A `<ns>:<kind>/v<n>` key PID has a kind for becomes that kind. Everything else —
-              // plain keys, and structured keys for kinds PID does not know — reaches the strip,
-              // which is what the terminal does with a widget too.
-              const read = readKind(ev.widgetKey, ev.widgetLines);
-              if (read) {
-                const byNs = setOrClear(
-                  (p.published[read.kind] ?? {}) as Record<string, unknown>,
-                  read.ns,
-                  read.data,
-                );
-                const published = setOrClear(
-                  p.published as Record<string, unknown>,
-                  read.kind,
-                  Object.keys(byNs).length > 0 ? byNs : undefined,
-                ) as Published;
-                return { ...p, published };
-              }
+            case "setWidget":
               return { ...p, widgets: setOrClear(p.widgets, ev.widgetKey, ev.widgetLines) };
-            }
             default:
               return p;
           }

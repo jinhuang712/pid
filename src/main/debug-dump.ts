@@ -31,7 +31,10 @@ export function installDebugDump(): void {
       mkdirSync(dir, { recursive: true });
       const win = BrowserWindow.getAllWindows()[0];
       if (!win) return;
-      await writeFile(join(dir, "menu.txt"), `${menuLines(Menu.getApplicationMenu()?.items ?? []).join("\n")}\n`);
+      await writeFile(
+        join(dir, "menu.txt"),
+        `${menuLines(Menu.getApplicationMenu()?.items ?? []).join("\n")}\n`,
+      );
       const report = await win.webContents.executeJavaScript("JSON.stringify(window.__pidDump ?? null)");
       await writeFile(join(dir, "window.json"), String(report));
       const text = await win.webContents.executeJavaScript(

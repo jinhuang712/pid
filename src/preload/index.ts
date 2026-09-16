@@ -51,6 +51,9 @@ const bridge: Bridge = {
     appendSystemPrompt: () => ipcRenderer.invoke("eco:appendSystemPrompt"),
     setAppendSystemPrompt: (text) => ipcRenderer.invoke("eco:setAppendSystemPrompt", text),
   },
+  plugins: {
+    list: (cwd, uiNames) => ipcRenderer.invoke("plugins:list", cwd, uiNames),
+  },
   shell: {
     reveal: (path) => ipcRenderer.invoke("shell:reveal", path),
     openPath: (path) => ipcRenderer.invoke("shell:openPath", path),

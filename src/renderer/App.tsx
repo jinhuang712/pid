@@ -1,15 +1,12 @@
-import { only } from "@shared/extension-kinds";
 import type { RepoInfo } from "@shared/git";
 import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { PiDialogRequest, PiDialogResponse, PiEvent } from "@shared/protocol";
 import type { SessionSummary } from "@shared/sessions";
-import { worktreeSummary } from "@shared/worktree";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { appendAttachments, parseAttachments, toAttachment } from "./attachments";
 import { bridge } from "./bridge";
 import { type PiActions, useCompletion } from "./completion";
 import { Composer } from "./components/Composer";
-import { ExtensionStrip } from "./components/ExtensionStrip";
 import { type DialogRequest, ExtensionDialog, type Toast, Toasts } from "./components/ExtensionUI";
 import { ForkDialog } from "./components/ForkDialog";
 import { Home } from "./components/Home";
@@ -17,12 +14,14 @@ import type { Page } from "./components/NavRail";
 import { Palette, type PaletteAction } from "./components/Palette";
 import { QueuePanel } from "./components/QueuePanel";
 import { type SessionActions, SessionTree } from "./components/SessionTree";
+import { StatusLine } from "./components/StatusLine";
 import { Timeline } from "./components/Timeline";
 import { expandLinks } from "./links";
-import { ExtensionPage } from "./pages/ExtensionPage";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
+import { PluginSlot, PluginSlots } from "./plugins/PluginSlot";
+import { usePlugins } from "./plugins/usePlugins";
 import {
   DISPLAY_RE,
   expandReferences,
@@ -663,6 +662,7 @@ export function App() {
   // Headless smoke probe: a terminal without Assistive Access cannot type `@`, so when a run
   // offers a dump directory the window publishes the picker's data — and which session it belongs
   // to — for the dump to read out.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the workspace is read as a snapshot; subscribing would re-run the probe on every streamed token
   useEffect(() => {
     if (!dumpRequested) return;
     const report = {
@@ -814,9 +814,6 @@ export function App() {
       activeSummary?.firstMessage ||
       (active.conv.messages.length ? firstUserText(active.conv.messages) : undefined)
     : undefined;
-  // An extension publishes the binding it made; PID shows it in place of the plain git branch,
-  // because "where this work lands" is the more useful answer when the two differ.
-  const worktreeLine = worktreeSummary(active ? only(active.published, "binding") : undefined);
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
@@ -847,9 +844,18 @@ export function App() {
     : undefined;
   const dialog = renameReq ?? active?.dialogs[0];
 
-  // Every page beyond PID's own was described by an extension, and is here only while one is
-  // describing it. PID knows none of their names.
-  const pages = useMemo(() => surfaces(ws), [ws]);
+  // Every page beyond PID's own was registered by a plugin, and is here only while one is. PID
+  // knows none of their names.
+  const plugins = usePlugins(folder);
+  const pages = useMemo(() => surfaces(plugins), [plugins]);
+  // A plugin's affordances run as the user would type them: one command, one prompt, in the
+  // session it is drawing for. It never writes a session file.
+  const runCommand = useCallback(
+    (command: string) =>
+      key ? bridge.pi.command(key, { type: "prompt", message: command }) : Promise.resolve(undefined),
+    [key],
+  );
+  const headerLines = <PluginSlots plugins={plugins} where="header" proc={active} run={runCommand} />;
   useEffect(() => {
     // Closing the last session that filled a page takes the page with it.
     setPage((cur) =>
@@ -925,18 +931,11 @@ export function App() {
         )}
         {pages.map(
           (s) =>
-            s.page &&
+            s.plugin &&
             page === s.id && (
-              <ExtensionPage
-                key={s.id}
-                page={s.page}
-                onCommand={
-                  s.sessionKey
-                    ? (command) =>
-                        bridge.pi.command(s.sessionKey as string, { type: "prompt", message: command })
-                    : undefined
-                }
-              />
+              <div key={s.id} className="flex-1 min-w-0 overflow-y-auto">
+                <PluginSlot plugin={s.plugin} where="page" proc={active} run={runCommand} />
+              </div>
             ),
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} onClose={() => setPage("sessions")} />}
@@ -957,22 +956,14 @@ export function App() {
                       <FolderGlyph />
                       {base(active.cwd)}
                     </span>
-                    {worktreeLine ? (
-                      <span
-                        className="inline-flex items-center gap-1 min-w-0 truncate text-warn"
-                        title="Worktree binding for this session"
-                      >
-                        <BranchGlyph />
-                        <span className="font-mono truncate">{worktreeLine}</span>
-                      </span>
-                    ) : (
-                      branch && (
-                        <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
-                          <BranchGlyph />
-                          <span className="font-mono truncate">{branch}</span>
-                        </span>
-                      )
-                    )}
+                    {plugins.some((pl) => pl.header)
+                      ? headerLines
+                      : branch && (
+                          <span className="inline-flex items-center gap-1 min-w-0 truncate" title={branch}>
+                            <BranchGlyph />
+                            <span className="font-mono truncate">{branch}</span>
+                          </span>
+                        )}
                     {active.exit && <span className="text-danger truncate">{active.exit}</span>}
                   </div>
                 </>
@@ -992,7 +983,8 @@ export function App() {
                   onSteerNow={steerNow}
                   onRemove={removeQueued}
                 />
-                <ExtensionStrip widgets={active.widgets} statuses={active.statuses} />
+                <StatusLine statuses={active.statuses} />
+                <PluginSlots plugins={plugins} where="strip" proc={active} run={runCommand} />
                 <Composer
                   blocked={
                     active.pending

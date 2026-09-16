@@ -10,12 +10,12 @@
  */
 
 export { ContextMenu, type MenuItem } from "./ContextMenu";
-export { IconButton, Row, Segmented, Toggle, Trigger } from "./Controls";
+export { Action, IconButton, Row, Segmented, Toggle, Trigger } from "./Controls";
 export { useDismiss } from "./dismiss";
 export { Key, Keys, SigilChip } from "./Key";
 export { Logo } from "./Logo";
 export { Badge, Dot, Eyebrow, Num } from "./Marks";
 export { Modal } from "./Modal";
 export { Popover } from "./Popover";
-export { Divider, Floating, Panel, Scroll } from "./Surface";
+export { Divider, Floating, Inline, Line, Panel, Say, Scroll, Spread, Stack } from "./Surface";
 export { FILL, SOFT, TEXT, type Tone } from "./tone";
