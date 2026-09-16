@@ -20,7 +20,7 @@ import { expandLinks } from "./links";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SkillsPage } from "./pages/SkillsPage";
-import { PluginSlot, PluginSlots } from "./plugins/PluginSlot";
+import { PluginPage, PluginSlots } from "./plugins/PluginSlot";
 import { PluginTools } from "./plugins/tools";
 import { usePlugins } from "./plugins/usePlugins";
 import {
@@ -934,9 +934,13 @@ export function App() {
           (s) =>
             s.plugin &&
             page === s.id && (
-              <div key={s.id} className="flex-1 min-w-0 overflow-y-auto">
-                <PluginSlot plugin={s.plugin} where="page" proc={active} run={runCommand} />
-              </div>
+              <PluginPage
+                key={s.id}
+                plugin={s.plugin}
+                proc={active}
+                run={runCommand}
+                onClose={() => setPage("sessions")}
+              />
             ),
         )}
         {page === "extensions" && <ExtensionsPage folder={folder} onClose={() => setPage("sessions")} />}

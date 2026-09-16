@@ -16,6 +16,7 @@ import { RenderTool, ToolRendererBoundary, toolRenderers } from "../contribution
 // the call is the registration. Idempotent, so a hot reload cannot stack duplicates.
 registerBuiltInToolRenderers();
 
+import { Chevron } from "@/ui";
 import { CwdContext } from "../cwd-context";
 import { usePluginTool } from "../plugins/tools";
 import { useSettings } from "../settings";
@@ -271,18 +272,7 @@ function Thinking({ text, live }: { text: string; live: boolean }) {
       >
         <span className={live ? "animate-pulse" : ""}>{live ? "Thinking" : "Thought"}</span>
         <span className="tabular-nums">· {(text.length / 4).toFixed(0)} tokens</span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          <title>{open ? "collapse" : "expand"}</title>
-          <path d="m5 6 3 3 3-3" />
-        </svg>
+        <Chevron open={open} turn="down" />
       </button>
       {open && (
         <pre className="mt-1 mb-2 pl-3.5 border-l-2 border-line-2 text-[12.5px] leading-relaxed text-ink-2 whitespace-pre-wrap font-sans">
@@ -396,20 +386,7 @@ function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?:
         className={`group flex items-center gap-2 h-6 text-[12.5px] text-ink-3 ${onToggle ? "hover:text-ink-2" : "cursor-default"}`}
         title={turn.summary?.detail}
       >
-        {onToggle && (
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
-          >
-            <title>{open ? "collapse" : "expand"}</title>
-            <path d="m6 4 4 4-4 4" />
-          </svg>
-        )}
+        {onToggle && <Chevron open={open} />}
         <span className="tabular-nums">{describeTurn(turn)}</span>
       </button>
     </div>

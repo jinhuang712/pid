@@ -88,10 +88,12 @@ export interface Bridge {
   };
   plugins: {
     /**
-     * Ids of the enabled extensions that brought a desktop half, for the given folder. The window
-     * passes the primitive names it exports so the `@pid/ui` shim matches what it actually has.
+     * Ids of the enabled extensions that brought a desktop half, for the given folder.
+     *
+     * The window passes the names it can re-export — its primitives, and the React it runs — so the
+     * shims served back match what it actually has instead of a second list that can drift.
      */
-    list(cwd: string | undefined, uiNames: string[]): Promise<string[]>;
+    list(cwd: string | undefined, exports: { ui: string[]; react: string[] }): Promise<string[]>;
   };
   shell: {
     reveal(path: string): Promise<void>;

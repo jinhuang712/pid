@@ -1,5 +1,6 @@
 import type { ToolCall } from "@earendil-works/pi-ai";
 import { type ReactNode, useState } from "react";
+import { Chevron } from "@/ui";
 import { useSettings } from "../settings";
 import type { ToolRun } from "../state/conversation";
 import { label } from "../tool-label";
@@ -125,18 +126,9 @@ export function ToolCallFrame({
         onClick={() => setOpen(!open)}
         className={`group flex items-center gap-2 h-6 text-left w-full ${isError ? "text-danger" : "text-ink-2 hover:text-ink"}`}
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          className={`shrink-0 text-ink-3 transition-transform ${open ? "rotate-90" : ""}`}
-        >
-          <title>{open ? "collapse" : "expand"}</title>
-          <path d="m6 4 4 4-4 4" />
-        </svg>
+        <span className="text-ink-3 flex">
+          <Chevron open={open} />
+        </span>
         <span className={`shrink-0 ${status === "running" ? "animate-pulse" : ""}`}>{shownVerb}</span>
         <span className="font-mono text-ink-3 truncate" title={shownDetail}>
           {shownDetail}

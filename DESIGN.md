@@ -669,11 +669,23 @@ Mount points, each one a place PID already puts something of its own. A slot not
 slot nobody has looked at, so the list grows when an extension needs one, not before:
 
 ```text
-page     a navigation entry and the page behind it   api.page({ label, render })
+page     a navigation entry and the page behind it   api.page({ label, note, search, render })
 header   the session title bar's second line          api.header({ render })
 strip    the line above the composer                  api.strip({ render })
 tool     a tool call in the transcript, by name       api.tool({ names, render })
 ```
+
+A page is drawn inside the frame PID's own pages use — the heading, the one-line note under it, the
+search box, the scrolling region — rather than into a blank div. That split is the rule the whole
+layer follows: the chrome is the host's, so an extension's page sits at the same rhythm as Skills
+and Extensions without copying anything; what a query *matches* is the extension's, because only it
+knows whether a word should reach a row's title, its children, or the error underneath. The box's
+text arrives as `ctx.query`.
+
+A plugin may also import `react`. Not as a convenience: a page that cannot hold state cannot
+remember which of its rows are open, and every row it has must then be open at once — which is what
+a hundred and fifty tools in one flat list looks like. It resolves to the window's own React for the
+same reason the JSX runtime does; a bundled second copy throws on the first hook.
 
 The first three hand a place over wholesale and are drawn from the plugin's own published state.
 `tool` is a lookup instead: a tool call arrives in the middle of the transcript and nothing above it

@@ -11,6 +11,7 @@
 
 export { ContextMenu, type MenuItem } from "./ContextMenu";
 export { Action, IconButton, Row, Segmented, Toggle, Trigger } from "./Controls";
+export { Chevron, Disclosure } from "./Disclosure";
 export { useDismiss } from "./dismiss";
 export { Key, Keys, SigilChip } from "./Key";
 export { Logo } from "./Logo";

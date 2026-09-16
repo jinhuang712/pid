@@ -45,8 +45,10 @@ export function usePluginContext(
   id: string,
   proc: Proc | undefined,
   run: (command: string) => Promise<unknown>,
+  /** What the page's search box holds; empty for every mount that has no box above it. */
+  query = "",
 ): PluginContext {
   const lines = proc?.widgets[id];
   const cwd = proc?.cwd;
-  return useMemo(() => ({ state: pluginState(lines), run, cwd }), [lines, cwd, run]);
+  return useMemo(() => ({ state: pluginState(lines), run, cwd, query }), [lines, cwd, run, query]);
 }
