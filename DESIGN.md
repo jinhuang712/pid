@@ -683,6 +683,13 @@ the chevron, the status, the output and any images the tool returned — so an e
 different about its tool and inherits the rest, the way a Pi tool's `renderCall` composes pi-tui's
 widgets rather than painting a row from scratch.
 
+The end of the line takes a node rather than a string, which is where an extension's row comes to
+read a little differently from `read` and `bash` without inventing a second visual language. PID's
+own rows put text there — `edit` says `+3 −1`. A call that went somewhere marks it instead: a tinted
+`Badge` for the web backend that answered, or for the vision model that described a picture. The
+distinction is not decoration; it is that a built-in tool always goes to the same place, so it has
+nothing to mark.
+
 Not implemented, and not promised: a composer line, a modal, a toast, an unconstrained overlay.
 
 The exact registration signature may evolve. The architectural boundary should not.
