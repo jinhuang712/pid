@@ -8,6 +8,7 @@ vi.mock("../src/renderer/bridge", () => ({ bridge: {} }));
 
 import type { Registered, ToolDraw, ToolSpec } from "../src/renderer/plugins/api";
 import { pluginToolResolver } from "../src/renderer/plugins/tools";
+import { Badge, Say } from "../src/renderer/ui";
 
 /**
  * Who draws a tool call. PID must not know which extension owns which tool name — only that one
@@ -108,5 +109,31 @@ describe("plugin tool renderers", () => {
     const html = renderToStaticMarkup(r("read")?.({ call: call("read", { path: "a.ts" }) }) as never);
     expect(html).toContain("Reading");
     expect(html).toContain("a.ts");
+  });
+
+  /**
+   * How an extension's row comes to read a little differently from `read` and `bash`: the end of
+   * the line takes a node, so a call that went somewhere can say so with a mark instead of more
+   * grey text. PID's own rows keep passing a string and are unchanged.
+   */
+  it("takes a node at the end of the line, not only a string", () => {
+    const r = resolve([
+      plugin("some-ext", [
+        spec(["search"], ({ Frame }) => (
+          <Frame
+            meta={
+              <>
+                <Badge>exa</Badge>
+                <Say tone="faint">5 results</Say>
+              </>
+            }
+          />
+        )),
+      ]),
+    ]);
+    const html = renderToStaticMarkup(r("search")?.({ call: call("search", { query: "q" }) }) as never);
+    // A tinted pill, which no built-in row draws.
+    expect(html).toMatch(/<span[^>]*rounded[^>]*>exa</);
+    expect(html).toContain("5 results");
   });
 });

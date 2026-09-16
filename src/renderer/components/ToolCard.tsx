@@ -65,8 +65,15 @@ export interface FrameProps {
   verb?: string;
   /** Replaces the text after the verb — the argument the row is about. */
   detail?: string;
-  /** Extra text at the end of the collapsed line, e.g. "+3 −1" or "exa · 5 results". */
-  meta?: string;
+  /**
+   * The end of the collapsed line: what this call reported that the verb and the argument do not.
+   *
+   * A string for PID's own rows — `edit` puts "+3 −1" here. A node for an extension that has
+   * something to mark rather than to state, which is why its rows read a little differently from
+   * `read` and `bash`: a tinted `Badge` says the call went somewhere, a vision model or one web
+   * backend of two, and only the extension knows that happened.
+   */
+  meta?: ReactNode;
   /**
    * How the body above the output is drawn. `args` is the default: the arguments as JSON, and
    * nothing at all for `read`, whose path is already the whole story — the generic card's rule.
@@ -139,7 +146,7 @@ export function ToolCallFrame({
             {brief}
           </span>
         )}
-        {meta && <span className="text-ink-3 shrink-0">{meta}</span>}
+        {meta && <span className="text-ink-3 shrink-0 inline-flex items-center gap-1.5">{meta}</span>}
         {isError && <span className="shrink-0">failed</span>}
       </button>
       {open && (
