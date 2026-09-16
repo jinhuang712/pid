@@ -16,7 +16,7 @@ import { repoInfo } from "./git";
 import { installMenu } from "./menu";
 import { runDiagnostics } from "./pi/diagnostics";
 import { configureAgentDir, listExtensions, listSkills, readPiHome } from "./pi/ecosystem";
-import { bundlePlugin, discoverPlugins, JSX_SHIM, uiShim } from "./pi/plugins";
+import { bundlePlugin, discoverPlugins, JSX_SHIM, reactShim, uiShim } from "./pi/plugins";
 import { PiRegistry } from "./pi/registry";
 import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
 import { readSessionBranch, readSessionMessages } from "./pi/session-read";
@@ -214,8 +214,8 @@ protocol.registerSchemesAsPrivileged([
 /** Plugin entries by id, refreshed whenever the window asks for the list. */
 const pluginEntries = new Map<string, string>();
 
-/** Primitive names the shim re-exports; the window reports its own list so the two cannot drift. */
-let uiNames: string[] = [];
+/** What the shims re-export; the window reports its own lists so they cannot drift from it. */
+let hostExports: { ui: string[]; react: string[] } = { ui: [], react: [] };
 
 const MEDIA: Record<string, string> = {
   html: "text/html",
@@ -239,7 +239,8 @@ function serveApp(): void {
   protocol.handle("pid", async (req) => {
     const rel = new URL(req.url).pathname.replace(/^\/+/, "") || "index.html";
     if (rel === "plugin/jsx-runtime") return js(JSX_SHIM);
-    if (rel === "plugin/ui") return js(uiShim(uiNames));
+    if (rel === "plugin/ui") return js(uiShim(hostExports.ui));
+    if (rel === "plugin/react") return js(reactShim(hostExports.react));
     if (rel.startsWith("plugin/")) {
       const id = rel.slice("plugin/".length).replace(/\.js$/, "");
       const entry = pluginEntries.get(id);
@@ -265,15 +266,18 @@ function serveApp(): void {
   });
 }
 
-ipcMain.handle("plugins:list", async (_e, cwd: string | undefined, names: string[]) => {
-  uiNames = names;
-  // Safe mode: hold Shift at launch, or set the variable, and nothing third-party is loaded.
-  if (process.env.PID_SAFE_MODE) return [];
-  const found = await discoverPlugins(cwd);
-  pluginEntries.clear();
-  for (const p of found) pluginEntries.set(p.id, p.entry);
-  return found.map((p) => p.id);
-});
+ipcMain.handle(
+  "plugins:list",
+  async (_e, cwd: string | undefined, exports: { ui: string[]; react: string[] }) => {
+    hostExports = exports;
+    // Safe mode: hold Shift at launch, or set the variable, and nothing third-party is loaded.
+    if (process.env.PID_SAFE_MODE) return [];
+    const found = await discoverPlugins(cwd);
+    pluginEntries.clear();
+    for (const p of found) pluginEntries.set(p.id, p.entry);
+    return found.map((p) => p.id);
+  },
+);
 
 app.whenReady().then(() => {
   // A headless run hides the window, but on macOS the Dock icon alone steals focus from whatever

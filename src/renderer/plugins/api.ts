@@ -21,11 +21,26 @@ export interface PluginContext<T = unknown> {
   run: (command: string) => Promise<unknown>;
   /** The folder of that session, for a plugin that wants to say where it is. */
   cwd: string | undefined;
+  /**
+   * What is typed in the page's search box, for a page that asked for one. Empty otherwise.
+   *
+   * The box is PID's, so it looks and behaves like the one on Skills and Extensions and keeps its
+   * text when the plugin re-renders. What matches is the plugin's: only it knows whether a query
+   * should reach a row's title, its tools, or the error underneath.
+   */
+  query: string;
 }
 
 export interface PageSpec {
-  /** Shown in the navigation. Defaults to the plugin's own id. */
+  /** Shown in the navigation and as the page's heading. Defaults to the plugin's own id. */
   label?: string;
+  /**
+   * One line under the heading. A function so it can read the same state the body does — a count,
+   * a warning — rather than being fixed at registration.
+   */
+  note?: (ctx: PluginContext) => ReactNode;
+  /** Placeholder for the search box. Omit for a page that has nothing to search. */
+  search?: string;
   render: (ctx: PluginContext) => ReactNode;
 }
 

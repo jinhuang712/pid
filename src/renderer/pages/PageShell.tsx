@@ -7,6 +7,7 @@ export function PageShell({
   title,
   note,
   search,
+  searchPlaceholder,
   onSearch,
   actions,
   onClose,
@@ -16,6 +17,8 @@ export function PageShell({
   title: string;
   note?: ReactNode;
   search?: string;
+  /** What the box asks for, when "Search <title>" is not what a page searches. */
+  searchPlaceholder?: string;
   onSearch?: (q: string) => void;
   actions?: ReactNode;
   /** Circular close button at the right of the header. Escape already does the same. */
@@ -60,7 +63,7 @@ export function PageShell({
           <input
             value={search ?? ""}
             onChange={(e) => onSearch(e.target.value)}
-            placeholder={`Search ${title.toLowerCase()}…`}
+            placeholder={searchPlaceholder ?? `Search ${title.toLowerCase()}…`}
             className="mt-3 w-full max-w-md h-8 px-3 rounded-md bg-paper-2 border border-line outline-none focus:border-accent text-sm text-ink placeholder:text-ink-3"
           />
         )}

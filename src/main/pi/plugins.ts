@@ -62,11 +62,12 @@ export async function discoverPlugins(cwd?: string): Promise<PluginEntry[]> {
 }
 
 /**
- * The two modules a plugin is allowed to import, served from the same origin as the plugin itself.
+ * The three modules a plugin is allowed to import, served from the same origin as the plugin
+ * itself: the JSX runtime, the component library, and React.
  *
- * Both read a global the window puts in place before the first import. That keeps one React and one
- * component library in the process: a plugin that bundled its own copy of either would render into
- * a second reconciler and see none of the host's context.
+ * All three read a global the window puts in place before the first import. That keeps one React
+ * and one component library in the process: a plugin that bundled its own copy of either would
+ * render into a second reconciler, see none of the host's context, and throw on its first hook.
  */
 export const JSX_SHIM = [
   "const r = globalThis.__pidPlugin;",
@@ -77,16 +78,57 @@ export const JSX_SHIM = [
 ].join("\n");
 
 /**
+ * The hooks a plugin needs, from the window's own React.
+ *
+ * A page that remembers which rows are open, or that a command is in flight, needs state. Bundling
+ * React into the plugin would give it a second reconciler, and the first `useState` inside a host
+ * element would throw `Invalid hook call` — so `react` is externalised like `@pid/ui` and resolves
+ * here. One React in the process, which is the same reason the JSX runtime is a shim.
+ */
+export function reactShim(names: readonly string[]): string {
+  return [
+    "const r = globalThis.__pidPlugin.react;",
+    ...exportable(names).map((n) => `export const ${n} = r.${n};`),
+    "export default r;",
+  ].join("\n");
+}
+
+/**
+ * Reserved words that are also real export names on a module namespace object.
+ *
+ * `import * as react` gives a `default` key, and `export const default = …` does not parse — the
+ * whole shim fails at the first token and the plugin reports a syntax error with no clue where it
+ * came from. The default is re-exported by the trailing `export default r`, so dropping it here
+ * loses nothing.
+ */
+const RESERVED = new Set([
+  "default",
+  "class",
+  "function",
+  "const",
+  "let",
+  "var",
+  "new",
+  "delete",
+  "import",
+  "export",
+]);
+
+/** Names a shim can turn into `export const <name>`; anything else is dropped rather than emitted. */
+function exportable(names: readonly string[]): string[] {
+  return names.filter((n) => /^[A-Za-z_$][\w$]*$/.test(n) && !RESERVED.has(n));
+}
+
+/**
  * The shim for `@pid/ui`, one named export per primitive the window hands out.
  *
  * Generated from the live object rather than a second list, so the shim cannot drift from the
  * library. A name that is not a plain identifier is dropped instead of being interpolated.
  */
 export function uiShim(names: readonly string[]): string {
-  const safe = names.filter((n) => /^[A-Za-z_$][\w$]*$/.test(n));
   return [
     "const r = globalThis.__pidPlugin.ui;",
-    ...safe.map((n) => `export const ${n} = r.${n};`),
+    ...exportable(names).map((n) => `export const ${n} = r.${n};`),
     "export default r;",
   ].join("\n");
 }
@@ -119,6 +161,8 @@ export async function bundlePlugin(entry: string): Promise<string> {
             path: `/plugin/${args.path.slice("@pid/".length)}`,
             external: true,
           }));
+          // Bare `react` too: one reconciler in the process, or hooks throw on the first call.
+          b.onResolve({ filter: /^react$/ }, () => ({ path: "/plugin/react", external: true }));
         },
       },
     ],

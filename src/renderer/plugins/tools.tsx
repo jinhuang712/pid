@@ -57,7 +57,7 @@ export function pluginToolResolver(
   if (byName.size === 0) return () => undefined;
   const contexts: Record<string, PluginContext> = {};
   for (const plugin of plugins) {
-    contexts[plugin.id] = { state: pluginState(widgets?.[plugin.id]), run, cwd };
+    contexts[plugin.id] = { state: pluginState(widgets?.[plugin.id]), run, cwd, query: "" };
   }
   return (toolName) => {
     const hit = byName.get(toolName);

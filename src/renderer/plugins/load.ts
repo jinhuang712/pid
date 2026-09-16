@@ -1,3 +1,4 @@
+import * as react from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { bridge } from "../bridge";
 import * as ui from "../ui";
@@ -16,9 +17,15 @@ import type { PluginApi, PluginModule, Registered } from "./api";
  * decision. The half that draws is the same package as the half that already has the filesystem.
  */
 
-/** Installed before the first import; the shims the main process serves read exactly this. */
+/**
+ * Installed before the first import; the shims the main process serves read exactly this.
+ *
+ * React is here for the same reason the JSX runtime is: one reconciler in the process. A plugin
+ * that bundled its own would throw on its first `useState` inside a host element, and a page that
+ * cannot hold state cannot remember which of its rows are open.
+ */
 function installRuntime(): void {
-  (globalThis as unknown as { __pidPlugin?: unknown }).__pidPlugin = { jsx, jsxs, Fragment, ui };
+  (globalThis as unknown as { __pidPlugin?: unknown }).__pidPlugin = { jsx, jsxs, Fragment, ui, react };
 }
 
 function register(id: string): { api: PluginApi; out: Registered } {
@@ -50,7 +57,7 @@ function register(id: string): { api: PluginApi; out: Registered } {
  */
 export async function loadPlugins(cwd: string | undefined): Promise<Registered[]> {
   installRuntime();
-  const ids = await bridge.plugins.list(cwd, Object.keys(ui));
+  const ids = await bridge.plugins.list(cwd, { ui: Object.keys(ui), react: Object.keys(react) });
   const out: Registered[] = [];
   for (const id of ids) {
     const { api, out: reg } = register(id);
