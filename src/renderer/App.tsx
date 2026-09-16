@@ -59,6 +59,8 @@ export function App() {
   /** The latest report handed to the dump, kept so a re-render cannot blank it. */
   const probe = useRef<{ activeDir?: string; sessionKey?: string; items: string[] } | undefined>(undefined);
   const completeRef = useRef<typeof complete | undefined>(undefined);
+  /** A PID_PAGE that names a plugin page, held until the page's plugin has loaded. */
+  const pendingDevPage = useRef<Page | undefined>(undefined);
   const [forkKey, setForkKey] = useState<string>();
   const [renameKey, setRenameKey] = useState<string>();
 
@@ -785,6 +787,9 @@ export function App() {
         // PID_PAGE=settings/prompt lands on one Settings section.
         const [pg, sub] = info.devPage.split("/");
         setPage(pg as Page);
+        // A plugin's page arrives only once its extension loads, which is after this runs; keep
+        // the request until then, or the page reset above eats it.
+        pendingDevPage.current = pg.startsWith("page:") ? (pg as Page) : undefined;
         if (sub) setSettingsSection(sub);
       }
       if (info.devSearch !== undefined) setPaletteOpen(true);
@@ -858,10 +863,16 @@ export function App() {
   );
   const headerLines = <PluginSlots plugins={plugins} where="header" proc={active} run={runCommand} />;
   useEffect(() => {
-    // Closing the last session that filled a page takes the page with it.
+    // Closing the last session that filled a page takes the page with it — unless that page is
+    // still the one a dev run asked to open and has not arrived yet: plugin pages load after the
+    // app mounts, and resetting in between would drop PID_PAGE on the floor.
     setPage((cur) =>
       cur === "sessions" || cur === "settings" || pages.some((s) => s.id === cur) ? cur : "sessions",
     );
+    if (pendingDevPage.current && pages.some((s) => s.id === pendingDevPage.current)) {
+      setPage(pendingDevPage.current);
+      pendingDevPage.current = undefined;
+    }
   }, [pages]);
 
   const paletteActions: PaletteAction[] = [

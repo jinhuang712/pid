@@ -220,7 +220,7 @@ cat /tmp/pid-dump/window.txt      # rendered window text
 The renderer probe is `window.__pidDump`, filled only when `PID_DUMP_DIR` is set (see the probe
 effect in `src/renderer/App.tsx`); the dump is written repeatedly, at ~5s through ~60s, because a
 resumed session keeps replaying while the window settles. Add fields to the probe rather than
-guessing from `window.txt`. `pnpm dev` reuses userData (`~/Library/Application Support/Electron`),
+guessing from `window.txt`. `pnpm dev` reuses userData (`~/Library/Application Support/pid`),
 so a smoke run inherits whatever sessions were open — write `pid-state.json` there (or delete it)
 to control what is restored. Kill the run when done (`pkill -f electron/dist/Electron.app`); never
 leave a dev app running against real user state.
