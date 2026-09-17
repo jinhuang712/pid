@@ -192,38 +192,64 @@ src/renderer/       React UI: components/, pages/, state/, settings, completion,
 src/renderer/ui/    presentation primitives; no session, no IPC, no domain type
 src/renderer/plugins/  loading an extension's desktop half and mounting what it registers
 src/shared/         types shared by all three processes
+scripts/            sandbox.sh: a PID that never draws, for agent testing
 test/               vitest unit tests (real-environment tests are opt-in via env vars)
 docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README
 ```
 
-Dev hooks for headless runs: `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`, `PID_FOLLOWUP`,
-`PID_DRAFT`, `PID_ATTACH` (colon-separated absolute paths), `PID_SEARCH`, `PID_PAGE`,
-`PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`, `PID_DUMP_DIR`, `PID_HEADLESS`.
-
 ### Proving a change in the running app without a human
 
 A terminal usually has neither macOS Assistive Access (to click or type) nor Screen Recording (to
-screenshot). Do not conclude "needs the user to try it" before this: `PID_DUMP_DIR` writes what the
-window actually painted, and the window stays hidden — `PID_HEADLESS=1` does the same on its own, so
-a run never pops a window in someone's face.
+screenshot), so an agent cannot drive the window the way a person does. It does not have to: the
+window paints whether or not it is shown, and `PID_DUMP_DIR` writes what it painted.
+
+Use `scripts/sandbox.sh`. It is the only supported way to run PID from an agent session, because
+it is the only one that cannot disturb whoever is at the machine:
 
 ```bash
-# Silent run: open a folder, then read what the picker and the menu really are.
-rm -rf /tmp/pid-dump && mkdir -p /tmp/pid-dump
-PID_DUMP_DIR=/tmp/pid-dump PID_OPEN_FOLDER=/abs/path/to/repo pnpm dev &
-sleep 40
-cat /tmp/pid-dump/menu.txt        # accelerators Electron actually installed
-cat /tmp/pid-dump/window.json     # renderer probe: active folder, sessions, the `@` list
-cat /tmp/pid-dump/window.txt      # rendered window text
+scripts/sandbox.sh --detach --open /abs/path --prompt "say ok"
+sleep 30
+cat /tmp/pid-sandbox/dump/window.txt    # rendered window text
+cat /tmp/pid-sandbox/dump/window.json   # renderer probe: active folder, sessions, the `@` list
+cat /tmp/pid-sandbox/dump/menu.txt      # accelerators Electron actually installed
+scripts/sandbox.sh --kill               # or --clean, which also deletes the root and its sessions
 ```
 
+Why a script and not `pnpm dev` with an env var:
+
+- **No window, and no Dock icon either.** `PID_HEADLESS` only hides the window, and only from
+  `app.whenReady()` — by then the stock Electron has already shown a Dock icon and taken focus off
+  whatever the person was doing. That is the popup, even with no window on screen. The sandbox
+  builds a copy of Electron.app with `LSUIElement` set, which macOS settles before the process can
+  draw anything. Verify with `osascript -e 'tell application "System Events" to get background only
+  of (first process whose unix id is <pid>)'` — it must be `true`.
+- **Its own userData** (`--user-data-dir`), so `pid-state.json`, `pid-settings.json` and the
+  restored session list belong to the sandbox. Nothing writes to `~/Library/Application Support/pid`.
+- **Its own bundle id** (`dev.pid.headless`). A packaged `PID.app`, or any build signed with the
+  stock Electron identifier, shares an identity with the installed app — launching one can bring up
+  the other, with the user's real sessions in it. The sandbox cannot be confused with it.
+- **Its own cwd** by default (`/tmp/pid-sandbox/folder`), so test sessions land in a folder named
+  after the sandbox. `--clean` removes that folder's sessions too. `--open` a real project and the
+  sessions are real, in that project's own session folder — which is the point of passing it, and
+  something to clean up afterwards the way any other test artifact is.
+
+Flags: `--open DIR`, `--prompt TEXT`, `--follow-up TEXT`, `--page PAGE`, `--session FILE`,
+`--search TEXT`, `--detach`, `--no-build`, `--kill`, `--clean`. `PID_SANDBOX_ROOT` moves the root.
+
+Two things it does not isolate, both on purpose: Pi's agent directory, because a turn needs the
+user's models and auth, and the notification permission, because that belongs to the app identity
+and not to the run. A sandbox notification is a real one — on a machine that has never allowed
+this build, macOS refuses it, and the refusal shows up in `window.txt` as the toast it is.
+
 The renderer probe is `window.__pidDump`, filled only when `PID_DUMP_DIR` is set (see the probe
-effect in `src/renderer/App.tsx`); the dump is written repeatedly, at ~5s through ~60s, because a
-resumed session keeps replaying while the window settles. Add fields to the probe rather than
-guessing from `window.txt`. `pnpm dev` reuses userData (`~/Library/Application Support/pid`),
-so a smoke run inherits whatever sessions were open — write `pid-state.json` there (or delete it)
-to control what is restored. Kill the run when done (`pkill -f electron/dist/Electron.app`); never
-leave a dev app running against real user state.
+effect in `src/renderer/App.tsx`), and dumped repeatedly at ~5s through ~60s because a resumed
+session keeps replaying while the window settles. Add fields to the probe rather than guessing from
+`window.txt`.
+
+The raw hooks the script drives are `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`,
+`PID_FOLLOWUP`, `PID_DRAFT`, `PID_ATTACH` (colon-separated absolute paths), `PID_SEARCH`,
+`PID_PAGE`, `PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`, `PID_DUMP_DIR`, `PID_HEADLESS`. Reach for
+them directly only when the sandbox is in the way — and then still never against real user state.
 
 ## Verification
 
