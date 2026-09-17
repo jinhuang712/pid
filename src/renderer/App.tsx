@@ -36,6 +36,7 @@ import {
 import { useSettings } from "./settings";
 import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
+import { emptyOpenSessions, type OpenEntry, openSessionsReducer } from "./state/openSessions";
 import { emptyWorkspace, fromMessages, type Proc, procForSession, workspaceReducer } from "./state/workspace";
 import { surfaces } from "./surfaces";
 
@@ -81,6 +82,26 @@ function answered(messages: AgentMessage[]): boolean {
   const last = [...messages].reverse().find((m) => m.role === "assistant");
   if (last?.role !== "assistant") return true;
   return last.stopReason !== "aborted" && last.stopReason !== "error";
+}
+
+/**
+ * What `start` answers with. A value, not a thrown error: a session that could not be opened is an
+ * ordinary outcome for the caller — the tab stays, the list entry stays, and the reason travels
+ * with it instead of being swallowed on the way.
+ */
+export type StartResult =
+  /** A process is up, or was already. */
+  | { key: string }
+  /** On its way up; nothing can be sent to it yet. */
+  | { busy: true }
+  /** The user closed the placeholder before the process arrived. */
+  | { cancelled: true }
+  | { error: string };
+
+/** Electron wraps a rejected IPC call in its own words; the session's own reason is the useful part. */
+function reasonOf(e: unknown): string {
+  const text = e instanceof Error ? e.message : String(e);
+  return text.replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 }
 
 export function App() {
@@ -166,29 +187,20 @@ export function App() {
     [loadFolder],
   );
 
-  // ---- open sessions survive a restart (PID state, derived from live processes; Pi files stay authoritative) ----
-  const restored = useRef(false);
-  // One string per distinct set of open sessions: streaming deltas change `ws` on every token but not this.
-  const openSessionsKey = useMemo(() => {
-    const open = Object.values(ws.procs)
-      .filter((p) => p.piState.sessionFile && !p.exit && !p.pending)
-      .map((p) => `${p.cwd}\u0000${p.piState.sessionFile}`);
-    const activePath = ws.activeKey ? ws.procs[ws.activeKey]?.piState.sessionFile : undefined;
-    // One entry per file: a renderer reload leaves the previous processes running in main, and
-    // restoring their duplicates would double the list on every reload.
-    return JSON.stringify({ open: [...new Set(open)], activePath });
-  }, [ws]);
+  // ---- open sessions survive a restart (PID's own record; Pi's files stay authoritative) ----
+  /**
+   * What `pid-state.json` holds. It is written from here and nowhere else, and only user actions
+   * change it: a process that fails to resume, or exits, is a label on an entry, never a reason to
+   * drop one. See `state/openSessions.ts` — that reducer is the whole of this promise.
+   */
+  const [open, openDispatch] = useReducer(openSessionsReducer, undefined, emptyOpenSessions);
+  /** The saved list has been read (and, if the setting asks for it, reopened): only then may a save replace it. */
+  const [hydrated, setHydrated] = useState(false);
+  const activePath = ws.activeKey ? ws.procs[ws.activeKey]?.piState.sessionFile : undefined;
   useEffect(() => {
-    if (!restored.current) return; // don't overwrite the saved list before it has been restored
-    const { open, activePath } = JSON.parse(openSessionsKey) as { open: string[]; activePath?: string };
-    void bridge.openSessions.save(
-      open.map((s) => {
-        const [cwd, path] = s.split("\u0000");
-        return { cwd, path };
-      }),
-      activePath,
-    );
-  }, [openSessionsKey]);
+    if (!hydrated) return; // a save before the list is read would erase it
+    void bridge.openSessions.save(open.entries, activePath);
+  }, [hydrated, open.entries, activePath]);
 
   // ---- notifications ----
   /** One toast per distinct message: several pi processes starting in one folder repeat the same notice. */
@@ -233,14 +245,18 @@ export function App() {
   const wsRef = useRef(ws);
   wsRef.current = ws;
   const start = useCallback(
-    async (cwd: string, sessionPath?: string, opts: { background?: boolean } = {}) => {
+    async (cwd: string, sessionPath?: string, opts: { background?: boolean } = {}): Promise<StartResult> => {
       // A session has one process. Opening it again (a second click, a duplicated restore list)
       // switches to the one that is already running instead of spawning a twin.
       const live = sessionPath ? procForSession(wsRef.current, sessionPath) : undefined;
       if (live && !live.exit) {
         if (!opts.background) dispatch({ type: "activate", key: live.key });
-        return live.pending ? undefined : live.key;
+        return live.pending ? { busy: true } : { key: live.key };
       }
+      // Pi opens a session file by path and, when the file is gone, quietly starts a new session in
+      // its place — a tab that looks like the old one and is not. Say so instead.
+      if (sessionPath && !(await bridge.files.stat([sessionPath]))[0]?.exists)
+        return { error: "session file is gone" };
       setStatus(sessionPath ? "resuming session…" : "starting pi…");
       // Resuming: show the file's messages now, while pi spawns and loads its extensions.
       // Reading the file and starting the process run side by side; the snapshot wins the race by seconds.
@@ -259,7 +275,7 @@ export function App() {
         if (pendingKey && cancelledPending.current.delete(pendingKey)) {
           void bridge.pi.stop(handle.key);
           setStatus(undefined);
-          return undefined;
+          return { cancelled: true };
         }
         dispatch({ type: "add", handle, replaces: pendingKey });
         if (pendingKey) composerRef.current.move(pendingKey, handle.key);
@@ -274,14 +290,52 @@ export function App() {
           dispatch({ type: "messages", key: handle.key, conv: fromMessages(messages) });
         }
         setStatus(undefined);
-        return handle.key;
+        return { key: handle.key };
       } catch (e) {
         if (pendingKey) dispatch({ type: "remove", key: pendingKey });
-        setStatus(String(e));
+        setStatus(reasonOf(e));
+        return { error: reasonOf(e) };
       }
     },
     [toast],
   );
+
+  /**
+   * Records the wish to have a session open and then tries to make it so. The record is never rolled
+   * back: a session that cannot be opened right now is one the user still wants open, so it stays in
+   * the list carrying the reason, and the next launch tries again.
+   */
+  const openAndStart = useCallback(
+    async (cwd: string, sessionPath?: string, opts: { background?: boolean } = {}) => {
+      if (sessionPath) openDispatch({ type: "open", entries: [{ cwd, path: sessionPath }] });
+      const r = await start(cwd, sessionPath, opts);
+      if (sessionPath) {
+        if ("key" in r || "busy" in r) openDispatch({ type: "ok", path: sessionPath });
+        else if ("error" in r)
+          openDispatch({ type: "fail", entry: { cwd, path: sessionPath }, reason: r.error });
+      }
+      return r;
+    },
+    [start],
+  );
+
+  /**
+   * Pi can move a process onto another session file (`fork`, `/switch`), and a session that just
+   * started has no file until Pi writes its first entry. Both are additions to the list; nothing
+   * here removes one.
+   */
+  const fileOf = useRef(new Map<string, string>());
+  useEffect(() => {
+    for (const p of Object.values(ws.procs)) {
+      const path = p.piState.sessionFile;
+      const was = fileOf.current.get(p.key);
+      if (path) fileOf.current.set(p.key, path);
+      if (!path || p.pending) continue;
+      if (was && was !== path) openDispatch({ type: "move", from: was, to: { cwd: p.cwd, path } });
+      else if (!was) openDispatch({ type: "open", entries: [{ cwd: p.cwd, path }] });
+    }
+    for (const key of [...fileOf.current.keys()]) if (!ws.procs[key]) fileOf.current.delete(key);
+  }, [ws]);
 
   /**
    * A clicked banner comes back as the session that raised it, with the window brought forward:
@@ -299,7 +353,7 @@ export function App() {
     // page's test — has nowhere to go, and the window coming forward is the whole of it.
     if (!req.cwd) return;
     const cwd = req.cwd;
-    void selectFolder(cwd).then(() => start(cwd, req.sessionFile));
+    void selectFolder(cwd).then(() => openAndStart(cwd, req.sessionFile));
   };
 
   const refreshState = useCallback(async (k: string) => {
@@ -413,9 +467,9 @@ export function App() {
       if (live && !live.exit) return dispatch({ type: "activate", key: live.key });
       // folder bookkeeping (recency, git, session list) runs alongside the start, not ahead of it
       if (s.cwd !== folder) void selectFolder(s.cwd);
-      await start(s.cwd, s.path);
+      await openAndStart(s.cwd, s.path);
     },
-    [ws, folder, selectFolder, start],
+    [ws, folder, selectFolder, openAndStart],
   );
 
   const ensureLive = useCallback(
@@ -424,9 +478,10 @@ export function App() {
       if (live?.pending) return undefined; // still starting; nothing can be sent yet
       if (live && !live.exit) return live.key;
       // A worker that exited cannot take a command, so the session is started again.
-      return start(s.cwd, s.path);
+      const r = await openAndStart(s.cwd, s.path);
+      return "key" in r ? r.key : undefined;
     },
-    [ws, start],
+    [ws, openAndStart],
   );
 
   /** Put the session's $token on the clipboard; pasting it into any composer attaches the reference. */
@@ -505,10 +560,14 @@ export function App() {
       ),
     closeProcess: (s) => {
       const live = procForSession(ws, s.path);
-      if (!live) return;
-      if (live.pending) cancelledPending.current.add(live.key);
-      else void bridge.pi.stop(live.key);
-      dispatch({ type: "remove", key: live.key });
+      if (live) {
+        if (live.pending) cancelledPending.current.add(live.key);
+        else void bridge.pi.stop(live.key);
+        dispatch({ type: "remove", key: live.key });
+      }
+      // An entry that never came up has no process to stop, and closing it is still the user's call:
+      // the menu offers it, and this is the only way an entry leaves the list.
+      openDispatch({ type: "close", paths: [s.path] });
     },
     reveal: (path) => void bridge.shell.reveal(path),
     forgetFolder: (dir) => void bridge.folders.forget(dir).then(setFolders),
@@ -558,7 +617,11 @@ export function App() {
   /** From the palette: a fresh session in the current folder, prompted with the typed text. */
   const askInFolder = (text: string) => {
     if (!folder) return;
-    void run(start(folder).then((k) => k && bridge.pi.command(k, { type: "prompt", message: text })));
+    void run(
+      start(folder).then((r) =>
+        "key" in r ? bridge.pi.command(r.key, { type: "prompt", message: text }) : undefined,
+      ),
+    );
   };
 
   /** From the entry view: start a session in the chosen folder (asking for one if needed), then send. */
@@ -572,12 +635,12 @@ export function App() {
           await selectFolder(dir);
         }
         const c = composer;
-        const k = await start(dir);
-        if (!k) {
+        const r = await start(dir);
+        if (!("key" in r)) {
           c.restoreDraft(raw);
           return;
         }
-        await deliver(k, raw, "prompt");
+        await deliver(r.key, raw, "prompt");
       })(),
     );
   };
@@ -792,7 +855,7 @@ export function App() {
   // Headless smoke probe: a terminal without Assistive Access cannot type `@`, so when a run
   // offers a dump directory the window publishes the picker's data — and which session it belongs
   // to — for the dump to read out.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the workspace is read as a snapshot; subscribing would re-run the probe on every streamed token
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the workspace is read as a snapshot; subscribing would re-run the probe on every streamed token. The open list is a dep: it changes rarely, and a restart's outcome is what a smoke run reads.
   useEffect(() => {
     if (!dumpRequested) return;
     const report = {
@@ -800,6 +863,9 @@ export function App() {
       sessionKey: liveKey,
       activeKey: ws.activeKey,
       procs: Object.values(ws.procs).map((p) => ({ key: p.key, cwd: p.cwd, pending: p.pending === true })),
+      // The list PID owns, and what it could not reopen: the part of a restart a smoke run checks.
+      open: open.entries.map((e) => e.path),
+      failures: open.failures,
       notified: lastNotify.current,
       items: [] as string[],
     };
@@ -815,7 +881,7 @@ export function App() {
     );
     // The workspace is read as a snapshot for the report; subscribing to it would re-run the
     // probe on every streamed token.
-  }, [dumpRequested, activeDir, liveKey]);
+  }, [dumpRequested, activeDir, liveKey, open.entries, open.failures]);
 
   // ---- restore last open sessions (sequentially: each pi start is a few seconds) ----
   const restoring = useRef(false);
@@ -828,12 +894,14 @@ export function App() {
     void (async () => {
       const saved = await bridge.openSessions.get();
       const { activeSession } = saved;
-      // A state file written before entries were unique may list one session many times.
-      const openSessions = saved.openSessions.filter(
-        (o, i, all) => all.findIndex((x) => x.path === o.path) === i,
-      );
+      // A state file written before entries were unique may list one session many times; the reducer
+      // keeps one entry per file.
+      const openSessions = saved.openSessions.filter((o) => o?.path);
+      // The list is the record of what the user had open, so it is taken as it is: a session that
+      // fails to open now stays in it, marked, and is tried again on the next launch.
+      openDispatch({ type: "open", entries: openSessions });
       if (!settings.sessions.restoreOnLaunch || openSessions.length === 0) {
-        restored.current = true;
+        setHydrated(true);
         return;
       }
       setStatus(`reopening ${openSessions.length} session${openSessions.length === 1 ? "" : "s"}…`);
@@ -843,16 +911,24 @@ export function App() {
         if (!loaded.current.has(cwd)) void loadFolder(cwd);
       }
       let activeKey: string | undefined;
+      const failed: OpenEntry[] = [];
       for (const o of openSessions) {
-        const k = await start(o.cwd, o.path, { background: true });
-        if (k && o.path === activeSession) activeKey = k;
+        const r = await openAndStart(o.cwd, o.path, { background: true });
+        if ("key" in r) {
+          if (o.path === activeSession) activeKey = r.key;
+        } else if ("error" in r) failed.push(o);
       }
       if (activeKey) dispatch({ type: "activate", key: activeKey });
       const last = openSessions.at(-1);
       if (last)
         setFolder((cur) => cur ?? openSessions.find((o) => o.path === activeSession)?.cwd ?? last.cwd);
       setStatus(undefined);
-      restored.current = true;
+      setHydrated(true);
+      if (failed.length > 0)
+        toast(
+          `${failed.length} session${failed.length === 1 ? "" : "s"} could not be reopened · the sidebar marks ${failed.length === 1 ? "it" : "them"}`,
+          "error",
+        );
     })();
   }, [settingsLoaded]);
 
@@ -905,6 +981,7 @@ export function App() {
     else void bridge.pi.stop(active.key);
     composer.clear(active.key);
     dispatch({ type: "remove", key: active.key });
+    if (active.piState.sessionFile) openDispatch({ type: "close", paths: [active.piState.sessionFile] });
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
@@ -923,8 +1000,9 @@ export function App() {
       if (info.devSearch !== undefined) setPaletteOpen(true);
       if (!info.devOpenFolder) return;
       await selectFolder(info.devOpenFolder);
-      const k = await start(info.devOpenFolder, info.devOpenSession);
-      if (!k) return;
+      const r = await openAndStart(info.devOpenFolder, info.devOpenSession);
+      if (!("key" in r)) return;
+      const k = r.key;
       if (info.devDraft) setTimeout(() => composerRef.current.setDraft(info.devDraft ?? ""), 500);
       if (info.devAttach) attach(info.devAttach.split(":").filter(Boolean));
       if (info.devPrompt) await bridge.pi.command(k, { type: "prompt", message: info.devPrompt });
@@ -1044,6 +1122,8 @@ export function App() {
           folders={folders}
           sessionsByFolder={sessionsByFolder}
           ws={ws}
+          open={open.entries}
+          failures={open.failures}
           activeFolder={folder}
           onSearch={() => setPaletteOpen(true)}
           actions={sessionActions}

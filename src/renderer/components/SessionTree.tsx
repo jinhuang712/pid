@@ -2,6 +2,7 @@ import type { SessionSummary } from "@shared/sessions";
 import { type MouseEvent, useEffect, useState } from "react";
 import { ContextMenu, Dot, IconButton, Keys, Logo, type MenuItem, Scroll } from "@/ui";
 import { useSettings } from "../settings";
+import type { OpenEntry } from "../state/openSessions";
 import {
   type Proc,
   procForSession,
@@ -53,6 +54,8 @@ export function SessionTree({
   folders,
   sessionsByFolder,
   ws,
+  open,
+  failures,
   activeFolder,
   onSearch,
   actions,
@@ -67,6 +70,9 @@ export function SessionTree({
   folders: string[];
   sessionsByFolder: Record<string, SessionSummary[]>;
   ws: Workspace;
+  /** Every session the user has open, and the reason for each one that is not up; see state/openSessions.ts. */
+  open: OpenEntry[];
+  failures: Record<string, string>;
   activeFolder?: string;
   onSearch: () => void;
   actions: SessionActions;
@@ -116,7 +122,14 @@ export function SessionTree({
     { label: "Export HTML", onClick: () => actions.exportHtml(s) },
     "sep",
     { label: "Reveal session file", onClick: () => actions.reveal(s.path) },
-    { label: "Close process", danger: true, disabled: !live, onClick: () => actions.closeProcess(s) },
+    {
+      // A session that could not be reopened has no process to close, and it is the one entry the
+      // user has to be able to dismiss: it would otherwise be retried on every launch.
+      label: live ? "Close process" : "Close",
+      danger: true,
+      disabled: !live && !failures[s.path],
+      onClick: () => actions.closeProcess(s),
+    },
   ];
 
   const folderMenu = (f: string): (MenuItem | "sep")[] => {
@@ -171,7 +184,7 @@ export function SessionTree({
       <Scroll className="px-3 pb-2 flex flex-col gap-px">
         {orderedFolders.map((f) => {
           const list = visible(f);
-          const open = isOpen(f);
+          const unfolded = isOpen(f);
           const liveHere = Object.values(ws.procs).filter((p) => p.cwd === f);
           const liveStatus = liveHere.map(procStatus);
           const isActive = f === activeFolder;
@@ -185,12 +198,18 @@ export function SessionTree({
           const unlisted = liveHere.filter(
             (p) => !p.piState.sessionFile || !byPath.has(p.piState.sessionFile),
           );
+          // A session that could not be reopened and is not in the folder listing either: the file it
+          // names is gone, so the disk has no row for it and this is the only place it can be seen —
+          // and the only place it can be dismissed from.
+          const failedHere = open.filter(
+            (e) => e.cwd === f && failures[e.path] && !byPath.has(e.path) && !liveFiles.has(e.path),
+          );
           // closed sessions stay folded except the most recent few
           const closed = list.filter((x) => !liveFiles.has(x.path));
           const limit = CLOSED_PREVIEW + (revealed[f] ?? 0);
           const shown = [...live, ...closed.slice(0, limit)];
           const hidden = closed.length - Math.min(closed.length, limit);
-          const total = list.length + unlisted.length;
+          const total = list.length + unlisted.length + failedHere.length;
 
           return (
             <div key={f}>
@@ -205,16 +224,16 @@ export function SessionTree({
                   type="button"
                   onClick={() => toggle(f)}
                   className="shrink-0 text-ink-3"
-                  title={open ? "Collapse" : "Expand"}
+                  title={unfolded ? "Collapse" : "Expand"}
                 >
-                  <FolderIcon open={open} />
+                  <FolderIcon open={unfolded} />
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     // The name folds and unfolds like the icon; unfolding also makes the folder current.
                     toggle(f);
-                    if (!open) actions.openFolder(f);
+                    if (!unfolded) actions.openFolder(f);
                   }}
                   title={f}
                   className={`flex-1 min-w-0 text-left truncate ${isActive ? "font-medium" : ""}`}
@@ -223,7 +242,7 @@ export function SessionTree({
                 </button>
                 {/* Trailing column mirrors SessionRow: resting meta swaps in place for actions on hover,
                     so nothing invisible reserves width and the right edge lines up with the rows below. */}
-                {!open && (
+                {!unfolded && (
                   <span className="flex items-center gap-2 group-hover:hidden">
                     {liveStatus.includes("running") && <StatusDot status="running" />}
                     {liveStatus.includes("needs-you") && <StatusDot status="needs-you" />}
@@ -240,7 +259,7 @@ export function SessionTree({
                     <Dots />
                   </IconButton>
                 </span>
-                {open && (
+                {unfolded && (
                   <IconButton
                     size="sm"
                     ground={false}
@@ -262,7 +281,7 @@ export function SessionTree({
                 )}
               </section>
 
-              {open && (
+              {unfolded && (
                 <div className="pl-3.5 flex flex-col gap-px mb-1">
                   {unlisted.map((p) => (
                     <SessionRow
@@ -274,23 +293,45 @@ export function SessionTree({
                       onActivate={() => actions.openSession({ ...placeholder(p), path: `proc:${p.key}` })}
                     />
                   ))}
-                  {shown.map((s) => (
-                    <div key={s.path}>
+                  {failedHere.map((e) => {
+                    const s = failedSummary(e);
+                    return (
                       <SessionRow
-                        title={titleOf(s)}
-                        meta={metaFor(s, procForSession(ws, s.path))}
-                        status={
-                          procForSession(ws, s.path)
-                            ? procStatus(procForSession(ws, s.path) as Proc)
-                            : "closed"
-                        }
-                        active={s.path === activePath}
+                        key={e.path}
+                        title={base(e.path)}
+                        meta="could not open"
+                        status="error"
+                        hint={`Could not be reopened: ${clip(failures[e.path])}\n${e.path}`}
+                        active={false}
                         onActivate={() => actions.openSession(s)}
-                        onFork={() => actions.fork(s)}
-                        onMenu={(e) => openMenu(e, sessionMenu(s, procForSession(ws, s.path)), titleOf(s))}
+                        onMenu={(ev) =>
+                          openMenu(
+                            ev,
+                            [{ label: "Close", danger: true, onClick: () => actions.closeProcess(s) }],
+                            base(e.path),
+                          )
+                        }
                       />
-                    </div>
-                  ))}
+                    );
+                  })}
+                  {shown.map((s) => {
+                    const live = procForSession(ws, s.path);
+                    const failure = failures[s.path];
+                    return (
+                      <div key={s.path}>
+                        <SessionRow
+                          title={titleOf(s)}
+                          meta={failure ? "could not open" : metaFor(s, live)}
+                          status={failure ? "error" : live ? procStatus(live) : "closed"}
+                          hint={failure ? `Could not be reopened: ${clip(failure)}` : undefined}
+                          active={s.path === activePath}
+                          onActivate={() => actions.openSession(s)}
+                          onFork={() => actions.fork(s)}
+                          onMenu={(e) => openMenu(e, sessionMenu(s, live), titleOf(s))}
+                        />
+                      </div>
+                    );
+                  })}
                   {hidden > 0 && (
                     <button
                       type="button"
@@ -403,10 +444,24 @@ function placeholder(p: Proc): SessionSummary {
   };
 }
 
+/** Just enough of a listing entry to close a session whose file no longer exists. */
+function failedSummary(e: OpenEntry): SessionSummary {
+  return {
+    path: e.path,
+    id: "",
+    cwd: e.cwd,
+    created: "",
+    modified: "",
+    messageCount: 0,
+    firstMessage: "",
+  };
+}
+
 function SessionRow({
   title,
   meta,
   status,
+  hint,
   active,
   onActivate,
   onFork,
@@ -415,6 +470,8 @@ function SessionRow({
   title: string;
   meta: string;
   status: SessionStatus;
+  /** Native tooltip; used for a reason that does not fit in the row. */
+  hint?: string;
   active: boolean;
   onActivate: () => void;
   onFork?: () => void;
@@ -424,6 +481,7 @@ function SessionRow({
   return (
     <section
       aria-label={title}
+      title={hint}
       className={`group h-[30px] rounded-lg flex items-center gap-2 pr-1 pl-2 ${
         active ? "bg-paper-3 text-ink" : "text-ink-2 hover:bg-paper-3 hover:text-ink"
       }`}
@@ -453,6 +511,11 @@ function SessionRow({
       </span>
     </section>
   );
+}
+
+/** A reason can run long (a worker's stderr tail); the row's tooltip is a hint, not a log. */
+function clip(text: string): string {
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
 }
 
 /**
