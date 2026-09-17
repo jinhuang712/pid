@@ -28,6 +28,11 @@ const bridge: Bridge = {
     get: () => ipcRenderer.invoke("state:openSessions"),
     save: (open, active) => ipcRenderer.invoke("state:saveOpenSessions", open, active),
   },
+  notify: {
+    show: (req) => ipcRenderer.invoke("notify:show", req),
+    openSettings: () => ipcRenderer.invoke("notify:openSettings"),
+    onOpen: (l) => on("notify:open", l),
+  },
   files: {
     list: (cwd) => ipcRenderer.invoke("files:list", cwd),
     stat: (paths) => ipcRenderer.invoke("files:stat", paths),

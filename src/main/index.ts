@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ResourceToggle } from "@shared/ecosystem";
 import type { ListOptions } from "@shared/glob";
+import type { NotifyRequest } from "@shared/notifications";
 import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
@@ -14,6 +15,7 @@ import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
 import { suggestFolders } from "./folders";
 import { repoInfo } from "./git";
 import { installMenu } from "./menu";
+import { openNotificationSettings, showNotification } from "./notifications";
 import { runDiagnostics } from "./pi/diagnostics";
 import { configureAgentDir, listExtensions, listSkills, readPiHome } from "./pi/ecosystem";
 import { bundlePlugin, discoverPlugins, JSX_SHIM, reactShim, uiShim } from "./pi/plugins";
@@ -163,6 +165,21 @@ ipcMain.handle("eco:extensions", (_e, cwd?: string) => listExtensions(cwd));
 ipcMain.handle("eco:setResource", (_e, req: ResourceToggle) => setResourceState(req));
 ipcMain.handle("eco:appendSystemPrompt", () => readAppendSystemPrompt());
 ipcMain.handle("eco:setAppendSystemPrompt", (_e, text: string) => writeAppendSystemPrompt(text));
+ipcMain.handle("notify:show", (_e, req: NotifyRequest) =>
+  showNotification(req, {
+    focused: Boolean(mainWindow?.isFocused()),
+    // The click lands back in the window, which knows what an open session is. Focus first: a
+    // banner is read because the window was not in front, so a click has to bring it back.
+    onOpen: (r) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send("notify:open", r);
+    },
+  }),
+);
+ipcMain.handle("notify:openSettings", () => openNotificationSettings());
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(expandHome(path)));
 ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(expandHome(path)));
 ipcMain.handle("shell:openExternal", async (_e, url: string) => {
