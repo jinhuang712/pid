@@ -385,7 +385,7 @@ function metaFor(s: SessionSummary, live?: Proc): string {
 
 function userText(p: Proc): string {
   const m = p.conv.messages.find((x) => x.role === "user");
-  if (!m || m.role !== "user") return "New session";
+  if (m?.role !== "user") return "New session";
   return typeof m.content === "string"
     ? m.content
     : m.content.map((c) => (c.type === "text" ? c.text : "")).join(" ");
