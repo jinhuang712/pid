@@ -1,255 +1,121 @@
 # AGENTS
 
-Development guide for coding agents and humans working on PID.
+How to work in this repository. Architecture lives in `DESIGN.md`; the calls that look
+debatable are argued in `PHILOSOPHY.md`. This file is the short version: what PID is, the rules
+that decide a change, and how to land one.
 
-## Project Identity
+## What PID Is
 
-PID is a graphical desktop frontend for Pi.
+A graphical desktop frontend for Pi. Pi owns agent behavior and agent state; PID owns presentation.
+It is not a second agent runtime, not an agent built on Pi, and not a Pi distribution.
 
-It is not a new agent runtime. It is not an agent built on Pi. Pi owns agent behavior and agent state; PID owns presentation.
+## Reading Before Writing
 
-## Pi First
+| You are about to… | Read |
+| --- | --- |
+| touch anything that drives Pi | `DESIGN.md` §2–8, then `src/main/pi/session-worker.ts` |
+| add or change a UI surface | `DESIGN.md` §9–29, then `src/renderer/ui/` |
+| touch extensions, skills, models, auth | `DESIGN.md` §22–26, §32, then `src/main/pi/ecosystem.ts` |
+| ask "why is it like this" | `PHILOSOPHY.md`, and the test that fails if you change it |
+| ask "should PID do this at all" | `GOALS.md` non-goals |
 
-Before implementing any capability:
+## Rules
 
-1. Check upstream Pi (the monorepo and the installed `@earendil-works/pi-coding-agent` package).
-2. Read the current API, examples, and source. Do not rely on memory of older versions.
-3. Confirm whether Pi already has the capability.
-4. If it does, expose it.
-5. Only if it does not, consider a PID-specific implementation, and keep it thin.
+Each of these has cost someone a rewrite. The reasoning is in the linked section; the rule is here.
 
-API names and paths are whatever the current upstream code says. Verify before use.
+**Pi owns the agent.** Before implementing a capability, check upstream Pi — the monorepo and the
+installed `@earendil-works/pi-coding-agent`. Read the current API and source, not a memory of an
+older version. If Pi has it, expose it. Only if it does not, write something thin. (`DESIGN.md` §2)
 
-## No Shadow Agent System
+**No shadow agent system.** Never create, even accidentally: a second session model, provider
+system, auth system, skill runtime, extension ecosystem, tool runtime or message queue; project
+memory; hidden agent state. If a PID-side copy exists for display performance it must be derived,
+rebuildable and non-authoritative. (`DESIGN.md` §1, §34)
 
-Never create, even accidentally:
+**One file drives Pi.** `src/main/pi/session-worker.ts` is the only file that touches Pi's agent
+API. Everything else speaks `src/shared/protocol.ts`. `test/protocol-boundary.test.ts` fails when
+that erodes. (`DESIGN.md` §2, §36)
 
-- a second session model
-- a second provider system
-- a second auth system
-- a second skill runtime
-- a second extension ecosystem
-- a second tool runtime
-- a second message queue
-- project memory
-- hidden agent state
+**One writer per session file.** Pi has no session-file lock. PID owns one worker per session file
+it opens and never appends to a file another process is writing. Sessions PID writes must stay
+readable and resumable by the Pi terminal. (`DESIGN.md` §7, §8)
 
-If a PID-side copy of Pi data is needed for display performance, it must be derived, rebuildable, and non-authoritative.
+**PID configures no models or providers**, and keeps no second set of credentials. It reads Pi's
+local model configuration and lets the user pick. (`DESIGN.md` §32)
 
-## Folder / Session Model
+**PID ships no extension and names none.** A session loads exactly what Pi resolves for its
+directory. No bundled or vendored extension, no fallback, and no code that checks for a particular
+extension being installed — `test/protocol-boundary.test.ts` fails on any of them. A page for one
+ecosystem is drawn by that extension's own desktop half. (`DESIGN.md` §22–26)
 
-PID manages sessions under folders. There is no Project entity. A Git worktree is a Folder.
+**Writes under `~/.pi` are Pi's own formats through Pi's own code paths.** `src/main/pi/toggles.ts`
+is the whole list. Never modify Pi's global configuration silently. An extension's own
+configuration is the extension's to read and write. (`DESIGN.md` §33)
 
-## Cross-session Reference
+**One origin.** The window is served from `pid://app` and a plugin from a path under it, because a
+`file:` document has an opaque origin and Chromium refuses a cross-origin module import. Do not
+simplify this back to `loadFile`. (`DESIGN.md` §23–25)
 
-`$session` is an explicit context reference chosen by the user. It is not automatic memory. Referenced content enters the conversation as visible prompt content, never silently.
+**A plugin composes primitives, not classes.** The stylesheet is built from PID's own sources, so a
+class no PID file uses does not exist by the time a plugin loads. When a plugin needs a shape the
+library lacks, add the primitive. A safelist would be the same mistake as a description language.
+(`DESIGN.md` §23, §27)
 
-## Fork
-
-Use Pi's native session tree and fork semantics. PID keeps no fork database of its own.
-
-## Extension Boundary
-
-A Pi extension's behaviour — tools, commands, hooks, providers — runs the same in both hosts. Its
-interface does not: PID serves the `ctx.ui` members whose payload is data, and cannot serve the ones
-whose signature carries a terminal (`custom`, `setFooter`, `setHeader`, `setEditorComponent`,
-`onTerminalInput`, and the pi-tui renderer registrations).
-
-`src/shared/extension-ui.ts` is the single answer to which is which. The worker implements it, the
-Extensions page reports it, and `test/extension-ui.test.ts` fails when they disagree. Classify a new
-member there rather than adding a special case anywhere else, and do not build an adapter framework
-to fake a terminal.
-
-`ctx.hasUI` is not a terminal check: PID has a UI, so it is true here. Only `ctx.mode === "tui"`
-stands an extension's terminal parts down.
-
-"Cannot serve" is a choice, not a wall. A pi-tui `Component` is `render(width): string[]` and
-`Terminal` is an interface with more than one implementation upstream — Pi's own test suite drives
-the whole TUI against an xterm-backed double. PID could therefore host those members by becoming a
-terminal emulator in a window, and does not, because a character grid is not a desktop interface.
-Anyone reopening this should reopen it as "how does an extension get native desktop presentation",
-which is DESIGN §23–25, not as "how does PID fake a terminal".
-
-## Ecosystem Boundary
-
-An extension's tools end up as Pi Tools and flow through Pi's agent loop. PID runs no second tool
-system, and carries no code for any particular ecosystem: a page for one is drawn by that
-extension's own desktop half, or does not exist.
-
-## Model Boundary
-
-PID does not configure providers or models. It reads Pi's local model configuration and lets the user pick one for the session.
-
-## Pi Coexistence
-
-- Never modify Pi's global configuration silently.
-- Sessions PID writes must remain readable and resumable by the Pi terminal UI.
-- Do not maintain a second set of provider credentials.
-- Avoid concurrent-writer corruption of a session file; reuse Pi's protections where they exist, and keep any PID-side guard trivial.
-
-## Implementation Style
-
-- simple
-- explicit
-- thin abstractions
-- no speculative framework
-- no premature future-proofing
-- composition over framework
-
-If 100 lines solve it, do not write an 800-line framework.
-
-Do not introduce `AgentHost`, `RuntimeManager`, `WorkspaceManager`, `ProjectManager`, `MemoryManager`, `PluginPlatform`, `SessionRepository`, `EventFramework`, or similar until a real need proves them necessary.
-
-Target shape:
-
-```text
-GUI
-  ↓
-thin PID bridge
-  ↓
-Pi Coding Agent SDK
-```
-
-## How PID Talks to Pi
-
-- **Live agent**: one Electron utility process per open session, hosting Pi's own
-  `AgentSessionRuntime` — the layer the Pi terminal runs on (`src/main/pi/session-worker.ts`,
-  spawned by `src/main/pi/session-process.ts`). It reads the user's `~/.pi/agent`, so their
-  extensions, skills, models and auth apply unchanged. One session per process keeps
-  Pi's process-global state per session and contains a crashing extension.
-- **Protocol** (`src/shared/protocol.ts`): PID's own commands, events, dialogs and session state,
-  shaped from `AgentSession` and `AgentSessionEvent` so a field cannot drift from what the agent
-  returns. Pi's `modes/rpc` types are deliberately not used: that surface is second-class and
-  upstream has a replacement in development. `session-worker.ts` is the only file that touches
-  Pi's agent API; `test/protocol-boundary.test.ts` fails if anything else does.
-- **Discovery**: session lists (`SessionManager.list/listAll`), skills (`loadSkillsFromDir`),
-  and skill/extension enablement resolved by Pi's `DefaultPackageManager` so it matches `pi config`.
-  An extension's own configuration is the extension's to read and write, never PID's.
-- **PID ships no extension.** A session loads exactly what Pi resolves for its directory, which is
-  what the terminal loads too. PID must never bundle, vendor or fall back to one — that would make
-  it a Pi distribution, which GOALS lists as a non-goal.
-- **On/off switches** (`src/main/pi/toggles.ts`): the only writes PID makes under `~/.pi/agent` or
-  `<cwd>/.pi`, and they are Pi's own formats through Pi's own code paths. Skills and extensions go
-  through `SettingsManager` as the same `+pattern` / `-pattern` entries `pi config` writes (global
-  or `--local`, including the project-layer inherit state). An extension's own configuration files
-  are the extension's to write; PID touches no other key and no other file.
-  `~/.pi/agent/APPEND_SYSTEM.md` in place, Pi's own global append-system-prompt file, so the same
-  rules apply in the terminal. An empty box removes the file. PID keeps no copy and never writes
-  `SYSTEM.md` or a project's `.pi/APPEND_SYSTEM.md`.
-- **Renderer state**: the streaming assistant message is rebuilt from `message_update` deltas;
-  `message_end` is authoritative. Everything else is a projection of Pi events.
-- **Extension UI**: the worker implements Pi's `ExtensionUIContext` and forwards each served call as
-  a dialog request; the window answers and the extension's await resolves. Members PID does not
-  serve are stubs, not events nothing reads. `src/shared/extension-ui.ts` holds the classification.
-- **Extension presentation**: `setStatus` and `setWidget` from any extension reach the strip above
-  the composer — no allowlist, the same as the terminal. Pi defines a widget key as an identity for
-  replace-and-clear and nothing more, so PID reads no meaning into it.
-- **Desktop presentation is the extension's own code** (`src/main/pi/plugins.ts`,
-  `src/renderer/plugins/`): an extension that declares `"pid": { "ui": "./src/ui.tsx" }` ships a
-  second entry point beside the one Pi loads. PID bundles it on demand with esbuild, serves it at
-  `pid://app/plugin/<id>.js`, and calls its default export with a small registration API. It
-  composes PID's own primitives — the same relationship a Pi extension has with pi-tui's widgets.
-  There is no description language and no schema: a host that accepts only a description caps every
-  extension at what the host author thought of first.
-- **One origin, and that is not an implementation detail.** A `file:` document has an opaque origin
-  and Chromium refuses to import a module into one from anywhere else — the request never reaches a
-  handler. A second scheme does not help; the import is still cross-origin. So the window is served
-  from `pid://app` and a plugin from a path under it. Do not "simplify" this back to `loadFile`.
-- **A plugin cannot use a utility class.** The stylesheet is built from PID's own sources, so a
-  class no PID file uses does not exist by the time a plugin loads. Layout is therefore a primitive
-  like everything else (`Line`, `Stack`, `Inline`, `Spread`, `Say`). When a plugin needs a shape the
-  library lacks, add the primitive — a safelist would be the same mistake as the kind table.
-- **Primitives** (`src/renderer/ui/`): `Row` `Action` `IconButton` `Toggle` `Segmented` `Trigger`
-  `Badge` `Dot` `Num` `Eyebrow` `Say` `Line` `Stack` `Inline` `Spread` `Modal` `Popover`
-  `ContextMenu` `Floating` `Panel` `Divider` `Scroll`, plus the five-tone table every one of them
-  colours from. PID draws its own window with these, and hands the same set to plugins — a library
-  the host does not use itself is a guess. Nothing in here knows what a session or a tool call is;
-  that belongs in `components/`.
-- **PID names no extension, and no ecosystem of one.** Whatever a row means stays with whoever
-  published it. A hardcoded widget key, a check for one extension being installed, and a built-in
-  page for one ecosystem were three versions of the same mistake;
-  `test/protocol-boundary.test.ts` fails on any of them. It scans `src/`, not prose, so the docs
-  are on their own — an extension named in a document is a name that will end up in code.
-- **Quota is not PID's**: PID neither fetches plan quota nor shows it. Whoever computes quota for the terminal shows it there; there is no usage bar and no quota settings. Context stays visible where it always was, as the gauge in the composer toolbar, read off Pi's own messages.
-- **Fork**: Pi stamps a forked session with its parent. PID leaves that alone — the lineage is
-  Pi's, and the file does not even exist until the next turn appends to it.
-- **Concurrency**: Pi has no session-file lock. PID owns one worker per session file it opens and
-  never appends to a file another process is writing.
-
-PID runs the Pi version it pins, so a `pi` on the user's PATH is not required. Keep the pinned
-version equal to the installed one anyway when there is one: both read the same `~/.pi/agent`, and
-the Settings page reports the drift.
+**Quota is not PID's.** PID neither fetches plan quota nor shows it. Context stays visible as the
+gauge in the composer toolbar, read off Pi's own messages. (`GOALS.md`)
 
 ## Repository Layout
 
 ```text
-src/main/           Electron main: window, menu, IPC, settings, git, ecosystem discovery
-src/main/pi/        Pi bridge: session-worker (the only file that drives Pi), session-process,
-                    registry, sessions, search, session-read, ecosystem, compat/
-                    (upstream-gap shims; the only place Pi private layout is touched)
-src/preload/        typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
-src/renderer/       React UI: components/, pages/, state/, settings, completion, sigils
-src/renderer/ui/    presentation primitives; no session, no IPC, no domain type
-src/renderer/plugins/  loading an extension's desktop half and mounting what it registers
-src/shared/         types shared by all three processes
-scripts/            sandbox.sh: a PID that never draws, for agent testing
-test/               vitest unit tests (real-environment tests are opt-in via env vars)
-docs at the repository root: PROPOSAL, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README
+src/main/             Electron main: window, menu, IPC, settings, git, ecosystem discovery
+src/main/pi/          Pi bridge: session-worker, session-process, registry, sessions, search,
+                      session-read, ecosystem, compat/ (upstream-gap shims; the only place Pi
+                      private layout is touched)
+src/preload/          typed bridge exposed to the renderer (bridge-types.d.ts is the contract)
+src/renderer/         React UI: components/, pages/, state/, settings, completion, sigils
+src/renderer/ui/      presentation primitives; no session, no IPC, no domain type
+src/renderer/plugins/ loading an extension's desktop half and mounting what it registers
+src/shared/           types shared by all three processes
+scripts/              sandbox.sh — a PID that never draws, for testing
+test/                 vitest unit tests
+docs at the root: PROPOSAL, PHILOSOPHY, GOALS, DESIGN, FEATURES, GITFLOW, AGENTS, README
 ```
 
-### Proving a change in the running app without a human
+## Implementation Style
 
-A terminal usually has neither macOS Assistive Access (to click or type) nor Screen Recording (to
-screenshot), so an agent cannot drive the window the way a person does. It does not have to: the
-window paints whether or not it is shown, and `PID_DUMP_DIR` writes what it painted.
+simple · explicit · thin abstractions · composition over framework · no speculative framework ·
+no premature future-proofing.
 
-Use `scripts/sandbox.sh`. It is the only supported way to run PID from an agent session, because
-it is the only one that cannot disturb whoever is at the machine:
+If 100 lines solve it, do not write an 800-line framework. Do not introduce `AgentHost`,
+`RuntimeManager`, `WorkspaceManager`, `ProjectManager`, `MemoryManager`, `PluginPlatform`,
+`SessionRepository`, `EventFramework` or similar until a real need proves them necessary.
+
+```text
+GUI  →  thin PID bridge  →  Pi Coding Agent SDK
+```
+
+## Testing
+
+`pnpm test` is the unit suite, and it is cheap — run it constantly. Some tests need a real
+environment and are opt-in through env vars.
+
+For anything a person can see, do not ask them to look; run it yourself:
 
 ```bash
-scripts/sandbox.sh --detach --open /abs/path --prompt "say ok"
+scripts/sandbox.sh --detach --open /abs/path --prompt "say hi"
 sleep 30
-cat /tmp/pid-sandbox/dump/window.txt    # rendered window text
-cat /tmp/pid-sandbox/dump/window.json   # renderer probe: active folder, sessions, the `@` list
-cat /tmp/pid-sandbox/dump/menu.txt      # accelerators Electron actually installed
-scripts/sandbox.sh --kill               # or --clean, which also deletes the root and its sessions
+cat /tmp/pid-sandbox/dump/window.txt     # what the window rendered
+cat /tmp/pid-sandbox/dump/window.json    # renderer probe: active folder, sessions, the @ list
+cat /tmp/pid-sandbox/dump/menu.txt       # accelerators Electron really installed
+scripts/sandbox.sh --clean               # stop, and remove the sandbox and its sessions
 ```
 
-Why a script and not `pnpm dev` with an env var:
-
-- **No window, and no Dock icon either.** `PID_HEADLESS` only hides the window, and only from
-  `app.whenReady()` — by then the stock Electron has already shown a Dock icon and taken focus off
-  whatever the person was doing. That is the popup, even with no window on screen. The sandbox
-  builds a copy of Electron.app with `LSUIElement` set, which macOS settles before the process can
-  draw anything. Verify with `osascript -e 'tell application "System Events" to get background only
-  of (first process whose unix id is <pid>)'` — it must be `true`.
-- **Its own userData** (`--user-data-dir`), so `pid-state.json`, `pid-settings.json` and the
-  restored session list belong to the sandbox. Nothing writes to `~/Library/Application Support/pid`.
-- **Its own bundle id** (`dev.pid.headless`). A packaged `PID.app`, or any build signed with the
-  stock Electron identifier, shares an identity with the installed app — launching one can bring up
-  the other, with the user's real sessions in it. The sandbox cannot be confused with it.
-- **Its own cwd** by default (`/tmp/pid-sandbox/folder`), so test sessions land in a folder named
-  after the sandbox. `--clean` removes that folder's sessions too. `--open` a real project and the
-  sessions are real, in that project's own session folder — which is the point of passing it, and
-  something to clean up afterwards the way any other test artifact is.
-
-Flags: `--open DIR`, `--prompt TEXT`, `--follow-up TEXT`, `--page PAGE`, `--session FILE`,
-`--search TEXT`, `--detach`, `--no-build`, `--kill`, `--clean`. `PID_SANDBOX_ROOT` moves the root.
-
-Two things it does not isolate, both on purpose: Pi's agent directory, because a turn needs the
-user's models and auth, and the notification permission, because that belongs to the app identity
-and not to the run. A sandbox notification is a real one — on a machine that has never allowed
-this build, macOS refuses it, and the refusal shows up in `window.txt` as the toast it is.
-
-The renderer probe is `window.__pidDump`, filled only when `PID_DUMP_DIR` is set (see the probe
-effect in `src/renderer/App.tsx`), and dumped repeatedly at ~5s through ~60s because a resumed
-session keeps replaying while the window settles. Add fields to the probe rather than guessing from
-`window.txt`.
-
-The raw hooks the script drives are `PID_OPEN_FOLDER`, `PID_OPEN_SESSION`, `PID_PROMPT`,
-`PID_FOLLOWUP`, `PID_DRAFT`, `PID_ATTACH` (colon-separated absolute paths), `PID_SEARCH`,
-`PID_PAGE`, `PID_SCREENSHOT`, `PID_SCREENSHOT_DELAY`, `PID_DUMP_DIR`, `PID_HEADLESS`. Reach for
-them directly only when the sandbox is in the way — and then still never against real user state.
+The sandbox has no window and no Dock icon, its own userData, its own bundle id and its own cwd, so
+it cannot disturb whoever is at the machine. Never launch a GUI any other way from an agent
+session — `pnpm dev` and a packaged `PID.app` both take focus, and a packaged build shares its
+bundle id with an installed one, so launching it can bring up the user's real window instead.
+`scripts/sandbox.sh --help` lists the rest of the hooks it drives. Add fields to the renderer probe
+rather than guessing at `window.txt`; the probe is the effect in `src/renderer/App.tsx`.
 
 ## Verification
 
@@ -258,40 +124,38 @@ Before every commit that touches code:
 ```text
 pnpm typecheck
 pnpm lint
-pnpm test        (when tests exist)
+pnpm test
 pnpm build
-runtime smoke test where the change is user-visible
 ```
 
-Also verify, when relevant:
+Then prove it in the running app where the change is user-visible, and check the invariants that
+apply to what you touched:
 
-- a session created or modified by PID still opens in the Pi CLI
+- a session PID created or modified still opens in the Pi CLI
 - PID did not mutate Pi global state it should not touch
 - `$session` injection is explicit and inspectable
 - fork lineage matches Pi's own session tree
 - worktree data comes from Git, not a PID model
 - the search index can be deleted and rebuilt
-- steer and follow-up behave exactly as in upstream Pi
+- steer and follow-up behave exactly as upstream Pi
 - model selection only reads and selects existing Pi model config
 
 ## Incremental Development
 
 ```text
-implement
-  → verify
-  → inspect
-  → commit
-  → next
+implement → verify → inspect → commit → next
 ```
 
-Small commits. See GITFLOW.md.
+Small commits, one concern each. `GITFLOW.md` has the branch and message discipline.
 
-## Document Responsibilities
+## Documents
 
-- `PROPOSAL.md` — why PID exists
-- `PHILOSOPHY.md` — principles that decide the calls where several implementations are reasonable
-- `GOALS.md` — goals and non-goals
-- `FEATURES.md` — tagged capability inventory
-- `DESIGN.md` — architectural boundary with Pi, state ownership, runtime lifecycle, interaction model
-- `GITFLOW.md` — commit and branch discipline
-- `AGENTS.md` — this file: how to develop PID
+| File | Answers |
+| --- | --- |
+| `PROPOSAL.md` | why PID exists |
+| `PHILOSOPHY.md` | principles that decide the calls where several implementations are reasonable |
+| `GOALS.md` | goals and non-goals |
+| `FEATURES.md` | tagged capability inventory |
+| `DESIGN.md` | architectural boundary with Pi, state ownership, runtime lifecycle, interaction model |
+| `GITFLOW.md` | commit and branch discipline |
+| `AGENTS.md` | this file: how to develop PID |
