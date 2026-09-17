@@ -1,6 +1,7 @@
 import type { PiDialogRequest, PiDialogResponse } from "@shared/protocol";
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/ui";
+import { Markdown } from "./Markdown";
 
 export type DialogRequest = Extract<PiDialogRequest, { method: "select" | "confirm" | "input" | "editor" }>;
 
@@ -41,7 +42,11 @@ export function ExtensionDialog({
     <Modal label={req.title} z={50}>
       <div className="px-4 pt-3 pb-2 text-sm font-medium">{req.title}</div>
       {req.method === "confirm" && (
-        <div className="px-4 pb-3 text-sm text-ink-2 whitespace-pre-wrap">{req.message}</div>
+        // Markdown, because a confirmation can carry a card: an extension with a tree or a table to
+        // show writes a fenced block and it arrives as one, instead of as one proportional
+        // paragraph with the columns collapsed. Prose is unaffected — `.prose p` is
+        // `white-space: pre-wrap`, so line breaks in a plain message survive either way.
+        <Markdown source={req.message} className="px-4 pb-3 text-ink-2" />
       )}
       {req.method === "select" && (
         <div className="pb-2 max-h-80 overflow-y-auto">

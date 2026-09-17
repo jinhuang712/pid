@@ -384,6 +384,10 @@ Examples:
 * status → the extension strip above the composer `[Presentation]`
 * widget → the same strip, any key, no allowlist `[Presentation]`
 
+A confirmation's message is rendered as markdown, so an extension with a card to show — a tree, a
+table of files — writes it as a fenced block and the dialog hands it over as one. Prose is
+unaffected: a plain message keeps its own line breaks. `[Presentation]`
+
 A widget key is an identity, the way Pi defines it: PID replaces and clears by key, and reads no
 meaning into the key or the lines.
 
