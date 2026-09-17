@@ -12,6 +12,8 @@ vi.mock("../src/renderer/components/Markdown", () => ({
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage as AM } from "@earendil-works/pi-ai";
 import { Timeline } from "../src/renderer/components/Timeline";
+import type { ToolSpec } from "../src/renderer/plugins/api";
+import { PluginTools } from "../src/renderer/plugins/tools";
 import type { ConversationState, Marker } from "../src/renderer/state/conversation";
 import { emptyUsage } from "../src/renderer/turn-summary";
 
@@ -71,6 +73,25 @@ const settled = (final: AM): Marker => ({
 
 const markup = (s: ConversationState) => renderToStaticMarkup(<Timeline state={s} />);
 
+/**
+ * A plugin's row that is a question rather than a step: the extension that stops a call to ask
+ * something says so with `asks`, and the fold leaves it in sight. Its own `render` is what the row
+ * shows — here a button, which is the affordance folding would have taken away.
+ */
+const asking = (over: Partial<ToolSpec> = {}): ToolSpec => ({
+  names: ["land"],
+  asks: () => true,
+  render: ({ Frame }) => <Frame verb="Waiting" detail="for your answer" body="none" />,
+  ...over,
+});
+
+const withPlugin = (s: ConversationState, tools: ToolSpec[]) =>
+  renderToStaticMarkup(
+    <PluginTools plugins={[{ id: "gate", tools }]} proc={undefined} run={async () => undefined}>
+      <Timeline state={s} />
+    </PluginTools>,
+  );
+
 describe("steps fold only when the turn settles", () => {
   it("keeps them open while the model works", () => {
     const out = markup(tail([call("3")]));
@@ -105,5 +126,41 @@ describe("steps fold only when the turn settles", () => {
     expect(out).toContain("Worked for 1m 53s · 3 tool calls");
     expect(out).toContain("done");
     expect(out).not.toContain('"command"'); // the tool argument JSON only shows on an open card
+  });
+
+  /**
+   * A question the turn is waiting on is not a step: the row that asks it has the buttons that
+   * answer it, so folding the turn would fold the answer away. The extension that owns the row is
+   * the only side that knows, which is what `asks` is for.
+   */
+  describe("a turn waiting on a plugin's question", () => {
+    const asked = () => {
+      const asking2 = assistant([call("9", "land")]);
+      const final = assistant([text("waiting for you")]);
+      return state({
+        messages: [user("land it"), asking2, final],
+        toolRuns: { "9": { toolCallId: "9", toolName: "land", args: {}, status: "done" } },
+        markers: [settled(final)],
+      });
+    };
+
+    it("stays open, so the row with the buttons is still drawn", () => {
+      const out = withPlugin(asked(), [asking()]);
+      expect(out).toContain("Worked for 1m 53s");
+      expect(out).toContain("Waiting");
+      expect(out).toContain("for your answer");
+    });
+
+    it("folds as usual once the answer is in — nothing is asking any more", () => {
+      const out = withPlugin(asked(), [asking({ asks: () => false })]);
+      expect(out).toContain("Worked for 1m 53s");
+      expect(out).not.toContain("Waiting");
+    });
+
+    it("folds as usual when the plugin never asks through its row", () => {
+      const out = withPlugin(asked(), [{ names: ["land"], render: asking().render }]);
+      expect(out).toContain("Worked for 1m 53s");
+      expect(out).not.toContain("Waiting");
+    });
   });
 });

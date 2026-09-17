@@ -309,7 +309,8 @@ const Assistant = memo(function Assistant({
             <Markdown key={key} source={c.text} live={live} className="text-[14px] leading-[1.7] text-ink" />
           );
         if (c.type === "toolCall") {
-          const render = byPlugin(c.name) ?? toolRenderers.resolve(c.name);
+          const claimed = byPlugin(c.name);
+          const render = claimed?.render ?? toolRenderers.resolve(c.name);
           const run = toolRuns[c.id];
           return (
             <ToolRendererBoundary key={key} call={c} run={run}>
@@ -395,7 +396,8 @@ function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?:
 
 /**
  * One exchange. While Pi is still working every step stays open so output can be read as it
- * arrives; once the turn settles the steps fold behind the step line and only the answer remains.
+ * arrives; once the turn settles the steps fold behind the step line and only the answer remains —
+ * unless one of those steps is a question the turn is waiting on, which folding would take away.
  */
 const TurnBlock = memo(function TurnBlock({
   turn,
@@ -408,11 +410,23 @@ const TurnBlock = memo(function TurnBlock({
   streaming?: AssistantMessage;
 }) {
   const { settings } = useSettings();
+  const byPlugin = usePluginTool();
   const { steps, answer, suspect } = useMemo(() => splitReply(turn.replies), [turn.replies]);
+  // A question the user still has to answer is not a step of the work: a folded turn would hide
+  // the row that asks it, and with it the only way to answer. The plugin that owns the row says so.
+  const asking = useMemo(
+    () =>
+      steps.some(({ m }) =>
+        m.role === "assistant"
+          ? m.content.some((c) => c.type === "toolCall" && byPlugin(c.name)?.asks?.(c) === true)
+          : false,
+      ),
+    [steps, byPlugin],
+  );
   // A suspect answer starts unfolded: what the user came for is in the steps, not the answer slot.
   const [open, setOpen] = useState(!settings.appearance.stepsCollapsed || suspect === true);
   const settled = turn.summary !== undefined;
-  const unfolded = !settled || open;
+  const unfolded = !settled || open || asking;
   const replies = settled ? steps : turn.replies;
   return (
     // data-turn anchors the jump buttons: the block's top is the prompt, its bottom the end of the reply

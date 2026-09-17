@@ -702,6 +702,12 @@ own rows put text there — `edit` says `+3 −1`. A call that went somewhere ma
 distinction is not decoration; it is that a built-in tool always goes to the same place, so it has
 nothing to mark.
 
+An extension that stops a call to ask the user something says so, and the host keeps the row it
+asks on in sight. `asks` answers per call from the extension's own published state, and while it is
+true the timeline does not fold that turn's steps: the buttons that answer the question live on that
+row, so folding it would take away the only way to answer. Nothing else is asked of the host — it
+never reads what the question is, and an extension that never asks leaves the member out.
+
 Not implemented, and not promised: a composer line, a modal, a toast, an unconstrained overlay.
 
 The exact registration signature may evolve. The architectural boundary should not.
