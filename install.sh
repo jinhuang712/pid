@@ -88,7 +88,14 @@ if [ "$mode" = "app" ]; then
   # `open` on a running app only brings it forward: the running instance keeps the old build and
   # its live sessions, which is the point — installing must never interrupt work in progress.
   # Say when the new build takes effect instead of restarting anything.
-  if pgrep -f "/Applications/PID.app/Contents/MacOS/PID" >/dev/null 2>&1; then
+  #
+  # Two traps live in this one line, and both end in `open` raising the window it meant to leave
+  # alone. `pgrep` does not report the app's own process on this machine (`pgrep -f
+  # /Applications/PID.app/...` and `pgrep -x PID` find nothing while it runs, only its helpers), and
+  # `grep -q` under `set -o pipefail` fails the whole pipeline: it exits at the match, `ps` takes
+  # SIGPIPE, and the `if` reads that as "not running". So: `ps` for the lookup, and a `grep` that
+  # reads to the end.
+  if ps -Ao comm= | grep -xF "/Applications/PID.app/Contents/MacOS/PID" >/dev/null; then
     warn "a PID is running — it keeps the old build until you quit and reopen it"
   else
     open /Applications/PID.app
