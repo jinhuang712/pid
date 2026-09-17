@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { app } from "electron";
 
@@ -9,14 +9,22 @@ export interface OpenSession {
   path: string;
 }
 
+/** Bumped when the shape changes; a reader keeps accepting anything it still understands. */
+export const STATE_VERSION = 1;
+
 export interface PidState {
+  version: number;
   recentFolders: string[];
-  /** Sessions that had a live process when PID last saved state; restored on launch. */
+  /** The sessions the user had open; reopened on launch, and dropped only when the user closes one. */
   openSessions: OpenSession[];
   activeSession?: string;
 }
 
 const file = () => join(app.getPath("userData"), "pid-state.json");
+/** Writes land here first: a file that is only ever renamed cannot be read half-written. */
+const staged = () => `${file()}.tmp`;
+/** Where an unreadable file is kept, so a broken write can still be looked at instead of erased. */
+const brokenFile = () => `${file()}.corrupt`;
 
 /**
  * The file is read once and then served from memory: the main process is the only writer,
@@ -42,6 +50,7 @@ function readState(): PidState {
   try {
     const raw = JSON.parse(readFileSync(file(), "utf8")) as Partial<PidState>;
     return {
+      version: STATE_VERSION,
       recentFolders: Array.isArray(raw.recentFolders)
         ? raw.recentFolders.filter((x) => typeof x === "string")
         : [],
@@ -53,7 +62,17 @@ function readState(): PidState {
       activeSession: typeof raw.activeSession === "string" ? raw.activeSession : undefined,
     };
   } catch {
-    return { recentFolders: [], openSessions: [] };
+    // Missing is ordinary; unreadable is not. Keep that file as `pid-state.json.corrupt` — it is the
+    // only copy of what was there, and a truncated write should not be silently replaced by an
+    // empty list.
+    if (existsSync(file())) {
+      try {
+        renameSync(file(), brokenFile());
+      } catch {
+        // nothing to do about it here; an empty list is the fallback either way
+      }
+    }
+    return { version: STATE_VERSION, recentFolders: [], openSessions: [] };
   }
 }
 
@@ -83,7 +102,8 @@ async function flushAsync() {
   written = json;
   try {
     await mkdir(app.getPath("userData"), { recursive: true });
-    await writeFile(file(), json);
+    await writeFile(staged(), json);
+    await rename(staged(), file());
   } catch {
     written = undefined; // retry on the next save
   }
@@ -100,7 +120,8 @@ export function flushState() {
   if (json === written) return;
   try {
     mkdirSync(app.getPath("userData"), { recursive: true });
-    writeFileSync(file(), json);
+    writeFileSync(staged(), json);
+    renameSync(staged(), file());
     written = json;
   } catch {
     // nothing left to do at quit
