@@ -549,11 +549,17 @@ function NotificationCheck() {
       {result && (
         <div className="px-3.5 py-3 flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <Badge tone={result.shown ? "ok" : "warn"}>
-              {result.shown ? "handed to the system" : result.reason}
+            <Badge tone={result.shown && result.confirmed ? "ok" : "warn"}>
+              {result.shown
+                ? result.confirmed
+                  ? "confirmed by the system"
+                  : "sent, not confirmed"
+                : result.reason}
             </Badge>
           </div>
-          <p className="text-xs text-ink-3">{EXPLAIN[result.shown ? "shown" : result.reason]}</p>
+          <p className="text-xs text-ink-3">
+            {EXPLAIN[result.shown ? (result.confirmed ? "confirmed" : "sent") : result.reason]}
+          </p>
           {!result.shown && result.reason === "refused" && (
             <div className="flex items-center gap-3">
               <p className="flex-1 min-w-0 text-xs text-danger">{result.error}</p>
@@ -567,8 +573,10 @@ function NotificationCheck() {
 }
 
 /** What the answer means, in the terms the user can act on. */
-const EXPLAIN: Record<"shown" | "off" | "focused" | "unsupported" | "refused", string> = {
-  shown: "Nothing appeared? macOS may still be holding it — check System Settings → Notifications → PID.",
+const EXPLAIN: Record<"confirmed" | "sent" | "off" | "focused" | "unsupported" | "refused", string> = {
+  confirmed:
+    "The system confirmed it. A quiet one is still possible — macOS hides a banner posted while PID is in front.",
+  sent: "The system took it without saying whether it appeared, which is as much as macOS reports for a quiet one.",
   off: "Turned off above, so nothing was sent.",
   focused: "Skipped: PID is in front, and “only when PID is not focused” is on.",
   unsupported: "This system does not do desktop notifications.",
