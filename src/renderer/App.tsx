@@ -63,7 +63,7 @@ function sessionTitle(proc: Proc, sessions: SessionSummary[]): string | undefine
  */
 function replyTail(messages: AgentMessage[]): string | undefined {
   const last = [...messages].reverse().find((m) => m.role === "assistant");
-  if (!last || last.role !== "assistant") return undefined;
+  if (last?.role !== "assistant") return undefined;
   const text = last.content
     .filter((c) => c.type === "text")
     .map((c) => c.text)
@@ -79,7 +79,7 @@ function replyTail(messages: AgentMessage[]): string | undefined {
  */
 function answered(messages: AgentMessage[]): boolean {
   const last = [...messages].reverse().find((m) => m.role === "assistant");
-  if (!last || last.role !== "assistant") return true;
+  if (last?.role !== "assistant") return true;
   return last.stopReason !== "aborted" && last.stopReason !== "error";
 }
 
@@ -475,7 +475,13 @@ export function App() {
     },
     openSession: (s) => void run(openSession(s)),
     fork: (s) =>
-      void run(ensureLive(s).then((k) => k && (dispatch({ type: "activate", key: k }), setForkKey(k)))),
+      void run(
+        ensureLive(s).then((k) => {
+          if (!k) return;
+          dispatch({ type: "activate", key: k });
+          setForkKey(k);
+        }),
+      ),
     copyReference: copySessionReference,
     rename: (s) => void run(ensureLive(s).then((k) => k && setRenameKey(k))),
     exportHtml: (s) =>
@@ -1202,7 +1208,7 @@ export function App() {
 
 function firstUserText(messages: ReturnType<typeof emptyConversation>["messages"]): string {
   const m = messages.find((x) => x.role === "user");
-  if (!m || m.role !== "user") return "New session";
+  if (m?.role !== "user") return "New session";
   const raw =
     typeof m.content === "string"
       ? m.content

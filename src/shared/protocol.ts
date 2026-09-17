@@ -158,12 +158,12 @@ export type PiCommand =
   | { type: "reload" }
   | { type: "set_session_name"; name: string };
 
-/** What each command answers with. `void` means the response carries no data. */
+/** What each command answers with. `undefined` means the response carries no data. */
 export interface PiCommandData {
-  prompt: void;
-  steer: void;
-  follow_up: void;
-  abort: void;
+  prompt: undefined;
+  steer: undefined;
+  follow_up: undefined;
+  abort: undefined;
   clear_queue: ReturnType<AgentSession["clearQueue"]>;
   new_session: { cancelled: boolean };
   get_state: PiSessionState;
@@ -173,7 +173,7 @@ export interface PiCommandData {
   get_available_models: {
     models: ReturnType<AgentSession["modelRuntime"]["getAvailableSnapshot"]>[number][];
   };
-  set_thinking_level: void;
+  set_thinking_level: undefined;
   get_available_thinking_levels: { levels: ReturnType<AgentSession["getAvailableThinkingLevels"]> };
   compact: Awaited<ReturnType<AgentSession["compact"]>>;
   export_html: { path: string };
@@ -182,12 +182,12 @@ export interface PiCommandData {
   get_fork_messages: { messages: ReturnType<AgentSession["getUserMessagesForForking"]> };
   get_last_assistant_text: { text: string | null };
   get_commands: { commands: PiSlashCommand[] };
-  reload: void;
-  set_session_name: void;
+  reload: undefined;
+  set_session_name: undefined;
 }
 
 export type PiCommandType = PiCommand["type"];
-export type ResponseDataOf<T extends PiCommandType> = PiCommandData[T] extends void
+export type ResponseDataOf<T extends PiCommandType> = PiCommandData[T] extends undefined
   ? undefined
   : PiCommandData[T];
 
