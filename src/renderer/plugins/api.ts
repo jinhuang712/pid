@@ -69,6 +69,15 @@ export interface ToolSpec {
    */
   names: string[];
   render: (draw: ToolDraw, ctx: PluginContext) => ReactNode;
+  /**
+   * True while this call's row is a question the user has to answer, rather than a step of the work.
+   *
+   * The timeline folds a settled turn's steps behind one "Worked for …" line. A question is not a
+   * step, and folding it would take away the only thing that answers it — so the turn stays open
+   * while any of its rows says yes here. Read per call, from the same published state `render`
+   * reads; a plugin with nothing to ask leaves it out.
+   */
+  asks?: (call: ToolCall, ctx: PluginContext) => boolean;
 }
 
 /**

@@ -125,10 +125,10 @@ describe("a bundled desktop half", () => {
 
   it("draws its tool row in the host's own frame, with a module it imported itself", () => {
     const resolve = pluginToolResolver([registered], {}, "/repo", async () => undefined);
-    const render = resolve("fixture_tool");
-    expect(render).toBeTypeOf("function");
+    const tool = resolve("fixture_tool");
+    expect(tool?.render).toBeTypeOf("function");
     const html = renderToStaticMarkup(
-      render?.({
+      tool?.render({
         call: call("fixture_tool", { q: "a question" }),
         run: { status: "done", result: { content: [], details: { provider: "exa" } } } as never,
       }) as never,
