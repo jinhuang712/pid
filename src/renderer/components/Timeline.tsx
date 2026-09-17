@@ -16,7 +16,7 @@ import { RenderTool, ToolRendererBoundary, toolRenderers } from "../contribution
 // the call is the registration. Idempotent, so a hot reload cannot stack duplicates.
 registerBuiltInToolRenderers();
 
-import { Chevron } from "@/ui";
+import { Chevron, Eyebrow, Panel } from "@/ui";
 import { CwdContext } from "../cwd-context";
 import { usePluginTool } from "../plugins/tools";
 import { useSettings } from "../settings";
@@ -80,12 +80,16 @@ function JumpButton({
   );
 }
 
-function userText(m: UserMessage): string {
+/**
+ * The text of a message whose content is a string or text blocks. A prompt arrives both ways, and
+ * so does a note an extension injected.
+ */
+function bodyText(m: { content: string | readonly { type: string; text?: string }[] }): string {
   return typeof m.content === "string"
     ? m.content
     : m.content
         .filter((c) => c.type === "text")
-        .map((c) => c.text)
+        .map((c) => c.text ?? "")
         .join("\n");
 }
 
@@ -209,7 +213,7 @@ function isLargePrompt(body: string): boolean {
 }
 
 function User({ m }: { m: UserMessage }) {
-  const raw = userText(m);
+  const raw = bodyText(m);
   const { body, attachments, references, skill, images } = useMemo(() => {
     const a = parseAttachments(raw);
     const r = parseReferences(a.body);
@@ -333,10 +337,58 @@ const Assistant = memo(function Assistant({
 const Reply = memo(function Reply({ m, toolRuns }: { m: AgentMessage; toolRuns: Record<string, ToolRun> }) {
   if (m.role === "assistant") return <Assistant m={m} live={false} toolRuns={toolRuns} />;
   if (m.role === "toolResult") return null; // shown inside the tool line
-  return (
-    <div className="px-6 py-1 text-[12.5px] text-ink-3">{String((m as { role: string }).role)} message</div>
-  );
+  const note = customOf(m);
+  if (note) return note.display ? <CustomNote note={note} /> : null;
+  // A kind PID has no shape for — a `!` execution, a branch or compaction summary — draws nothing.
+  // `compactionSummary message` is not a sentence a person can read, and a placeholder row is worse
+  // than the gap it fills. A summary that matters to the reader wants a shape of its own; what PID
+  // shows for compaction today is the boundary it saw happen.
+  return null;
 });
+
+/**
+ * A message an extension injected into the conversation. The agent reads it either way; `display`
+ * is Pi's own answer to whether a person does too.
+ *
+ * Declared here rather than imported: the coding agent adds this kind to its message union by
+ * declaration merging, and `test/protocol-boundary.test.ts` keeps that package out of the renderer.
+ * The transcript is JSON over IPC, so the shape is read rather than assumed.
+ */
+interface CustomNote {
+  customType: string;
+  content: string | readonly { type: string; text?: string }[];
+  display: boolean;
+}
+
+function customOf(m: AgentMessage): CustomNote | undefined {
+  const c = m as { role?: unknown; customType?: unknown; content?: unknown; display?: unknown };
+  if (c.role !== "custom" || typeof c.customType !== "string") return undefined;
+  return {
+    customType: c.customType,
+    content:
+      typeof c.content === "string" || Array.isArray(c.content) ? (c.content as CustomNote["content"]) : "",
+    // Pi writes the flag on every one of these; a note with no flag is one worth reading.
+    display: c.display !== false,
+  };
+}
+
+/**
+ * A note an extension put in the conversation, drawn as its own quiet block rather than as model
+ * prose: the words are not the model's, and the styling is what says so. Named, because who wrote
+ * it is the first thing a reader wants to know about a voice that is neither theirs nor the model's.
+ */
+function CustomNote({ note }: { note: CustomNote }) {
+  const text = bodyText(note);
+  if (!text.trim()) return null;
+  return (
+    <div className="timeline-item px-6 py-2 flex">
+      <Panel className="max-w-[78%] px-3.5 py-2.5 min-w-0">
+        <Eyebrow className="block mb-1">{note.customType}</Eyebrow>
+        <Markdown source={text} className="text-[13px] leading-[1.7] text-ink-2" />
+      </Panel>
+    </div>
+  );
+}
 
 function MarkerRow({ kind, text, live }: Pick<Marker, "kind" | "text"> & { live?: boolean }) {
   const failed = kind === "command-failed";
@@ -396,8 +448,10 @@ function Steps({ turn, open, onToggle }: { turn: Turn; open: boolean; onToggle?:
 
 /**
  * One exchange. While Pi is still working every step stays open so output can be read as it
- * arrives; once the turn settles the steps fold behind the step line and only the answer remains —
- * unless one of those steps is a question the turn is waiting on, which folding would take away.
+ * arrives; once the turn settles the steps fold behind the step line and only the answer remains.
+ *
+ * Two things are not steps and survive that fold: a question the turn is waiting on, whose row is
+ * where it gets answered, and a note an extension injected and Pi marked for a person to read.
  */
 const TurnBlock = memo(function TurnBlock({
   turn,
@@ -428,6 +482,17 @@ const TurnBlock = memo(function TurnBlock({
   const settled = turn.summary !== undefined;
   const unfolded = !settled || open || asking;
   const replies = settled ? steps : turn.replies;
+  // Notes an extension injected, in the order they arrived. Rendered through `replies` while the
+  // turn is open, so this list is only for the folded view — a note is not work, and the fold that
+  // hides the work must not hide the one thing an extension went out of its way to say.
+  const notes = useMemo(
+    () =>
+      turn.replies.flatMap(({ index, m }) => {
+        const note = customOf(m);
+        return note?.display ? [{ index, note }] : [];
+      }),
+    [turn.replies],
+  );
   return (
     // data-turn anchors the jump buttons: the block's top is the prompt, its bottom the end of the reply
     <div data-turn={turn.start}>
@@ -436,6 +501,7 @@ const TurnBlock = memo(function TurnBlock({
         <Steps turn={turn} open={open} onToggle={steps.length > 0 ? () => setOpen(!open) : undefined} />
       )}
       {unfolded && replies.map(({ index, m }) => <Reply key={index} m={m} toolRuns={toolRuns} />)}
+      {!unfolded && notes.map(({ index, note }) => <CustomNote key={index} note={note} />)}
       {settled && suspect && (
         <div className="px-6 py-2 text-[12.5px] flex items-center gap-2 text-warn">
           <span className="min-w-0 [overflow-wrap:anywhere]">
