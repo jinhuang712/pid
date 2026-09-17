@@ -9,6 +9,7 @@ import type {
   StartPiOptions,
 } from "@shared/protocol";
 import type { BrowserWindow } from "electron";
+import { logLine } from "../log";
 import { warmShellEnv } from "../shell-env";
 import { SessionProcess } from "./session-process";
 
@@ -52,6 +53,10 @@ export class PiRegistry {
     }
     const key = randomUUID();
     let early: PiEvent[] | undefined = [];
+    // What the log calls this session: the file it resumes, or the folder a new one lands in.
+    const whom = opts.sessionPath ?? opts.cwd;
+    /** Set once the runtime is up: before that, an exit is a start failure, not a session ending. */
+    let ready = false;
     await warmShellEnv(); // never probe the login shell synchronously on the IPC thread
     const proc = new SessionProcess({
       cwd: opts.cwd,
@@ -62,6 +67,10 @@ export class PiRegistry {
       },
       onExit: (code, stderr) => {
         this.procs.delete(key);
+        logLine(
+          ready ? "exit" : "start",
+          `${whom} ${code === null ? "stopped" : `exited (${code})`}${tail(stderr)}`,
+        );
         this.send("pi:exit", { key, code, signal: null, stderr } satisfies PiExitEnvelope);
       },
     });
@@ -69,6 +78,7 @@ export class PiRegistry {
     let state: PiSessionState;
     try {
       state = await withTimeout(proc.started, STARTUP_TIMEOUT_MS);
+      ready = true;
     } catch (err) {
       // A failed runtime build, an early crash, or a worker that never answered: leave nothing
       // running and surface why.
@@ -152,6 +162,13 @@ export class PiRegistry {
     const w = this.win();
     if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
   }
+}
+
+/** The one line of worker output worth keeping beside "it stopped": the rest is its own problem. */
+function tail(stderr: string): string {
+  const line = stderr.trim().split("\n").filter(Boolean).at(-1);
+  if (!line) return "";
+  return ` · ${line.length > 300 ? `${line.slice(0, 300)}…` : line}`;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
