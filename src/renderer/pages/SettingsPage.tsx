@@ -1,5 +1,6 @@
 import type { PiDiagnostics } from "@shared/diagnostics";
 import type { AppendSystemPrompt } from "@shared/ecosystem";
+import type { NotifyResult } from "@shared/notifications";
 import {
   ACCENTS,
   type Accent,
@@ -12,7 +13,7 @@ import {
 } from "@shared/settings";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Badge, Eyebrow, Panel, Segmented, Toggle } from "@/ui";
+import { Action, Badge, Eyebrow, Panel, Segmented, Toggle } from "@/ui";
 import { bridge } from "../bridge";
 import { useSettings } from "../settings";
 import { PageShell, PathLink } from "./PageShell";
@@ -354,32 +355,35 @@ export function SettingsPage({ initialSection, onClose }: { initialSection?: str
           )}
 
           {section === "notifications" && (
-            <Group title="Notify me about">
-              <Row label="Run completed">
-                <Toggle
-                  value={settings.notifications.runCompleted}
-                  onChange={(runCompleted) => update("notifications", { runCompleted })}
-                />
-              </Row>
-              <Row label="Input or approval required">
-                <Toggle
-                  value={settings.notifications.inputRequired}
-                  onChange={(inputRequired) => update("notifications", { inputRequired })}
-                />
-              </Row>
-              <Row label="Errors">
-                <Toggle
-                  value={settings.notifications.error}
-                  onChange={(error) => update("notifications", { error })}
-                />
-              </Row>
-              <Row label="Only when PID is not focused">
-                <Toggle
-                  value={settings.notifications.onlyWhenUnfocused}
-                  onChange={(onlyWhenUnfocused) => update("notifications", { onlyWhenUnfocused })}
-                />
-              </Row>
-            </Group>
+            <>
+              <Group title="Notify me about">
+                <Row label="Run completed">
+                  <Toggle
+                    value={settings.notifications.runCompleted}
+                    onChange={(runCompleted) => update("notifications", { runCompleted })}
+                  />
+                </Row>
+                <Row label="Input or approval required">
+                  <Toggle
+                    value={settings.notifications.inputRequired}
+                    onChange={(inputRequired) => update("notifications", { inputRequired })}
+                  />
+                </Row>
+                <Row label="Errors">
+                  <Toggle
+                    value={settings.notifications.error}
+                    onChange={(error) => update("notifications", { error })}
+                  />
+                </Row>
+                <Row label="Only when PID is not focused">
+                  <Toggle
+                    value={settings.notifications.onlyWhenUnfocused}
+                    onChange={(onlyWhenUnfocused) => update("notifications", { onlyWhenUnfocused })}
+                  />
+                </Row>
+              </Group>
+              <NotificationCheck />
+            </>
           )}
 
           {section === "prompt" && <AppendSystemPromptEditor />}
@@ -514,6 +518,62 @@ function AppendSystemPromptEditor() {
     </Group>
   );
 }
+
+/**
+ * Proves the notification path rather than describing it.
+ *
+ * The system decides whether a banner appears, and when it says no it says so silently — nothing
+ * shows and nothing explains why, which reads as a feature that never ran. So the answer is
+ * printed here, including the one that has a fix attached.
+ */
+function NotificationCheck() {
+  const [result, setResult] = useState<NotifyResult>();
+  const [busy, setBusy] = useState(false);
+  const send = () => {
+    setBusy(true);
+    void bridge.notify
+      .show({ kind: "runCompleted", title: "PID", body: "This is what a finished run looks like." })
+      .then(setResult)
+      .finally(() => setBusy(false));
+  };
+  return (
+    <Group
+      title="Does it reach the desktop?"
+      note="Sent the way a finished run is, so the settings above apply to it too."
+    >
+      <Row label="Test notification">
+        <Action tone="accent" disabled={busy} onClick={send}>
+          {busy ? "sending…" : "Send one now"}
+        </Action>
+      </Row>
+      {result && (
+        <div className="px-3.5 py-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Badge tone={result.shown ? "ok" : "warn"}>
+              {result.shown ? "handed to the system" : result.reason}
+            </Badge>
+          </div>
+          <p className="text-xs text-ink-3">{EXPLAIN[result.shown ? "shown" : result.reason]}</p>
+          {!result.shown && result.reason === "refused" && (
+            <div className="flex items-center gap-3">
+              <p className="flex-1 min-w-0 text-xs text-danger">{result.error}</p>
+              <Action onClick={() => void bridge.notify.openSettings()}>Open System Settings</Action>
+            </div>
+          )}
+        </div>
+      )}
+    </Group>
+  );
+}
+
+/** What the answer means, in the terms the user can act on. */
+const EXPLAIN: Record<"shown" | "off" | "focused" | "unsupported" | "refused", string> = {
+  shown: "Nothing appeared? macOS may still be holding it — check System Settings → Notifications → PID.",
+  off: "Turned off above, so nothing was sent.",
+  focused: "Skipped: PID is in front, and “only when PID is not focused” is on.",
+  unsupported: "This system does not do desktop notifications.",
+  refused: "The system has notifications turned off for PID. Allow them here, then send another.",
+};
 
 function Group({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (

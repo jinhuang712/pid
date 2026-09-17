@@ -4,6 +4,7 @@ import type { AppendSystemPrompt, ExtensionView, PiHome, ResourceToggle, SkillVi
 import type { PathInfo } from "@shared/files";
 import type { RepoInfo } from "@shared/git";
 import type { ListOptions } from "@shared/glob";
+import type { NotifyRequest, NotifyResult } from "@shared/notifications";
 import type {
   PiCommand,
   PiDialogResponse,
@@ -54,6 +55,17 @@ export interface Bridge {
   openSessions: {
     get(): Promise<{ openSessions: { cwd: string; path: string }[]; activeSession?: string }>;
     save(open: { cwd: string; path: string }[], active?: string): Promise<void>;
+  };
+  notify: {
+    /**
+     * Ask the shell for a desktop notification. The shell owns the answer: it has the settings,
+     * the window's focus, and the platform's permission, and none of the three are the window's.
+     */
+    show(req: NotifyRequest): Promise<NotifyResult>;
+    /** System Settings → Notifications, for a refusal the user has to undo. */
+    openSettings(): Promise<void>;
+    /** A notification was clicked. The window brings the session that raised it to the front. */
+    onOpen(listener: (req: NotifyRequest) => void): () => void;
   };
   files: {
     /** Relative posix paths under `cwd`; `opts` carries the Settings that narrow the list. */

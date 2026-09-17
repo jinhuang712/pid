@@ -1,4 +1,6 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { RepoInfo } from "@shared/git";
+import type { NotificationKind, NotifyRequest, NotifyResult } from "@shared/notifications";
 import { stripPromptBlocks } from "@shared/prompt-blocks";
 import type { PiDialogRequest, PiDialogResponse, PiEvent } from "@shared/protocol";
 import type { SessionSummary } from "@shared/sessions";
@@ -34,10 +36,52 @@ import {
 import { useSettings } from "./settings";
 import { HOME_SCOPE, useComposer } from "./state/composer";
 import { emptyConversation } from "./state/conversation";
-import { emptyWorkspace, fromMessages, procForSession, workspaceReducer } from "./state/workspace";
+import { emptyWorkspace, fromMessages, type Proc, procForSession, workspaceReducer } from "./state/workspace";
 import { surfaces } from "./surfaces";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
+/** Pi's auto-generated names (pi-session-<timestamp>_<uuid>) are not titles; the first message is. */
+const human = (n?: string) => (n && !/^pi-session-\d{4}-/.test(n) ? n : undefined);
+
+/** What a session is called: Pi's name for it when it gave one, else what was first asked of it. */
+function sessionTitle(proc: Proc, sessions: SessionSummary[]): string | undefined {
+  const summary = proc.piState.sessionFile
+    ? sessions.find((s) => s.path === proc.piState.sessionFile)
+    : undefined;
+  return (
+    human(proc.piState.sessionName) ??
+    human(summary?.name) ??
+    summary?.firstMessage ??
+    (proc.conv.messages.length ? firstUserText(proc.conv.messages) : undefined)
+  );
+}
+
+/**
+ * The tail of what Pi answered, as a banner's worth of it: cap the length, because a notification
+ * is a reason to come back to the session, not a second place to read it.
+ */
+function replyTail(messages: AgentMessage[]): string | undefined {
+  const last = [...messages].reverse().find((m) => m.role === "assistant");
+  if (!last || last.role !== "assistant") return undefined;
+  const text = last.content
+    .filter((c) => c.type === "text")
+    .map((c) => c.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? (text.length > 180 ? `${text.slice(0, 180)}…` : text) : undefined;
+}
+
+/**
+ * Whether the run that just ended produced an answer. A stop or a provider error ends one too, and
+ * each of those has its own banner — announcing "finished" over it would be the wrong word twice.
+ */
+function answered(messages: AgentMessage[]): boolean {
+  const last = [...messages].reverse().find((m) => m.role === "assistant");
+  if (!last || last.role !== "assistant") return true;
+  return last.stopReason !== "aborted" && last.stopReason !== "error";
+}
 
 export function App() {
   const { settings } = useSettings();
@@ -147,25 +191,40 @@ export function App() {
   }, [openSessionsKey]);
 
   // ---- notifications ----
-  const notify = useCallback(
-    (kind: "runCompleted" | "inputRequired" | "error", title: string, body?: string) => {
-      const n = settings.notifications;
-      if (!n[kind]) return;
-      if (n.onlyWhenUnfocused && document.hasFocus()) return;
-      try {
-        new Notification(title, { body, silent: true });
-      } catch {
-        // notifications unavailable
-      }
-    },
-    [settings.notifications],
-  );
   /** One toast per distinct message: several pi processes starting in one folder repeat the same notice. */
   const toast = useCallback((message: string, type: Toast["type"] = "info") => {
     const id = Date.now() + Math.random();
     setToasts((t) => (t.some((x) => x.message === message) ? t : [...t, { id, message, type }]));
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
   }, []);
+  /**
+   * The shell decides whether the OS hears this: the two settings, the window's focus and the
+   * platform's permission are all its business and none of them are the window's. The one answer
+   * that matters back here is a refusal — it is a switch in System Settings, and a notification
+   * that quietly does not arrive looks exactly like a feature that never ran.
+   */
+  const refusals = useRef(new Set<string>());
+  /**
+   * The shell's last answer, for the headless probe: a desktop notification is the one thing this
+   * window does that leaves no trace in its own DOM, so a smoke run has nothing else to read.
+   */
+  const lastNotify = useRef<{ kind: NotificationKind; result: NotifyResult } | undefined>(undefined);
+  const notify = useCallback(
+    (req: NotifyRequest) => {
+      void bridge.notify.show(req).then((result) => {
+        lastNotify.current = { kind: req.kind, result };
+        if (result.shown || result.reason !== "refused") return;
+        const why = result.error ?? "the system turned it down";
+        if (refusals.current.has(why)) return;
+        refusals.current.add(why);
+        toast(
+          `Desktop notifications are blocked (${why}). Allow PID in System Settings → Notifications.`,
+          "error",
+        );
+      });
+    },
+    [toast],
+  );
 
   // ---- pi processes ----
   /** Placeholders the user closed before their process came up; the process is stopped on arrival. */
@@ -220,6 +279,25 @@ export function App() {
     [toast],
   );
 
+  /**
+   * A clicked banner comes back as the session that raised it, with the window brought forward:
+   * a notification that only says something happened is half the job. Subscribed once and read
+   * through a ref, like the pi events — `ws` changes on every streamed token.
+   */
+  const onNotifyOpen = useRef<(req: NotifyRequest) => void>(() => {});
+  useEffect(() => bridge.notify.onOpen((req) => onNotifyOpen.current(req)), []);
+  onNotifyOpen.current = (req) => {
+    setPage("sessions");
+    const live = req.sessionFile ? procForSession(ws, req.sessionFile) : undefined;
+    if (live) return dispatch({ type: "activate", key: live.key });
+    // Gone since the banner was posted: a closed session still opens from its file, and a session
+    // with no file left is at least the folder it was in. A banner about nothing — the settings
+    // page's test — has nowhere to go, and the window coming forward is the whole of it.
+    if (!req.cwd) return;
+    const cwd = req.cwd;
+    void selectFolder(cwd).then(() => start(cwd, req.sessionFile));
+  };
+
   const refreshState = useCallback(async (k: string) => {
     try {
       dispatch({ type: "state", key: k, piState: await bridge.pi.command(k, { type: "get_state" }) });
@@ -254,11 +332,23 @@ export function App() {
   };
 
   const handleEvent = (k: string, cwd: string, event: PiEvent) => {
+    const proc = ws.procs[k];
+    /** What a notification is about, so a click on its banner can find the session again. */
+    const about = {
+      subtitle: base(cwd),
+      sessionFile: proc?.piState.sessionFile,
+      cwd,
+    };
     if (event.type === "dialog") {
       if (event.method === "notify") return toast(event.message, event.notifyType);
       dispatch({ type: "event", key: k, event });
       if (["select", "confirm", "input", "editor"].includes(event.method)) {
-        notify("inputRequired", (event as DialogRequest).title, "An extension is waiting for your input");
+        notify({
+          kind: "inputRequired",
+          title: proc ? (sessionTitle(proc, allSessions) ?? base(cwd)) : base(cwd),
+          body: "An extension is waiting for your input",
+          ...about,
+        });
       }
       return;
     }
@@ -278,14 +368,27 @@ export function App() {
     if (event.type === "agent_end") {
       void refreshState(k);
       void loadFolder(cwd);
-      if (!event.willRetry) notify("runCompleted", "Pi finished", base(cwd));
+      // The run's own messages, not the window's copy: this event carries the turn that just
+      // ended, and the two can differ by one render while deltas are still landing.
+      if (!event.willRetry && answered(event.messages))
+        notify({
+          kind: "runCompleted",
+          title: proc ? (sessionTitle(proc, allSessions) ?? base(cwd)) : base(cwd),
+          body: replyTail(event.messages) ?? "Finished",
+          ...about,
+        });
     }
     if (
       event.type === "message_end" &&
       event.message.role === "assistant" &&
       event.message.stopReason === "error"
     ) {
-      notify("error", "Pi error", event.message.errorMessage);
+      notify({
+        kind: "error",
+        title: proc ? (sessionTitle(proc, allSessions) ?? base(cwd)) : base(cwd),
+        body: event.message.errorMessage,
+        ...about,
+      });
     }
   };
 
@@ -673,6 +776,7 @@ export function App() {
       sessionKey: liveKey,
       activeKey: ws.activeKey,
       procs: Object.values(ws.procs).map((p) => ({ key: p.key, cwd: p.cwd, pending: p.pending === true })),
+      notified: lastNotify.current,
       items: [] as string[],
     };
     probe.current = report;
@@ -809,17 +913,7 @@ export function App() {
   }, []);
 
   // ---- derived header ----
-  const activeSummary = active?.piState.sessionFile
-    ? allSessions.find((s) => s.path === active.piState.sessionFile)
-    : undefined;
-  // Pi's auto-generated names (pi-session-<timestamp>_<uuid>) are not titles; the first message is.
-  const human = (n?: string) => (n && !/^pi-session-\d{4}-/.test(n) ? n : undefined);
-  const title = active
-    ? human(active.piState.sessionName) ||
-      human(activeSummary?.name) ||
-      activeSummary?.firstMessage ||
-      (active.conv.messages.length ? firstUserText(active.conv.messages) : undefined)
-    : undefined;
+  const title = active ? sessionTitle(active, allSessions) : undefined;
   const branch = active
     ? (repos[active.cwd]?.worktrees.find((w) => w.path === active.cwd)?.branch ?? repos[active.cwd]?.branch)
     : undefined;
