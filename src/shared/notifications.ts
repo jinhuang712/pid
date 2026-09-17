@@ -26,7 +26,12 @@ export interface NotifyRequest {
 
 /** `refused` is the one the user has to act on: the system has this app turned off. */
 export type NotifyResult =
-  | { shown: true }
+  /**
+   * `confirmed` is the platform's own word for it. macOS says nothing at all when a banner was
+   * posted while the app is frontmost, or when it simply stayed quiet, and calling that a success
+   * would be the window guessing at a screen it cannot see.
+   */
+  | { shown: true; confirmed: boolean }
   | { shown: false; reason: "off" | "focused" | "unsupported" | "refused"; error?: string };
 
 /**

@@ -18,7 +18,7 @@ import { loadSettings } from "./settings";
 const live = new Map<string, Notification>();
 
 /** How long to wait for a platform that answers `show()` with neither an error nor a confirmation. */
-const REFUSAL_TIMEOUT = 1500;
+const ANSWER_TIMEOUT = 1500;
 
 export async function showNotification(
   req: NotifyRequest,
@@ -52,18 +52,31 @@ export async function showNotification(
     opts.onOpen(req);
   });
 
-  // macOS answers a refusal here and nowhere else: `show()` returns void whether the banner
-  // appeared or the system turned it down, so the error event is the whole report.
-  const refusal = new Promise<string | undefined>((resolve) => {
-    n.once("failed", (_e, error) => resolve(error));
-    n.once("show", () => resolve(undefined));
-    setTimeout(() => resolve(undefined), REFUSAL_TIMEOUT);
+  // macOS answers here and nowhere else: `show()` returns void whether the banner appeared or the
+  // system turned it down, so these two events are the whole report.
+  let settle: (answer: Answer) => void = () => {};
+  const answer = new Promise<Answer>((resolve) => {
+    settle = resolve;
+  });
+  const timer = setTimeout(() => settle({ kind: "silent" }), ANSWER_TIMEOUT);
+  n.once("failed", (_e, error) => {
+    clearTimeout(timer);
+    settle({ kind: "refused", error });
+  });
+  n.once("show", () => {
+    clearTimeout(timer);
+    settle({ kind: "shown" });
   });
 
   n.show();
-  const error = await refusal;
-  return error ? { shown: false, reason: "refused", error } : { shown: true };
+  const a = await answer;
+  return a.kind === "refused"
+    ? { shown: false, reason: "refused", error: a.error }
+    : { shown: true, confirmed: a.kind === "shown" };
 }
+
+/** What the platform said about a notification it accepted. */
+type Answer = { kind: "shown" } | { kind: "refused"; error: string } | { kind: "silent" };
 
 /**
  * System Settings → Notifications, which is where a refusal is undone. The pane exists on macOS
