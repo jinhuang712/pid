@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Quick start for PID.
 #   ./install.sh            install deps if needed, then launch the dev build (hot reload)
-#   ./install.sh --app      build a packaged PID.app, copy it to /Applications, and open it
+#   ./install.sh --app      build a packaged PID.app, sign it, copy it to /Applications, and open it
 #   ./install.sh --check    only verify prerequisites
+#
+# Notifications only work from the packaged app. `pnpm dev` runs the stock Electron binary, whose
+# shared "Electron" signature macOS refuses, so it can never post a banner — `./install.sh --app`
+# is the way to see one.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -10,7 +14,7 @@ mode="dev"
 case "${1:-}" in
   --app) mode="app" ;;
   --check) mode="check" ;;
-  -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
   "") ;;
   *) echo "unknown option: $1" >&2; exit 2 ;;
 esac
@@ -62,6 +66,21 @@ if [ "$mode" = "app" ]; then
   pnpm dist
   app=release/mac-arm64/PID.app
   [ -d "$app" ] || fail "build produced no $app"
+
+  # electron-builder skips signing when the keychain holds no identity, and an unsigned macOS app
+  # keeps the signature Electron shipped with — identifier "Electron", the same one every Electron
+  # app on the machine has. macOS keys notification permission on that identity and refuses it, so
+  # no notification is ever delivered and the app never appears under System Settings →
+  # Notifications. An ad-hoc signature carrying the app's own identifier is enough for it to get
+  # its own entry; a real certificate replaces both.
+  app_id=$(node -p 'require("fs").readFileSync("electron-builder.yml","utf8").match(/^appId:\\s*(\\S+)/m)[1]')
+  if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
+    ok "signed with a Developer ID identity"
+  else
+    codesign --force --deep --sign - --identifier "$app_id" "$app" || fail "could not sign $app"
+    ok "ad-hoc signed as $app_id (no Developer ID in the keychain)"
+  fi
+
   rm -rf /Applications/PID.app
   cp -R "$app" /Applications/PID.app
   ok "installed /Applications/PID.app"
