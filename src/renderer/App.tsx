@@ -1202,7 +1202,6 @@ export function App() {
                   onRemove={removeQueued}
                 />
                 <StatusLine statuses={active.statuses} />
-                <PluginSlots plugins={plugins} where="strip" proc={active} run={runCommand} />
                 <Composer
                   blocked={
                     active.pending
@@ -1258,6 +1257,7 @@ export function App() {
                     )
                   }
                 />
+                <PluginSlots plugins={plugins} where="strip" proc={active} run={runCommand} />
               </>
             ) : (
               <Home

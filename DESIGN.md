@@ -682,7 +682,7 @@ slot nobody has looked at, so the list grows when an extension needs one, not be
 ```text
 page     a navigation entry and the page behind it   api.page({ label, note, search, render })
 header   the session title bar's second line          api.header({ render })
-strip    the line above the composer                  api.strip({ render })
+strip    the line under the composer                  api.strip({ render })
 tool     a tool call in the transcript, by name       api.tool({ names, render })
 ```
 

@@ -7,7 +7,7 @@ import type { ToolRun } from "../state/conversation";
  * What a plugin registers, and what it is handed when it draws.
  *
  * Every mount point is somewhere PID already puts something of its own — the navigation list, the
- * session title bar, the line above the composer, a tool call in the transcript. None of them was
+ * session title bar, the line under the composer, a tool call in the transcript. None of them was
  * invented for plugins, which is the check that keeps the list honest: a slot nothing occupies is a
  * slot nobody has looked at.
  */
