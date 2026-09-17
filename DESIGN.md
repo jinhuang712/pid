@@ -337,6 +337,17 @@ Rendered using Tool Cards.
 
 Displayed inline or through specialized viewers.
 
+## Messages an Extension Injected
+
+Drawn, not named. Pi hands the timeline message kinds beyond the model's own — a note an extension
+put in the conversation, a bash execution, a branch or compaction summary — and a row reading
+`custom message` tells a reader nothing about any of them. A kind PID has a shape for is drawn as
+that shape; the rest draw nothing, because a gap is more honest than a placeholder.
+
+An extension's note carries its own `display` flag, which is Pi's answer to whether a person reads
+it: hidden when false, drawn with the extension's name when true. A note is not a step of the work,
+so the fold of a finished turn leaves it where it stands.
+
 ## Compaction
 
 Shown as an explicit timeline boundary.
