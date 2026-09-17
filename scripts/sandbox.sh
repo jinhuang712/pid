@@ -18,6 +18,8 @@
 #
 #   scripts/sandbox.sh --prompt "say ok"          launch, foreground, print the dump on exit
 #   scripts/sandbox.sh --detach --open /tmp/x     launch, come back straight away
+#   scripts/sandbox.sh --no-open                  launch with whatever PID had open last time
+#                                                 (no dev hook), which is how a restart is tested
 #   scripts/sandbox.sh --kill                     stop this sandbox's processes
 #   scripts/sandbox.sh --clean                    stop, then delete the sandbox root
 #
@@ -35,6 +37,7 @@ detach=0
 build=1
 mode=run
 open_dir=""
+no_open=0
 page=""
 prompt_text=""
 follow_up=""
@@ -61,6 +64,7 @@ kill_sandbox() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --open) open_dir="${2:?--open needs a directory}"; shift 2 ;;
+    --no-open) no_open=1; shift ;;
     --page) page="${2:?--page needs a value}"; shift 2 ;;
     --prompt) prompt_text="${2:?--prompt needs text}"; shift 2 ;;
     --follow-up) follow_up="${2:?--follow-up needs text}"; shift 2 ;;
@@ -151,11 +155,17 @@ else
   bin="$REPO/node_modules/.bin/electron"
 fi
 
-[ -z "$open_dir" ] && open_dir="$ROOT/folder"
-mkdir -p "$open_dir"
+# `--no-open` leaves PID_OPEN_FOLDER unset on purpose: the window then opens what its own state file
+# lists, which is the only way to test a restart from outside. Nothing else changes.
+if [ "$no_open" = 1 ]; then
+  open_dir=""
+else
+  [ -z "$open_dir" ] && open_dir="$ROOT/folder"
+  mkdir -p "$open_dir"
+fi
 # Remembered so --clean can take this run's session folder out of the real session list, wherever
 # `--open` pointed.
-printf '%s' "$open_dir" > "$ROOT/open-dir"
+[ -n "$open_dir" ] && printf '%s' "$open_dir" > "$ROOT/open-dir"
 
 rm -rf "$ROOT/dump"; mkdir -p "$ROOT/dump"
 
@@ -163,7 +173,7 @@ rm -rf "$ROOT/dump"; mkdir -p "$ROOT/dump"
 # only when the probe is on, which is what tells App.tsx to publish it.
 export PID_HEADLESS=1
 export PID_DUMP_DIR="$ROOT/dump"
-export PID_OPEN_FOLDER="$open_dir"
+[ "$no_open" = 0 ] && export PID_OPEN_FOLDER="$open_dir"
 [ -n "$page" ] && export PID_PAGE="$page"
 [ -n "$prompt_text" ] && export PID_PROMPT="$prompt_text"
 [ -n "$follow_up" ] && export PID_FOLLOWUP="$follow_up"
@@ -175,9 +185,11 @@ args=(--user-data-dir="$ROOT/userdata")
 
 echo "sandbox: root    $ROOT"
 echo "sandbox: dump    $ROOT/dump"
-echo "sandbox: cwd     $open_dir"
+echo "sandbox: cwd     ${open_dir:-<from pid-state>}"
 echo "sandbox: state   $ROOT/userdata"
-echo "sandbox: pi sessions  $(sessions_dir_for "$open_dir")"
+if [ -n "$open_dir" ]; then
+  echo "sandbox: pi sessions  $(sessions_dir_for "$open_dir")"
+fi
 echo "sandbox: logs    $ROOT/app.log"
 
 if [ "$detach" = 1 ]; then
