@@ -73,7 +73,7 @@ if [ "$mode" = "app" ]; then
   # no notification is ever delivered and the app never appears under System Settings →
   # Notifications. An ad-hoc signature carrying the app's own identifier is enough for it to get
   # its own entry; a real certificate replaces both.
-  app_id=$(node -p 'require("fs").readFileSync("electron-builder.yml","utf8").match(/^appId:\\s*(\\S+)/m)[1]')
+  app_id=$(node -p 'require("fs").readFileSync("electron-builder.yml","utf8").match(/^appId:\s*(\S+)/m)[1]')
   if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
     ok "signed with a Developer ID identity"
   else
