@@ -1,70 +1,50 @@
 import { readFile } from "node:fs/promises";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import {
+  buildContextEntries,
+  parseSessionEntries,
+  type SessionEntry,
+  sessionEntryToContextMessages,
+} from "@earendil-works/pi-coding-agent";
 import type { SessionMessage } from "@shared/sessions";
 
 /**
- * Read-only view of a Pi session file's active branch.
- * Parses the JSONL directly; never writes. The file remains the source of truth.
+ * Read-only view of a Pi session file's active branch. Parses the JSONL directly; never writes.
+ * The file remains the source of truth.
+ *
+ * Pi's own reader walks the tree, and it is the one to ask. The branch is the leaf's ancestry, and
+ * a compaction stands in for everything before it. PID filtered the raw entries itself, which
+ * showed messages the session had already summarized away and hid what Pi's context carries — a
+ * compaction summary, an extension's custom message — so the preview disagreed with `get_messages`
+ * a moment later, once the process reported its own messages.
  */
-type Entry = {
-  type: string;
-  id?: string;
-  parentId?: string | null;
-  message?: { role: string; content: unknown };
-};
 
-/** Entries on the branch Pi would resume: leaf → root, returned root-first. */
-async function readBranch(path: string): Promise<Entry[]> {
-  const raw = await readFile(path, "utf8");
-  const byId = new Map<string, Entry>();
-  let leaf: Entry | undefined;
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
-    let e: Entry;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue; // torn trailing line
-    }
-    if (e.type === "session" || !e.id) continue;
-    byId.set(e.id, e);
-    leaf = e; // last appended entry is the leaf
+/** The active branch as full agent messages — what `get_messages` would return once pi is up. */
+export async function readSessionBranch(path: string): Promise<AgentMessage[]> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (e) {
+    // a session pi has not written yet has no file; the timeline just starts empty
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw e;
   }
-  const branch: Entry[] = [];
-  for (let cur = leaf; cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) branch.push(cur);
-  branch.reverse();
-  return branch;
+  // The header line names the session; everything after it is the tree.
+  const entries = parseSessionEntries(raw).filter((e): e is SessionEntry => e.type !== "session");
+  return buildContextEntries(entries).flatMap((entry) => sessionEntryToContextMessages(entry));
 }
 
 /**
- * The active branch as full agent messages — what `get_messages` would return once pi is up.
- * Lets the timeline show a resumed session before its process has started.
+ * User/assistant text only, for explicit $session references and search. The same branch as
+ * `readSessionBranch`, minus what a person did not type or read: a compaction's summary and an
+ * extension's custom message have a role of their own and none of their own text to report here.
  */
-export async function readSessionBranch(path: string): Promise<AgentMessage[]> {
-  const out: AgentMessage[] = [];
-  let branch: Entry[];
-  try {
-    branch = await readBranch(path);
-  } catch (e) {
-    // a session pi has not written yet has no file; the timeline just starts empty
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return out;
-    throw e;
-  }
-  for (const e of branch) {
-    if (e.type === "message" && e.message) out.push(e.message as AgentMessage);
-  }
-  return out;
-}
-
-/** User/assistant text only, for explicit $session references and search. */
 export async function readSessionMessages(path: string): Promise<SessionMessage[]> {
   const out: SessionMessage[] = [];
-  for (const e of await readBranch(path)) {
-    if (e.type !== "message" || !e.message) continue;
-    const { role, content } = e.message as { role: string; content: unknown };
-    if (role !== "user" && role !== "assistant") continue;
-    const text = textOf(content);
-    if (text.trim()) out.push({ role, text });
+  for (const m of await readSessionBranch(path)) {
+    if (m.role !== "user" && m.role !== "assistant") continue;
+    const text = textOf(m.content);
+    if (text.trim()) out.push({ role: m.role, text });
   }
   return out;
 }

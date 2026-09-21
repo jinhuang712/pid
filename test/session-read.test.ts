@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readSessionMessages } from "../src/main/pi/session-read";
+import { readSessionBranch, readSessionMessages } from "../src/main/pi/session-read";
 
 const line = (o: unknown) => JSON.stringify(o);
 
@@ -31,5 +31,35 @@ describe("readSessionMessages", () => {
       { role: "assistant", text: "A1" },
       { role: "assistant", text: "A2" },
     ]);
+  });
+
+  /**
+   * A compacted session is shorter than its file: the summary stands in for what came before, and
+   * the preview has to say what the session says, or the timeline changes under the user a moment
+   * after it appears.
+   */
+  it("previews what the session's context holds, not what it summarized away", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pid-"));
+    const file = join(dir, "c.jsonl");
+    writeFileSync(
+      file,
+      [
+        line({ type: "session", version: 3, id: "x", timestamp: "t", cwd: "/r" }),
+        line({ type: "message", id: "a", parentId: null, message: { role: "user", content: [{ type: "text", text: "old question" }] } }),
+        line({ type: "message", id: "b", parentId: "a", message: { role: "assistant", content: [{ type: "text", text: "old answer" }] } }),
+        line({ type: "compaction", id: "c", parentId: "b", summary: "they discussed the cache", tokensBefore: 100, firstKeptEntryId: "d", timestamp: "t" }),
+        line({ type: "message", id: "d", parentId: "c", message: { role: "user", content: [{ type: "text", text: "new question" }] } }),
+        "",
+      ].join("\n"),
+    );
+
+    // The summary, then the one message the compaction kept.
+    const branch = await readSessionBranch(file);
+    expect(branch).toHaveLength(2);
+    expect(JSON.stringify(branch)).toContain("they discussed the cache");
+    expect(JSON.stringify(branch)).not.toContain("old answer");
+
+    // The text view has no role to report a summary under, so it carries what a person typed.
+    expect((await readSessionMessages(file)).map((m) => m.text)).toEqual(["new question"]);
   });
 });
