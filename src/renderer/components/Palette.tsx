@@ -1,6 +1,6 @@
 import type { FolderSuggestion, SearchHit, SessionSummary } from "@shared/sessions";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Keys, Modal } from "@/ui";
+import { Keys, Modal, useActiveInView } from "@/ui";
 import { bridge } from "../bridge";
 
 const base = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
@@ -126,6 +126,10 @@ export function Palette({
     { title: "", kind: "ask" },
   ];
 
+  // Arrow keys move the highlight; the row they land on has to come into view.
+  const results = useRef<HTMLDivElement>(null);
+  useActiveInView(results, cursor, items.length);
+
   return (
     <Modal label="Search" align="top" width={680} maxHeight="64vh" onClose={onClose}>
       <div className="flex items-center gap-3 px-4 h-12">
@@ -161,7 +165,7 @@ export function Palette({
         />
         {busy && <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
       </div>
-      <div className="overflow-y-auto pb-1 border-t border-line">
+      <div className="overflow-y-auto pb-1 border-t border-line" ref={results}>
         {items.length === 0 && (
           <div className="px-4 py-3 text-[12.5px] text-ink-3">{failed ?? "Nothing matches."}</div>
         )}
@@ -174,6 +178,7 @@ export function Palette({
               {rows.map(([it, i]) => (
                 <Row
                   key={i}
+                  data-index={i}
                   active={i === cursor}
                   onHover={() => setCursor(i)}
                   onClick={(alt) => pick(it, alt)}

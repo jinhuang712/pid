@@ -1,6 +1,6 @@
 import type { Model } from "@earendil-works/pi-ai";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Dot, Num, Popover, Row, Trigger } from "@/ui";
+import { Dot, Num, Popover, Row, Trigger, useActiveInView } from "@/ui";
 import { fuzzyFilter } from "../fuzzy";
 
 // biome-ignore lint/suspicious/noExplicitAny: Pi models are Model<any> on the wire
@@ -46,6 +46,10 @@ export function ModelPicker({
     setOpen(false);
   };
 
+  // The keyboard moves the highlight; the row it lands on has to come into view.
+  const box = useRef<HTMLDivElement>(null);
+  useActiveInView(box, cursor, filtered.length);
+
   return (
     <div className="relative">
       <Trigger
@@ -75,7 +79,7 @@ export function ModelPicker({
           placeholder="Search models…"
           className="m-2 h-7 px-2 rounded-md bg-paper-3 outline-none text-ink placeholder:text-ink-3 text-xs"
         />
-        <div className="overflow-y-auto pb-1">
+        <div className="overflow-y-auto pb-1" ref={box}>
           {groups.length === 0 && <div className="px-3 py-2 text-xs text-ink-3">No models</div>}
           {groups.map(([provider, ms]) => (
             <div key={provider}>
@@ -86,6 +90,7 @@ export function ModelPicker({
                 return (
                   <Row
                     key={`${m.provider}/${m.id}`}
+                    data-index={idx}
                     active={idx === cursor}
                     hover={false}
                     className="text-xs"

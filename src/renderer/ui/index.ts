@@ -9,6 +9,7 @@
  * put something in the window, so the list is deliberately short and the names deliberately plain.
  */
 
+export { useActiveInView } from "./active";
 export { ContextMenu, type MenuItem } from "./ContextMenu";
 export { Action, IconButton, Row, Segmented, Toggle, Trigger } from "./Controls";
 export { Chevron, Disclosure } from "./Disclosure";
