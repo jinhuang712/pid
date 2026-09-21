@@ -90,7 +90,9 @@ export function expandLinks(text: string, links: LinkRef[]): { text: string; use
     const re = new RegExp(`${escapeRe(l.display)}(?=\\s|$)`, "g");
     if (!re.test(out)) continue;
     used.push(l);
-    out = out.replace(re, l.href);
+    // A function, not a replacement string: a URL may carry "$&", "$$" or "$'", which a string
+    // replacement would expand instead of inserting.
+    out = out.replace(re, () => l.href);
   }
   return { text: out, used };
 }

@@ -29,6 +29,15 @@ describe("collapseLinks", () => {
     expect(r.added.map((l) => l.href)).toEqual([lark, "https://a.dev/x"]);
   });
 
+  /** A URL may carry "$&" or "$$", which `String.replace` would expand from a replacement string. */
+  it("puts a URL back byte for byte, whatever it contains", () => {
+    const odd = "https://example.com/s?q=$&r=$$";
+    const folded = collapseLinks(`see ${odd} ok`, [], {});
+
+    expect(folded.added[0]?.href).toBe(odd);
+    expect(expandLinks(folded.text, folded.added).text).toBe(`see ${odd} ok`);
+  });
+
   it("does not report a link that is already known, and leaves an ambiguous one raw", () => {
     const known = [{ display: "🔗a.dev/x", href: "https://a.dev/x" }];
     const same = collapseLinks("https://a.dev/x ", known);
