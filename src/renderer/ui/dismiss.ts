@@ -15,7 +15,11 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, onClose: () => vo
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // The surface is what Escape is for, so it takes the key: the window listens too, and an
+      // unclaimed Escape there drops the user out of the session behind the popover.
+      e.preventDefault();
+      onClose();
     };
     document.addEventListener("mousedown", down);
     document.addEventListener("keydown", key);
