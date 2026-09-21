@@ -303,8 +303,12 @@ export function App() {
       dispatch({ type: "state", key: k, piState: await bridge.pi.command(k, { type: "get_state" }) });
     } catch (e) {
       // Fired off events (`agent_end`, `session_info_changed`) that can land right as the process
-      // exits; the exit banner already explains that, so only surface other failures.
-      if (!String(e).includes("unknown pi process")) setStatus(String(e));
+      // exits; the exit banner already explains that, so only surface other failures. A worker
+      // that is gone says one of these two in place of an answer.
+      const said = String(e);
+      const gone =
+        said.includes("unknown session worker") || said.includes("the session worker is not running");
+      if (!gone) setStatus(said);
     }
   }, []);
 
