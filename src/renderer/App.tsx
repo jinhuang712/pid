@@ -970,7 +970,9 @@ export function App() {
 
   // Every page beyond PID's own was registered by a plugin, and is here only while one is. PID
   // knows none of their names.
-  const plugins = usePlugins(folder);
+  // Plugins belong to the session in front of the user, not to the folder the sidebar highlights:
+  // activating a session from another folder has to bring that folder's extensions with it.
+  const plugins = usePlugins(activeDir);
   const pages = useMemo(() => surfaces(plugins), [plugins]);
   // A plugin's affordances run as the user would type them: one command, one prompt, in the
   // session it is drawing for. It never writes a session file.
