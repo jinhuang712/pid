@@ -126,7 +126,7 @@ export class PiRegistry {
   /** The live worker that already owns this session file, if any. */
   private liveFor(sessionPath: string): { key: string; proc: SessionProcess } | undefined {
     for (const [key, proc] of this.procs) {
-      if (proc.sessionPath === sessionPath && !proc.exited) return { key, proc };
+      if (proc.owns(sessionPath) && !proc.exited) return { key, proc };
     }
     return undefined;
   }

@@ -22,11 +22,17 @@ vi.mock("../src/main/pi/session-process", () => ({
     busy = false;
     started: Promise<unknown>;
     private gone = false;
+    /** What Pi would report: the file resumed, or the one it creates for a fresh session. */
+    private ownFile: string;
     constructor(opts: { cwd: string; sessionPath?: string }) {
       this.cwd = opts.cwd;
       this.sessionPath = opts.sessionPath;
-      this.started = Promise.resolve({ sessionFile: opts.sessionPath });
+      this.ownFile = opts.sessionPath ?? "/s/created.jsonl";
+      this.started = Promise.resolve({ sessionFile: this.ownFile });
       h.made.push(this as unknown as (typeof h.made)[number]);
+    }
+    owns(file: string) {
+      return this.sessionPath === file || this.ownFile === file;
     }
     kill() {
       this.gone = true;
@@ -54,6 +60,16 @@ describe("session workers", () => {
     expect(h.made).toHaveLength(1);
     expect(again.key).toBe(first.key);
     expect(again.state).toEqual({ sessionFile: "/tmp/s.jsonl" });
+  });
+
+  it("hands back the worker that created the session's own file", async () => {
+    const pi = registry();
+    // ⌘T, then ⌘R: the window restores the file Pi created, which the worker never had a path for.
+    const fresh = await pi.start({ cwd: "/tmp/p" });
+    const restored = await pi.start({ cwd: "/tmp/p", sessionPath: "/s/created.jsonl" });
+
+    expect(h.made).toHaveLength(1);
+    expect(restored.key).toBe(fresh.key);
   });
 
   it("keeps one worker per file, not one per folder", async () => {

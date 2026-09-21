@@ -38,8 +38,10 @@ const DISPOSE_GRACE_MS = 1500;
  */
 export class SessionProcess {
   readonly cwd: string;
-  /** The Pi session file this worker owns, when it resumes one. Two workers must never share it. */
-  readonly sessionPath?: string;
+  /** The file this worker was asked to resume, when it was resumed by path. */
+  private readonly sessionPath?: string;
+  /** The file Pi is writing: the one resumed, or the one it created for a fresh session. */
+  private ownFile?: string;
   /** Resolves once the process is gone, however it went. This is what a quit waits on. */
   readonly done: Promise<void>;
   private doneResolve!: () => void;
@@ -119,6 +121,7 @@ export class SessionProcess {
   private onMessage(msg: WorkerToMain) {
     switch (msg.kind) {
       case "started":
+        this.ownFile = msg.state.sessionFile;
         for (const d of msg.diagnostics) this.collectStderr(`${d}\n`);
         this.startResolve(msg.state);
         return;
@@ -178,6 +181,17 @@ export class SessionProcess {
       }
       this.post({ kind: "command", id, command });
     });
+  }
+
+  /**
+   * Does this worker own that session file?
+   *
+   * A session given a path is known before it starts; one Pi created the file for is only known
+   * once it has reported `started`, so both are asked. Missing the second is how a reload forked a
+   * second writer onto a file this worker was already appending to.
+   */
+  owns(file: string): boolean {
+    return this.sessionPath === file || this.ownFile === file;
   }
 
   respondUI(response: PiDialogResponse) {
