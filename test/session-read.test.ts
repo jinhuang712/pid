@@ -69,4 +69,24 @@ describe("readSessionMessages", () => {
       "new question",
     ]);
   });
+
+  /**
+   * A hand-edited file can name a loop. The walk has to end anyway: it runs in the search worker,
+   * where "never returns" is a wedged ⌘K rather than an error anyone sees.
+   */
+  it("ends when a parent chain loops back on itself", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pid-"));
+    const file = join(dir, "loop.jsonl");
+    writeFileSync(
+      file,
+      [
+        line({ type: "session", version: 3, id: "x", timestamp: "t", cwd: "/r" }),
+        line({ type: "message", id: "a", parentId: "b", message: { role: "user", content: [{ type: "text", text: "first" }] } }),
+        line({ type: "message", id: "b", parentId: "a", message: { role: "assistant", content: [{ type: "text", text: "second" }] } }),
+        "",
+      ].join("\n"),
+    );
+
+    expect((await readSessionTranscript(file)).map((m) => m.text)).toEqual(["first", "second"]);
+  });
 });

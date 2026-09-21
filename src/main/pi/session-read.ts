@@ -52,9 +52,13 @@ export async function readSessionTranscript(path: string): Promise<SessionMessag
   if (!entries) return [];
   const byId = new Map(entries.filter((e) => e.id).map((e) => [e.id, e] as const));
   const branch: SessionEntry[] = [];
-  // The last entry appended is the leaf; a parent is the entry it names.
-  for (let cur = entries.at(-1); cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) {
+  // The last entry appended is the leaf; a parent is the entry it names. A file whose chain loops
+  // back on itself — hand-edited, or written by something that went wrong — must not walk forever:
+  // a branch is never longer than the file it came from.
+  let cur = entries.at(-1);
+  while (cur && branch.length < entries.length) {
     branch.push(cur);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
   return textOfEntries(branch.reverse());
 }
