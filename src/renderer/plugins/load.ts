@@ -48,21 +48,29 @@ function register(id: string): { api: PluginApi; out: Registered } {
   return { api, out };
 }
 
+/** Counts loads, so each one asks for a URL the document has not already got a module for. */
+let loads = 0;
+
 /**
  * Load every plugin for a folder.
  *
  * One plugin failing is one plugin failing: its error is recorded against its id and the rest load.
  * A plugin that registers nothing is kept too, so the Extensions page can say it loaded and drew
  * nothing rather than leaving the author guessing.
+ *
+ * Each load carries a token in the URL. A dynamic import is cached for the life of the document,
+ * so without it a folder switch re-imported the same address and drew the previous folder's
+ * bundle, and an edit to a desktop half only appeared after a window reload.
  */
 export async function loadPlugins(cwd: string | undefined): Promise<Registered[]> {
   installRuntime();
   const ids = await bridge.plugins.list(cwd, { ui: Object.keys(ui), react: Object.keys(react) });
+  const stamp = ++loads;
   const out: Registered[] = [];
   for (const id of ids) {
     const { api, out: reg } = register(id);
     try {
-      const mod = (await import(/* @vite-ignore */ `pid://app/plugin/${id}.js`)) as {
+      const mod = (await import(/* @vite-ignore */ `pid://app/plugin/${id}.js?load=${stamp}`)) as {
         default?: PluginModule;
       };
       if (typeof mod.default !== "function") throw new Error("no default export function");
