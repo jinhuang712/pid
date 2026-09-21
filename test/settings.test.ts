@@ -23,7 +23,8 @@ describe("withDefaults", () => {
     const s = withDefaults({
       appearance: { interfaceScale: 12, fontSize: 2, sidebarWidth: 9000, messageFontSize: Number.NaN },
     });
-    expect(s.appearance.interfaceScale).toBe(1.6);
+    expect(s.appearance.interfaceScale).toBe(1.5);
+    expect(withDefaults({ appearance: { interfaceScale: 0.2 } }).appearance.interfaceScale).toBe(0.9);
     expect(s.appearance.fontSize).toBe(11);
     expect(s.appearance.sidebarWidth).toBe(460);
     expect(s.appearance.messageFontSize).toBe(DEFAULT_SETTINGS.appearance.messageFontSize);

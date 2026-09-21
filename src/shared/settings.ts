@@ -105,7 +105,9 @@ export const DEFAULT_SETTINGS: PidSettings = {
 
 /** Bounds the UI enforces anyway. A hand-edited file must not be able to make the window unusable. */
 const NUMERIC: Record<string, [min: number, max: number]> = {
-  "appearance.interfaceScale": [0.8, 1.6],
+  // The stops are what ⌘+ and ⌘- move between, so a stored value outside them is a value the menu
+  // cannot step away from in the direction asked for: at 1.6 "bigger" went to 1.5.
+  "appearance.interfaceScale": [UI_SCALES[0], UI_SCALES[UI_SCALES.length - 1]],
   "appearance.fontSize": [11, 18],
   "appearance.messageFontSize": [12, 20],
   "appearance.codeFontSize": [10, 18],
