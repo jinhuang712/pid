@@ -79,7 +79,12 @@ if [ "$mode" = kill ]; then kill_sandbox; echo "sandbox stopped"; exit 0; fi
 if [ "$mode" = clean ]; then
   kill_sandbox
   # Only what this sandbox made: the scratch cwd's own session folder, never the agent's sessions.
-  [ -d "$ROOT/folder" ] && rm -rf "$(sessions_dir_for "$ROOT/folder")"
+  # `--open` may point outside the sandbox, so the folder is read back from the record the launch
+  # wrote, and a root from before that record falls back to its own scratch folder.
+  recorded="$(cat "$ROOT/open-dir" 2>/dev/null || true)"
+  for d in "$recorded" "$ROOT/folder"; do
+    [ -n "$d" ] && rm -rf "$(sessions_dir_for "$d")"
+  done
   rm -rf "$ROOT"
   echo "sandbox removed: $ROOT"
   exit 0
@@ -148,6 +153,9 @@ fi
 
 [ -z "$open_dir" ] && open_dir="$ROOT/folder"
 mkdir -p "$open_dir"
+# Remembered so --clean can take this run's session folder out of the real session list, wherever
+# `--open` pointed.
+printf '%s' "$open_dir" > "$ROOT/open-dir"
 
 rm -rf "$ROOT/dump"; mkdir -p "$ROOT/dump"
 
