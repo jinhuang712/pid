@@ -19,8 +19,11 @@ export function ForkDialog({
   onClose: () => void;
 }) {
   const [points, setPoints] = useState<ForkPoint[]>();
+  const [failed, setFailed] = useState<string>();
   useEffect(() => {
-    void load().then(setPoints);
+    // A session whose Pi has exited cannot list its messages; the dialog says so rather than
+    // sitting on "Loading…" forever.
+    void load().then(setPoints, (e: unknown) => setFailed(e instanceof Error ? e.message : String(e)));
   }, [load]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -34,7 +37,8 @@ export function ForkDialog({
         <div className="text-xs text-ink-3 truncate">{title}</div>
       </div>
       <div className="overflow-y-auto py-1">
-        {points === undefined && <div className="px-4 py-2 text-xs text-ink-3">Loading…</div>}
+        {failed && <div className="px-4 py-2 text-xs text-danger">{failed}</div>}
+        {!failed && points === undefined && <div className="px-4 py-2 text-xs text-ink-3">Loading…</div>}
         {points?.length === 0 && <div className="px-4 py-2 text-xs text-ink-3">No user messages yet.</div>}
         {points?.map((p, i) => (
           <button
