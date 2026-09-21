@@ -1,7 +1,7 @@
 import type { PathInfo } from "@shared/files";
 import { SKILL_BLOCK_RE } from "@shared/prompt-blocks";
 import { LINK_DISPLAY_RE, URL_RE } from "./links";
-import { DISPLAY_RE, TOKEN_RE as SESSION_TOKEN_RE } from "./session-reference";
+import { DISPLAY_PATTERN, TOKEN_RE as SESSION_TOKEN_RE } from "./session-reference";
 
 /**
  * Attachments are absolute paths, nothing more. PID never copies bytes: the path goes into the
@@ -102,7 +102,7 @@ export type Segment =
  * "$token ("label")" that older sent messages carry.
  */
 const TOKEN_RE = new RegExp(
-  `(${URL_RE.source})|(?<=^|\\s)(${LINK_DISPLAY_RE.source})|(?<=^|\\s)(${DISPLAY_RE.source.replace("([0-9a-f]{8})", "[0-9a-f]{8}")}|${SESSION_TOKEN_RE.source}|\\$[0-9a-f]{8}\\b)(?: \\("((?:[^"\\\\]|\\\\.)*)"\\))?|(?<=^|\\s)(@\\/?[^\\s@]*[^\\s@.,;:!?])`,
+  `(${URL_RE.source})|(?<=^|\\s)(${LINK_DISPLAY_RE.source})|(?<=^|\\s)(${DISPLAY_PATTERN}|${SESSION_TOKEN_RE.source}|\\$[0-9a-f]{8}\\b)(?: \\("((?:[^"\\\\]|\\\\.)*)"\\))?|(?<=^|\\s)(@\\/?[^\\s@]*[^\\s@.,;:!?])`,
   "g",
 );
 

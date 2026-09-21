@@ -59,11 +59,16 @@ describe("attachments block", () => {
 
 describe("segment", () => {
   it("finds urls, session references, and @mentions", () => {
-    const s = segment("see https://example.com/a?b=1, then $debug the cache(01a08eb2) and @src/x.ts.");
+    const s = segment("see https://example.com/a?b=1, then $debug the cache(c4bcb638) and @src/x.ts.");
     expect(s.map((x) => x.type)).toEqual(["text", "url", "text", "session", "text", "mention", "text"]);
     expect(s[1]).toMatchObject({ href: "https://example.com/a?b=1" });
-    expect(s[3]).toMatchObject({ token: "$debug the cache(01a08eb2)" });
+    expect(s[3]).toMatchObject({ token: "$debug the cache(c4bcb638)" });
     expect(s[5]).toMatchObject({ path: "src/x.ts" });
+  });
+  /** A custom session id is not hex, and the display form carries it like any other. */
+  it("recognises a display form whose short id is not hex", () => {
+    const s = segment("see $release notes(notes.v2) now");
+    expect(s[1]).toMatchObject({ type: "session", token: "$release notes(notes.v2)" });
   });
   it("still recognises a raw full token and the legacy short form with a label", () => {
     const full = segment("see $01a08eb2-74e4-7740-a79d-92ddc4bcb638 now");

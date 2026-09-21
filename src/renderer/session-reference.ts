@@ -13,12 +13,33 @@ export interface SessionReference {
 /**
  * Two spellings of one reference. The token is what gets copied and what the prompt block carries:
  * "$" + the full session id, unambiguous across machines. The display form is what sits in the
- * draft and the sent text: "$" + the session's label + "(" + the first 8 id chars + ")", readable
- * at a glance. A pasted token is rewritten to its display form as soon as the session is known.
+ * draft and the sent text: "$" + the session's label + "(" + the short id + ")", readable at a
+ * glance. A pasted token is rewritten to its display form as soon as the session is known.
  */
-export const TOKEN_RE = /\$[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/;
-/** Display form; group 1 is the short id. The label may hold spaces but never "$", "(", ")" or a newline. */
-export const DISPLAY_RE = /\$[^\n$()]{1,60}\(([0-9a-f]{8})\)/;
+export const SHORT_ID_CHARS = 8;
+
+/**
+ * The full token: "$" and the whole session id, in the charset Pi's `assertValidSessionId` allows
+ * — `[A-Za-z0-9._-]`, starting and ending alphanumeric — rather than hex, which `pi --session-id`
+ * can step outside.
+ */
+export const TOKEN_RE = /\$[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/;
+/**
+ * A short id as it appears in the display form: never a "$", a ")" or a newline. The quote is
+ * excluded so the legacy `$hex ("label")` form is not read as a display form whose short id is
+ * `"label"` — Pi's ids are `[A-Za-z0-9._-]` and contain neither.
+ */
+export const SHORT_ID_PATTERN = '[^)\\n$"]{1,8}';
+/**
+ * The display form's shape, without a capture group — what a parser that merges it into its own
+ * alternation needs, so the two cannot drift apart.
+ */
+export const DISPLAY_PATTERN = `\\$[^\\n$()]{1,60}\\(${SHORT_ID_PATTERN}\\)`;
+/**
+ * Display form; group 1 is the short id. The label may hold spaces but never "$", "(", ")" or a
+ * newline.
+ */
+export const DISPLAY_RE = new RegExp(`\\$[^\\n$()]{1,60}\\((${SHORT_ID_PATTERN})\\)`);
 
 export const MAX_MESSAGES = 20;
 export const MAX_MESSAGE_CHARS = 2000;
@@ -28,8 +49,16 @@ export function refToken(s: SessionSummary): string {
   return `$${s.id}`;
 }
 
+/**
+ * The short form of a session id: its last 8 characters.
+ *
+ * Pi's ids are UUIDv7, whose first 4 bytes are the creation time — two sessions made in the same
+ * ~65 seconds share those, so the head cannot tell two sessions apart. The tail is random for a
+ * UUIDv7 and stays distinct for a custom id (`pi --session-id`). An ambiguous short form is not
+ * cosmetic: the draft resolves it to the first session that matches, block and all.
+ */
 export function shortId(s: SessionSummary): string {
-  return s.id.slice(0, 8);
+  return s.id.slice(-SHORT_ID_CHARS);
 }
 
 /** Session name, else the first message, squeezed so it fits inside a display form. */
@@ -48,7 +77,10 @@ export function refDisplay(s: SessionSummary): string {
 /** Does the session own this short id or full token? */
 export function refMatches(s: SessionSummary, idOrToken: string): boolean {
   const id = idOrToken.startsWith("$") ? idOrToken.slice(1) : idOrToken;
-  return s.id === id || (id.length === 8 && s.id.startsWith(id));
+  if (s.id === id) return true;
+  // A short form names the tail of a longer id; an id that is already that short is itself, and
+  // matched above.
+  return id.length === SHORT_ID_CHARS && s.id.length > SHORT_ID_CHARS && s.id.endsWith(id);
 }
 
 export interface RenderedReference {
