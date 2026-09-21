@@ -53,6 +53,7 @@ export function Palette({
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [cursor, setCursor] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
 
@@ -63,14 +64,24 @@ export function Palette({
   useEffect(() => {
     const n = ++seq.current;
     setBusy(true);
+    setFailed(undefined);
     const t = setTimeout(() => {
-      void Promise.all([bridge.folders.suggest(q), bridge.sessions.search(q, {})]).then(([fs, hs]) => {
-        if (n !== seq.current) return;
-        setFolders(fs);
-        setHits(hs);
-        setCursor(0);
-        setBusy(false);
-      });
+      void Promise.all([bridge.folders.suggest(q), bridge.sessions.search(q, {})]).then(
+        ([fs, hs]) => {
+          if (n !== seq.current) return;
+          setFolders(fs);
+          setHits(hs);
+          setCursor(0);
+          setBusy(false);
+        },
+        // A search that failed is not an empty result: saying "nothing matches" would be a lie
+        // about the index, and leaving `busy` on would pulse until the palette closes.
+        (e: unknown) => {
+          if (n !== seq.current) return;
+          setFailed(e instanceof Error ? e.message : String(e));
+          setBusy(false);
+        },
+      );
     }, 60);
     return () => clearTimeout(t);
   }, [q]);
@@ -151,7 +162,9 @@ export function Palette({
         {busy && <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />}
       </div>
       <div className="overflow-y-auto pb-1 border-t border-line">
-        {items.length === 0 && <div className="px-4 py-3 text-[12.5px] text-ink-3">Nothing matches.</div>}
+        {items.length === 0 && (
+          <div className="px-4 py-3 text-[12.5px] text-ink-3">{failed ?? "Nothing matches."}</div>
+        )}
         {groups.map(({ title, kind }) => {
           const rows = items.map((it, i) => [it, i] as const).filter(([it]) => it.kind === kind);
           if (rows.length === 0) return null;
