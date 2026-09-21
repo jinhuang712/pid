@@ -154,6 +154,8 @@ export type PiCommand =
   | { type: "get_fork_messages" }
   | { type: "get_last_assistant_text" }
   | { type: "get_commands" }
+  /** What the session currently shows: extension status and widget lines, for a window adopting it. */
+  | { type: "get_ui_state" }
   /** Re-read extensions, skills, prompts, themes and context files. Pi's own `/reload`. */
   | { type: "reload" }
   | { type: "set_session_name"; name: string };
@@ -182,6 +184,8 @@ export interface PiCommandData {
   get_fork_messages: { messages: ReturnType<AgentSession["getUserMessagesForForking"]> };
   get_last_assistant_text: { text: string | null };
   get_commands: { commands: PiSlashCommand[] };
+  /** The events a window replays to show what a session it did not start is already displaying. */
+  get_ui_state: { events: PiEvent[] };
   reload: undefined;
   set_session_name: undefined;
 }

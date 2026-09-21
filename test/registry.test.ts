@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const h = vi.hoisted(() => ({
-  made: [] as Array<{ cwd: string; sessionPath?: string; kill: () => void }>,
+  made: [] as Array<{ cwd: string; sessionPath?: string; kill: () => void; replay: unknown[] }>,
 }));
 
 vi.mock("../src/main/shell-env", () => ({ warmShellEnv: async () => {} }));
@@ -24,6 +24,8 @@ vi.mock("../src/main/pi/session-process", () => ({
     private gone = false;
     /** What Pi would report: the file resumed, or the one it creates for a fresh session. */
     private ownFile: string;
+    /** What this worker's session has published; a window that adopts it is handed these back. */
+    replay: unknown[] = [];
     constructor(opts: { cwd: string; sessionPath?: string }) {
       this.cwd = opts.cwd;
       this.sessionPath = opts.sessionPath;
@@ -33,6 +35,9 @@ vi.mock("../src/main/pi/session-process", () => ({
     }
     owns(file: string) {
       return this.sessionPath === file || this.ownFile === file;
+    }
+    request(command: { type: string }) {
+      return Promise.resolve(command.type === "get_ui_state" ? { events: this.replay } : undefined);
     }
     kill() {
       this.gone = true;
@@ -70,6 +75,21 @@ describe("session workers", () => {
 
     expect(h.made).toHaveLength(1);
     expect(restored.key).toBe(fresh.key);
+  });
+
+  it("hands a window the lines the session already published", async () => {
+    const pi = registry();
+    const first = await pi.start({ cwd: "/tmp/p", sessionPath: "/tmp/s.jsonl" });
+    // What the session shows, as its worker would report it to a window that adopts it.
+    const shown = [
+      { type: "dialog", id: "1", method: "setStatus", statusKey: "mcp", statusText: "1 connected" },
+    ];
+    (h.made[0] as unknown as { replay: unknown[] }).replay = shown;
+
+    const again = await pi.start({ cwd: "/tmp/p", sessionPath: "/tmp/s.jsonl" });
+
+    expect(again.key).toBe(first.key);
+    expect(again.earlyEvents).toEqual(shown);
   });
 
   it("keeps one worker per file, not one per folder", async () => {

@@ -35,6 +35,7 @@ import type {
   ResponseDataOf,
 } from "@shared/protocol";
 import { applyPiHttpSettings, toJsonEvent } from "./compat";
+import { UiState } from "./ui-state";
 import type { MainToWorker, WorkerStartOptions, WorkerToMain } from "./worker-protocol";
 
 type ParentPort = {
@@ -44,7 +45,12 @@ type ParentPort = {
 
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
 const send = (message: WorkerToMain) => port.postMessage(message);
-const emit = (event: PiDialogRequest) => send({ kind: "event", event });
+const emit = (event: PiDialogRequest) => {
+  uiState.note(event);
+  send({ kind: "event", event });
+};
+/** What this session has published, so a window that adopts it can be shown the same lines. */
+const uiState = new UiState();
 
 let runtime: AgentSessionRuntime;
 let session: AgentSession;
@@ -465,6 +471,10 @@ async function handleCommand(id: string, command: PiCommand): Promise<PiResponse
       }
       return ok(id, "get_commands", { commands });
     }
+    case "get_ui_state":
+      // What this session already published: a window that adopts it never sees a session start,
+      // so nothing republishes, and these are the events that would put its lines back.
+      return ok(id, "get_ui_state", { events: uiState.replay() });
     case "reload": {
       // Pi routes `/reload` only in its own TUI: typed anywhere else the text reaches the model as
       // a prompt. The session exposes the operation directly, so PID runs it rather than shipping

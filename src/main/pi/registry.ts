@@ -37,9 +37,14 @@ export class PiRegistry {
     const existing = opts.sessionPath ? this.liveFor(opts.sessionPath) : undefined;
     if (existing) {
       const { key, proc } = existing;
-      const earlyEvents: PiEvent[] = [];
       try {
-        return { key, cwd: proc.cwd, state: await proc.started, earlyEvents };
+        const state = await proc.started;
+        // Adoption is not a session start, so no extension republishes: hand the window what the
+        // session is already showing, in the same events the reducer replays for a fresh start. A
+        // worker that will not answer leaves the window with nothing to replay, which is what it
+        // would have had anyway.
+        const ui = await proc.request({ type: "get_ui_state" }).catch(() => undefined);
+        return { key, cwd: proc.cwd, state, earlyEvents: ui ? ui.events : [] };
       } catch (err) {
         this.discard(key, proc);
         throw new Error(this.why(err, proc));
