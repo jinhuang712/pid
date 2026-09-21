@@ -101,7 +101,13 @@ export class SessionProcess {
   }
 
   private post(message: MainToWorker) {
-    if (!this.closed) this.child.postMessage(message);
+    if (this.closed) return;
+    try {
+      this.child.postMessage(message);
+    } catch {
+      // The process can be gone before its exit event reaches us — `closed` flips on that event —
+      // and then there is nowhere for this to go. The exit path reports the truth a turn later.
+    }
   }
 
   /** Idempotent terminal transition: reject every pending request and notify the owner once. */
