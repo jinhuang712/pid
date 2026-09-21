@@ -1,5 +1,6 @@
 import type { SessionSummary } from "@shared/sessions";
 import { describe, expect, it } from "vitest";
+import { parseReferences } from "../src/renderer/attachments";
 import {
   DISPLAY_RE,
   MAX_MESSAGES,
@@ -88,6 +89,25 @@ describe("renderReference", () => {
 describe("expandReferences", () => {
   it("leaves prompts without tokens untouched", () => {
     expect(expandReferences("hello $unknown", [ref(2)])).toEqual({ text: "hello $unknown", used: [] });
+  });
+
+  /**
+   * The block is read back with a regex that stops at the closing quote, so a folder holding one —
+   * a real path can — used to make the whole block render as raw XML in the transcript.
+   */
+  it("survives a folder that holds a quote", () => {
+    const odd = { ...session, cwd: '/Users/me/my "proj"' };
+    const r: SessionReference = {
+      token: refToken(odd),
+      session: odd,
+      messages: [{ role: "user", text: "hi" }],
+    };
+    const { text } = expandReferences(`${r.token} please`, [r]);
+    const parsed = parseReferences(text);
+
+    expect(parsed.references).toHaveLength(1);
+    expect(parsed.references[0]?.folder).toBe("/Users/me/my 'proj'");
+    expect(parsed.body.trim()).toBe("$debug the cache(c4bcb638) please");
   });
   it("spells raw tokens in display form and appends the visible block once", () => {
     const r = ref(3);

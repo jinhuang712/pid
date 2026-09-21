@@ -90,6 +90,9 @@ export interface RenderedReference {
   chars: number;
 }
 
+/** Attribute-safe: the block is read back with a regex that stops at the closing quote. */
+const quote = (s: string) => s.replace(/"/g, "'");
+
 /**
  * Last MAX_MESSAGES messages, each clipped, total clipped. Deterministic and inspectable.
  * The character budget is filled newest-first so the most recent messages always survive;
@@ -112,7 +115,7 @@ export function renderReference(ref: SessionReference): RenderedReference {
   const included = lines.length;
   const label = ref.session.name || ref.session.firstMessage || ref.session.id;
   const header =
-    `<session-reference token="${ref.token}" title="${label.replace(/"/g, "'")}" folder="${ref.session.cwd}" ` +
+    `<session-reference token="${ref.token}" title="${quote(label)}" folder="${quote(ref.session.cwd)}" ` +
     `scope="last ${included} of ${total} messages, tool calls and thinking omitted">`;
   const text = `${header}\n${lines.join("\n")}\n</session-reference>`;
   return { text, included, total, chars: text.length };
