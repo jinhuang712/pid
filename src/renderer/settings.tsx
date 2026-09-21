@@ -30,10 +30,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    void bridge.settings.get().then((s) => {
-      setSettings(s);
-      setLoaded(true);
-    });
+    // A settings read that fails still has to end: the window restores its sessions from these
+    // values, and the defaults are a usable answer — never a state the window waits on forever.
+    void bridge.settings.get().then(
+      (s) => {
+        setSettings(s);
+        setLoaded(true);
+      },
+      () => setLoaded(true),
+    );
     // The menu's zoom items write settings in the main process; adopt them without a round trip.
     return bridge.settings.onChange(setSettings);
   }, []);
