@@ -1,6 +1,20 @@
 import { stripPromptBlocks } from "@shared/prompt-blocks";
 
 /**
+ * A key per queued row. The queue is plain text, so the same message can sit there twice; its
+ * occurrence is what makes two identical rows distinct, without falling back to the index (which
+ * the next removal would shift onto a different row).
+ */
+function rowKeys(list: readonly string[]): string[] {
+  const seen = new Map<string, number>();
+  return list.map((text) => {
+    const n = seen.get(text) ?? 0;
+    seen.set(text, n + 1);
+    return `${text}\u0000${n}`;
+  });
+}
+
+/**
  * Pi's steer / follow-up queue, as Pi reports it via queue_update. Pi has already expanded a
  * `/skill` into its SKILL.md by then, so the row shows the folded command and keeps the full
  * text on hover.
@@ -23,6 +37,8 @@ export function QueuePanel({
   onRemove: (kind: "steer" | "followUp", index: number) => void;
 }) {
   if (steering.length === 0 && followUp.length === 0) return null;
+  const steerKeys = rowKeys(steering);
+  const followKeys = rowKeys(followUp);
   const btn =
     "h-6 px-1.5 rounded-md text-[12.5px] text-ink-3 hover:text-ink hover:bg-paper-3 disabled:opacity-40";
   return (
@@ -32,7 +48,7 @@ export function QueuePanel({
     >
       <div className="max-w-[var(--pid-measure)] mx-auto text-xs flex flex-col">
         {steering.map((t, i) => (
-          <div key={`s-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
+          <div key={steerKeys[i]} className="flex items-center gap-3 px-3 h-[30px]">
             <span className="shrink-0 text-warn">Steer</span>
             <span className="flex-1 text-ink truncate" title={t}>
               {stripPromptBlocks(t) || t}
@@ -49,7 +65,7 @@ export function QueuePanel({
           </div>
         ))}
         {followUp.map((t, i) => (
-          <div key={`f-${t}`} className="flex items-center gap-3 px-3 h-[30px]">
+          <div key={followKeys[i]} className="flex items-center gap-3 px-3 h-[30px]">
             <span className="shrink-0 text-ink-3">Queued</span>
             <span className="flex-1 text-ink truncate" title={t}>
               {stripPromptBlocks(t) || t}
