@@ -56,7 +56,7 @@ export function PluginSlot({
   const spec = where === "header" ? plugin.header : plugin.strip;
   if (!spec) return null;
   return (
-    <PluginBoundary id={plugin.id}>
+    <PluginBoundary id={plugin.id} resetKey={spec}>
       <PluginRender render={spec.render} ctx={ctx} />
     </PluginBoundary>
   );
@@ -98,7 +98,7 @@ export function PluginPage({
       title={spec.label ?? plugin.id}
       note={
         spec.note && (
-          <PluginBoundary id={plugin.id}>
+          <PluginBoundary id={plugin.id} resetKey={spec}>
             <PluginRender render={spec.note} ctx={ctx} />
           </PluginBoundary>
         )
@@ -108,7 +108,7 @@ export function PluginPage({
       onSearch={spec.search === undefined ? undefined : setQuery}
       onClose={onClose}
     >
-      <PluginBoundary id={plugin.id}>
+      <PluginBoundary id={plugin.id} resetKey={spec}>
         <PluginRender render={spec.render} ctx={ctx} />
       </PluginBoundary>
     </PageShell>

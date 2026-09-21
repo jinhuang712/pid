@@ -48,4 +48,24 @@ describe("a plugin's render", () => {
     const html = renderToStaticMarkup(slot(() => <span>hello</span>) as never);
     expect(html).toContain("hello");
   });
+
+  /**
+   * A failure belongs to the drawing that failed. When the plugin's own code is replaced — a folder
+   * switch reloads the desktop half — the slot gets a fresh attempt instead of the old error line.
+   */
+  it("forgets a failure when the plugin's code is replaced, and only then", () => {
+    const spec = { render: () => null };
+    const boundary = new PluginBoundary({ id: "p", resetKey: spec, children: null });
+    boundary.state = { error: "boom" };
+    let cleared: boolean | undefined;
+    boundary.setState = (s) => {
+      cleared = (s as { error?: string }).error === undefined;
+    };
+
+    boundary.componentDidUpdate({ id: "p", resetKey: spec, children: null });
+    expect(cleared).toBeUndefined(); // the same drawing: the error stays visible
+
+    boundary.componentDidUpdate({ id: "p", resetKey: { render: () => null }, children: null });
+    expect(cleared).toBe(true);
+  });
 });
