@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, realpath, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ResourceToggle } from "@shared/ecosystem";
@@ -195,12 +195,14 @@ ipcMain.handle("notify:show", (_e, req: NotifyRequest) =>
 );
 ipcMain.handle("notify:openSettings", () => openNotificationSettings());
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(expandHome(path)));
-ipcMain.handle("shell:openPath", (_e, path: string) => {
+ipcMain.handle("shell:openPath", async (_e, path: string) => {
   const full = expandHome(path);
   // A transcript link is untrusted text (a model wrote it, or a file it quoted), and `openPath`
-  // hands the path to LaunchServices. Revealing a program is a click the user still chooses;
-  // launching it is not.
-  if (isProgramPath(full)) return shell.showItemInFolder(full);
+  // hands the path to LaunchServices. What the path really *is* decides, because a link can carry
+  // the name of a document and point at a program: a program is revealed in Finder, where the user
+  // still has to choose it, and a document opens as before.
+  const real = await realpath(full).catch(() => full);
+  if (isProgramPath(full) || isProgramPath(real)) return shell.showItemInFolder(full);
   return shell.openPath(full);
 });
 ipcMain.handle("shell:openExternal", async (_e, url: string) => {
