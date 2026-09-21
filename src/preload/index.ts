@@ -34,7 +34,7 @@ const bridge: Bridge = {
     onOpen: (l) => on("notify:open", l),
   },
   files: {
-    list: (cwd) => ipcRenderer.invoke("files:list", cwd),
+    list: (cwd, opts) => ipcRenderer.invoke("files:list", cwd, opts),
     stat: (paths) => ipcRenderer.invoke("files:stat", paths),
     thumbnail: (path) => ipcRenderer.invoke("files:thumbnail", path),
     pick: (kind) => ipcRenderer.invoke("files:pick", kind),
