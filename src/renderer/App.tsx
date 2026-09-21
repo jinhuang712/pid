@@ -84,7 +84,7 @@ function answered(messages: AgentMessage[]): boolean {
 }
 
 export function App() {
-  const { settings } = useSettings();
+  const { settings, loaded: settingsLoaded } = useSettings();
   const [page, setPage] = useState<Page>("sessions");
   const [settingsSection, setSettingsSection] = useState<string | undefined>();
   const [folder, setFolder] = useState<string>();
@@ -808,11 +808,11 @@ export function App() {
 
   // ---- restore last open sessions (sequentially: each pi start is a few seconds) ----
   const restoring = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run once, after the settings are read
   useEffect(() => {
-    // StrictMode mounts twice in dev; a second pass would start every session again and, once
-    // saved, double the list on every launch.
-    if (restoring.current) return;
+    // Wait for the stored settings: this decides whether to reopen anything at all, and the first
+    // render still holds the defaults.
+    if (!settingsLoaded || restoring.current) return;
     restoring.current = true;
     void (async () => {
       const saved = await bridge.openSessions.get();
@@ -843,7 +843,7 @@ export function App() {
       setStatus(undefined);
       restored.current = true;
     })();
-  }, []);
+  }, [settingsLoaded]);
 
   // ---- keyboard, menu, dev hooks ----
   useEffect(() => {
