@@ -106,7 +106,9 @@ export class SessionProcess {
       this.child.postMessage(message);
     } catch {
       // The process can be gone before its exit event reaches us — `closed` flips on that event —
-      // and then there is nowhere for this to go. The exit path reports the truth a turn later.
+      // and then there is nowhere for this to go. Say so in the tail; the exit path reports the
+      // state a beat later.
+      this.collectStderr(`could not post ${message.kind}: the worker is gone\n`);
     }
   }
 
