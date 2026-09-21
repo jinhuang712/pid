@@ -327,23 +327,31 @@ app.whenReady().then(() => {
  * When a turn is still running, follow the setting: ask, let it finish first, or just quit.
  */
 let quitting = false;
+
+/**
+ * Stop the workers, then quit for real.
+ *
+ * Pi's runtime emits `session_shutdown` from its own dispose, which is where an extension closes
+ * what it opened; quitting straight through would take the process tree down under it. The four
+ * call sites below all preventDefault first, so this second `quit` is the one that runs.
+ */
+function quitAfterStopping() {
+  quitting = true;
+  void pi.stopAll().then(() => app.quit());
+}
+
 app.on("before-quit", (e) => {
   if (quitting) return;
   const busy = pi.busyCount();
   const policy = loadSettings().sessions.onQuitWhileRunning;
   if (busy === 0 || policy === "quit") {
-    quitting = true;
-    pi.stopAll();
-    return;
+    e.preventDefault();
+    return quitAfterStopping();
   }
   e.preventDefault();
   const finishThenQuit = () => {
     mainWindow?.hide();
-    void pi.whenAllIdle().then(() => {
-      quitting = true;
-      pi.stopAll();
-      app.quit();
-    });
+    void pi.whenAllIdle().then(quitAfterStopping);
   };
   if (policy === "finish") return finishThenQuit();
   void dialog
@@ -358,11 +366,7 @@ app.on("before-quit", (e) => {
     })
     .then(({ response }) => {
       if (response === 0) finishThenQuit();
-      else if (response === 1) {
-        quitting = true;
-        pi.stopAll();
-        app.quit();
-      }
+      else if (response === 1) quitAfterStopping();
     });
 });
 app.on("will-quit", () => {

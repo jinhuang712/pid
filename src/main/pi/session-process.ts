@@ -26,6 +26,9 @@ export interface SessionProcessOptions extends WorkerStartOptions {
   onExit: (code: number | null, stderr: string) => void;
 }
 
+/** How long Pi's runtime gets to dispose before the worker is killed anyway. */
+const DISPOSE_GRACE_MS = 1500;
+
 /**
  * One session worker, seen from the main process.
  *
@@ -37,6 +40,13 @@ export class SessionProcess {
   readonly cwd: string;
   /** The Pi session file this worker owns, when it resumes one. Two workers must never share it. */
   readonly sessionPath?: string;
+  /** Resolves once the process is gone, however it went. This is what a quit waits on. */
+  readonly done: Promise<void>;
+  private doneResolve!: () => void;
+  /** The fallback kill, armed by `kill` and cleared as soon as the process goes. */
+  private stopper?: NodeJS.Timeout;
+  /** Set while a stop is in flight, so asking twice does not dispose twice. */
+  private stopping = false;
   private child: UtilityProcess;
   private stderr = "";
   private pending = new Map<string, Pending>();
@@ -60,6 +70,9 @@ export class SessionProcess {
     this.started = new Promise<PiSessionState>((resolve, reject) => {
       this.startResolve = resolve;
       this.startReject = reject;
+    });
+    this.done = new Promise<void>((resolve) => {
+      this.doneResolve = resolve;
     });
 
     this.child.stderr?.setEncoding("utf8");
@@ -94,9 +107,12 @@ export class SessionProcess {
     if (this.closed) return;
     this.closed = true;
     this.busy = false;
+    if (this.stopper) clearTimeout(this.stopper);
+    this.stopper = undefined;
     this.startReject(new Error(reason));
     for (const p of this.pending.values()) p.reject(new Error(reason));
     this.pending.clear();
+    this.doneResolve();
     this.opts.onExit(code, this.stderr);
   }
 
@@ -128,7 +144,8 @@ export class SessionProcess {
         this.collectStderr(`${msg.text}\n`);
         return;
       case "disposed":
-        this.kill();
+        // The runtime is down and has told its extensions; the process itself is done.
+        this.child.kill();
         return;
     }
   }
@@ -175,9 +192,18 @@ export class SessionProcess {
     return this.closed;
   }
 
+  /**
+   * Stop the worker, giving Pi's runtime the chance to shut down first.
+   *
+   * `runtime.dispose()` is what emits `session_shutdown` — the one place an extension closes what
+   * it opened, killable bash children among them — and SIGTERM alone skips it. So the worker is
+   * asked, and killed if it does not answer.
+   */
   kill() {
-    if (this.closed) return;
-    this.child.kill();
-    this.finish(null, "the session worker was stopped");
+    if (this.closed || this.stopping) return;
+    this.stopping = true;
+    this.post({ kind: "dispose" });
+    this.stopper = setTimeout(() => this.child.kill(), DISPOSE_GRACE_MS);
+    this.stopper.unref?.();
   }
 }

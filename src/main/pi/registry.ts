@@ -15,6 +15,9 @@ import { SessionProcess } from "./session-process";
 /** How long a fresh worker gets to build its runtime before we call the start failed. */
 export const STARTUP_TIMEOUT_MS = 15_000;
 
+/** The backstop for a worker that will not go even after `kill` SIGTERMs it. */
+export const STOP_DEADLINE_MS = 3000;
+
 /** Live session workers owned by this window. Nothing here is persisted. */
 export class PiRegistry {
   private procs = new Map<string, SessionProcess>();
@@ -97,9 +100,21 @@ export class PiRegistry {
     });
   }
 
-  stopAll() {
-    for (const p of this.procs.values()) p.kill();
+  /**
+   * Stop every worker, and let Pi's runtime dispose before its process is taken down — that is
+   * where an extension's `session_shutdown` runs. `kill` SIGTERMs whatever does not answer; the
+   * deadline is only for a process that will not go at all, which must not hold up the quit.
+   */
+  async stopAll(): Promise<void> {
+    const procs = [...this.procs.values()];
     this.procs.clear();
+    for (const p of procs) p.kill();
+    await Promise.race([
+      Promise.all(procs.map((p) => p.done)),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, STOP_DEADLINE_MS).unref();
+      }),
+    ]);
   }
 
   private get(key: string): SessionProcess {
