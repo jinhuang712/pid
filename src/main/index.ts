@@ -77,7 +77,15 @@ function createWindow(): BrowserWindow {
     },
   });
   state.manage(win);
-  nativeTheme.on("updated", () => win.setBackgroundColor(paperColor()));
+  const paint = () => win.setBackgroundColor(paperColor());
+  nativeTheme.on("updated", paint);
+  // A window that is gone must not be written to: its theme listener goes with it, and
+  // `mainWindow` stops pointing at it — which is what the menu and the interface-scale items send
+  // through.
+  win.on("closed", () => {
+    nativeTheme.off("updated", paint);
+    if (mainWindow === win) mainWindow = undefined;
+  });
   // Zoom resets on every load, so the stored interface scale is re-applied with the first frame.
   win.webContents.on("did-finish-load", () => applyAppearance(win));
   // A headless smoke run drives the same window the user would see, but never shows it: the

@@ -107,9 +107,13 @@ export function menuTemplate(
   ];
 }
 
+/** Send a menu command, unless the window it would reach is gone. */
+export function sendToWindow(win: BrowserWindow | undefined, cmd: MenuCommand): void {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send("menu:command", cmd);
+}
+
 export function installMenu(win: () => BrowserWindow | undefined, onScale: (steps: number) => void) {
-  const send = (cmd: MenuCommand) => (): void => {
-    win()?.webContents.send("menu:command", cmd);
-  };
+  const send = (cmd: MenuCommand) => (): void => sendToWindow(win(), cmd);
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(send, onScale)));
 }

@@ -7,7 +7,8 @@ vi.mock("electron", () => ({
   shell: { openExternal: () => {} },
 }));
 
-import { type MenuCommand, menuTemplate } from "../src/main/menu";
+import type { BrowserWindow } from "electron";
+import { type MenuCommand, menuTemplate, sendToWindow } from "../src/main/menu";
 
 /**
  * The menu is how ⌘N and ⌘T reach the window, and a wrong accelerator is invisible in every other
@@ -53,5 +54,24 @@ describe("application menu", () => {
     items.find((i) => i.label === "Bigger Interface" && i.accelerator === "CmdOrCtrl+Plus")?.click?.();
     items.find((i) => i.label === "Actual Size")?.click?.();
     expect(steps).toEqual([1, 0]);
+  });
+
+  /**
+   * The app outlives its window on macOS: closing the last one keeps PID running, and the menu bar
+   * still works. A command sent to the window that used to be there throws.
+   */
+  it("reaches a live window and not one that is closed", () => {
+    const sent: string[] = [];
+    const window = (destroyed: boolean) =>
+      ({
+        isDestroyed: () => destroyed,
+        webContents: { send: (_channel: string, cmd: string) => sent.push(cmd) },
+      }) as unknown as BrowserWindow;
+
+    sendToWindow(window(false), "new-session");
+    sendToWindow(window(true), "home");
+    sendToWindow(undefined, "fork");
+
+    expect(sent).toEqual(["new-session"]);
   });
 });
