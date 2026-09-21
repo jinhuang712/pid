@@ -93,4 +93,27 @@ describe("workspace: session lifecycle", () => {
     const ws = workspaceReducer(emptyWorkspace(), { type: "add", handle: h });
     expect(ws.procs.a.statuses.mcp).toBe("1 connected");
   });
+
+  /**
+   * A worker that exited keeps its entry so the reason stays visible, but a session can be opened
+   * again — and then two entries for one file is one too many: every lookup would find the dead one.
+   */
+  it("reopening a session replaces the entry of the worker that exited", () => {
+    let ws = workspaceReducer(emptyWorkspace(), { type: "add", handle: handle("dead", "/s/a.jsonl") });
+    ws = workspaceReducer(ws, { type: "exit", key: "dead", message: "pi exited (1) boom" });
+    ws = workspaceReducer(ws, { type: "add", handle: handle("fresh", "/s/a.jsonl") });
+
+    expect(ws.procs.dead).toBeUndefined();
+    expect(procForSession(ws, "/s/a.jsonl")?.key).toBe("fresh");
+    expect(ws.activeKey).toBe("fresh");
+  });
+
+  it("leaves an exited entry for another session alone", () => {
+    let ws = workspaceReducer(emptyWorkspace(), { type: "add", handle: handle("dead", "/s/a.jsonl") });
+    ws = workspaceReducer(ws, { type: "exit", key: "dead", message: "pi exited (1) boom" });
+    ws = workspaceReducer(ws, { type: "add", handle: handle("fresh", "/s/b.jsonl") });
+
+    expect(ws.procs.dead?.exit).toBe("pi exited (1) boom");
+    expect(procForSession(ws, "/s/a.jsonl")?.key).toBe("dead");
+  });
 });

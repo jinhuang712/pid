@@ -400,7 +400,9 @@ export function App() {
       setPage("sessions");
       if (s.path.startsWith("proc:")) return dispatch({ type: "activate", key: s.path.slice(5) });
       const live = procForSession(ws, s.path);
-      if (live) return dispatch({ type: "activate", key: live.key });
+      // An exited worker keeps its entry so the reason stays visible, but it cannot take a command:
+      // opening the session again starts a new one.
+      if (live && !live.exit) return dispatch({ type: "activate", key: live.key });
       // folder bookkeeping (recency, git, session list) runs alongside the start, not ahead of it
       if (s.cwd !== folder) void selectFolder(s.cwd);
       await start(s.cwd, s.path);
@@ -412,7 +414,8 @@ export function App() {
     async (s: SessionSummary): Promise<string | undefined> => {
       const live = procForSession(ws, s.path);
       if (live?.pending) return undefined; // still starting; nothing can be sent yet
-      if (live) return live.key;
+      if (live && !live.exit) return live.key;
+      // A worker that exited cannot take a command, so the session is started again.
       return start(s.cwd, s.path);
     },
     [ws, start],

@@ -88,13 +88,27 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         widgets: {},
         dialogs: [],
       };
-      const { [a.replaces ?? ""]: _placeholder, ...rest } = ws.procs;
+      // One entry per session file: an exited worker's entry is dropped when that session is opened
+      // again, so no lookup finds the worker that is gone instead of the one that is running.
+      const dropped = new Set(
+        Object.entries(ws.procs)
+          .filter(
+            ([, p]) =>
+              p.exit &&
+              proc.piState.sessionFile !== undefined &&
+              p.piState.sessionFile === proc.piState.sessionFile,
+          )
+          .map(([key]) => key),
+      );
+      if (a.replaces) dropped.add(a.replaces);
+      const procs: Record<string, Proc> = {};
+      for (const [key, p] of Object.entries(ws.procs)) if (!dropped.has(key)) procs[key] = p;
       // the placeholder was active when the user clicked; the real process inherits that, but a
       // later click elsewhere wins
-      const wasActive = !a.replaces || ws.activeKey === a.replaces;
+      const wasActive = !a.replaces || ws.activeKey === a.replaces || dropped.has(ws.activeKey ?? "");
       let next: Workspace = {
         ...ws,
-        procs: { ...rest, [proc.key]: proc },
+        procs: { ...procs, [proc.key]: proc },
         activeKey: wasActive ? proc.key : ws.activeKey,
       };
       for (const ev of a.handle.earlyEvents)
