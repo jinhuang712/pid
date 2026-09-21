@@ -21,13 +21,20 @@ export function ModelPicker({
   const [models, setModels] = useState<AnyModel[]>([]);
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
+  const [failed, setFailed] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     setQ("");
     setCursor(0);
-    void load().then(setModels);
+    setFailed(undefined);
+    // A picker that cannot reach Pi says so; without this the rejection was unhandled and the list
+    // read as "no models are configured".
+    void load().then(setModels, (e: unknown) => {
+      setModels([]);
+      setFailed(e instanceof Error ? e.message : String(e));
+    });
     requestAnimationFrame(() => input.current?.focus());
   }, [open, load]);
 
@@ -80,7 +87,7 @@ export function ModelPicker({
           className="m-2 h-7 px-2 rounded-md bg-paper-3 outline-none text-ink placeholder:text-ink-3 text-xs"
         />
         <div className="overflow-y-auto pb-1" ref={box}>
-          {groups.length === 0 && <div className="px-3 py-2 text-xs text-ink-3">No models</div>}
+          {groups.length === 0 && <div className="px-3 py-2 text-xs text-ink-3">{failed ?? "No models"}</div>}
           {groups.map(([provider, ms]) => (
             <div key={provider}>
               <div className="px-3 pt-1.5 pb-0.5 text-xs text-ink-3">{provider}</div>
