@@ -7,6 +7,20 @@ import type { MainToWorker, WorkerStartOptions, WorkerToMain } from "./worker-pr
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
+/**
+ * Does this event leave a turn in flight?
+ *
+ * `agent_end` also fires between retry attempts, with `willRetry` set; treating that as the end of
+ * the turn let a quit land inside the backoff and drop the retry. `agent_settled` is the one that
+ * means the turn is over for good.
+ */
+export function turnInFlight(event: PiEvent, busy: boolean): boolean {
+  if (event.type === "agent_start") return true;
+  if (event.type === "agent_end") return Boolean(event.willRetry);
+  if (event.type === "agent_settled") return false;
+  return busy;
+}
+
 export interface SessionProcessOptions extends WorkerStartOptions {
   onEvent: (event: PiEvent) => void;
   onExit: (code: number | null, stderr: string) => void;
@@ -106,8 +120,7 @@ export class SessionProcess {
       }
       case "event": {
         const event = msg.event;
-        if (event.type === "agent_start") this.busy = true;
-        if (event.type === "agent_end" || event.type === "agent_settled") this.busy = false;
+        this.busy = turnInFlight(event, this.busy);
         this.opts.onEvent(event);
         return;
       }
