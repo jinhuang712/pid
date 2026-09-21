@@ -20,13 +20,21 @@ export async function repoInfo(cwd: string): Promise<RepoInfo | undefined> {
   } catch {
     return undefined; // not a git repository
   }
-  const branch = (await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+  // `rev-parse --abbrev-ref HEAD` exits 128 on an unborn branch, and a repo with no commits is
+  // still a repo: the folder has to list. `symbolic-ref` names the branch that will be created
+  // there, and fails only when HEAD points at a commit rather than a branch.
+  let branch: string | undefined;
+  try {
+    branch = (await git(cwd, ["symbolic-ref", "--short", "HEAD"])).trim() || undefined;
+  } catch {
+    branch = undefined; // detached HEAD
+  }
   const worktrees = parseWorktrees(await git(cwd, ["worktree", "list", "--porcelain"]), root);
   const branches = (await git(cwd, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]))
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
-  return { root, commonDir, branch: branch === "HEAD" ? undefined : branch, worktrees, branches };
+  return { root, commonDir, branch, worktrees, branches };
 }
 
 function parseWorktrees(porcelain: string, currentRoot: string): WorktreeInfo[] {
