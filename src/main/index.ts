@@ -317,7 +317,26 @@ ipcMain.handle(
   },
 );
 
+/**
+ * One PID at a time.
+ *
+ * A second instance would open the same session files — Pi's session format assumes one writer —
+ * and rewrite the same state files whole. It comes forward as the first instead of starting.
+ */
+const primary = app.requestSingleInstanceLock();
+if (!primary) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(() => {
+  if (!primary) return; // quitting: this instance must not open a window on the way out
   // A headless run hides the window, but on macOS the Dock icon alone steals focus from whatever
   // the user is doing — which is the popup, as far as they are concerned. Hide that too.
   if (process.env.PID_HEADLESS || process.env.PID_DUMP_DIR) void app.dock?.hide();
