@@ -466,7 +466,10 @@ function AppendSystemPromptEditor() {
   }, []);
 
   useEffect(() => {
-    if (draft === undefined || file === undefined || draft === file.text) return;
+    if (draft === undefined || file === undefined) return;
+    // What the write stores: whitespace-only text removes the file, so a draft of spaces is already
+    // what is on disk. Comparing the raw draft would arm another write on every pass, forever.
+    if ((draft.trim() === "" ? "" : draft) === file.text) return;
     const t = setTimeout(() => {
       bridge.eco
         .setAppendSystemPrompt(draft)
