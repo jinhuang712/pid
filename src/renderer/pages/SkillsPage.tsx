@@ -1,5 +1,5 @@
 import type { SkillView } from "@shared/ecosystem";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Toggle } from "@/ui";
 import { bridge } from "../bridge";
 import { fuzzyFilter } from "../fuzzy";
@@ -25,12 +25,25 @@ export function SkillsPage({
   const [error, setError] = useState<string>();
   const sc = useEcoScope(folder);
 
+  const seq = useRef(0);
+
   const load = () => {
+    const n = ++seq.current;
     setLoading(true);
-    void bridge.eco.skills(sc.cwd).then((s) => {
-      setSkills(s);
-      setLoading(false);
-    });
+    void bridge.eco.skills(sc.cwd).then(
+      (s) => {
+        // A folder switch starts a second read; the first one landing late must not win, and its
+        // failure is not this folder's failure.
+        if (n !== seq.current) return;
+        setSkills(s);
+        setLoading(false);
+      },
+      (e: unknown) => {
+        if (n !== seq.current) return;
+        setError(String(e instanceof Error ? e.message : e));
+        setLoading(false);
+      },
+    );
   };
   useEffect(load, [sc.cwd]);
 

@@ -1,6 +1,6 @@
 import type { ExtensionView } from "@shared/ecosystem";
 import { type PidSupport, pidSupport, type UiSupport } from "@shared/extension-ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Toggle } from "@/ui";
 import { bridge } from "../bridge";
 import { fuzzyFilter } from "../fuzzy";
@@ -58,7 +58,20 @@ export function ExtensionsPage({ folder, onClose }: { folder?: string; onClose?:
   const [error, setError] = useState<string>();
   const sc = useEcoScope(folder);
 
-  const load = () => void bridge.eco.extensions(sc.cwd).then(setList);
+  const seq = useRef(0);
+
+  const load = () => {
+    const n = ++seq.current;
+    void bridge.eco.extensions(sc.cwd).then(
+      (list) => {
+        // A folder switch starts a second read; the first one landing late must not win.
+        if (n === seq.current) setList(list);
+      },
+      (e: unknown) => {
+        if (n === seq.current) setError(String(e instanceof Error ? e.message : e));
+      },
+    );
+  };
   useEffect(load, [sc.cwd]);
 
   const write = (e: ExtensionView, state: "load" | "unload" | "inherit") => {
