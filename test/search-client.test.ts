@@ -46,7 +46,7 @@ vi.mock("../src/main/pi/search", () => ({
   dropIndex: () => {},
 }));
 
-import { searchSessions, stopSearchWorker } from "../src/main/pi/search-client";
+import { readSessionMessages, searchSessions, stopSearchWorker } from "../src/main/pi/search-client";
 
 const fire = (i: number, ev: string, ...args: unknown[]) => {
   for (const cb of h.children[i]?.handlers.get(ev) ?? []) cb(...args);
@@ -74,5 +74,17 @@ describe("a search worker that dies", () => {
     // that one: the live worker's request is answered by the live worker.
     expect(await first).toEqual([]);
     expect(h.fellBack).toEqual(["a"]);
+  });
+
+  it("reads a session file through the worker, not on the IPC thread", async () => {
+    stopSearchWorker(); // start from no worker, the way a fresh window would
+    const read = readSessionMessages("/tmp/s.jsonl");
+
+    const fake = h.children.at(-1);
+    expect(fake?.posted.at(-1)).toMatchObject({ type: "readMessages", path: "/tmp/s.jsonl" });
+    if (!fake) throw new Error("no worker was forked");
+    fire(h.children.length - 1, "message", { id: fake.posted.at(-1)?.id, ok: true, result: [{ role: "user", text: "Q1" }] });
+
+    expect(await read).toEqual([{ role: "user", text: "Q1" }]);
   });
 });

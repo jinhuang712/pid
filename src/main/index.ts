@@ -20,8 +20,14 @@ import { runDiagnostics } from "./pi/diagnostics";
 import { configureAgentDir, listExtensions, listSkills, readPiHome } from "./pi/ecosystem";
 import { bundlePlugin, discoverPlugins, JSX_SHIM, reactShim, uiShim } from "./pi/plugins";
 import { PiRegistry } from "./pi/registry";
-import { dropIndex, searchSessions, stopSearchWorker, warmSearchIndex } from "./pi/search-client";
-import { readSessionBranch, readSessionMessages } from "./pi/session-read";
+import {
+  dropIndex,
+  readSessionBranch,
+  readSessionMessages,
+  searchSessions,
+  stopSearchWorker,
+  warmSearchIndex,
+} from "./pi/search-client";
 import { listAllSessions, listSessions } from "./pi/sessions";
 import { readAppendSystemPrompt, writeAppendSystemPrompt } from "./pi/system-prompt";
 import { setResourceState } from "./pi/toggles";

@@ -1,12 +1,14 @@
 import { join } from "node:path";
-import type { SearchHit, SearchScope } from "@shared/sessions";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { SearchHit, SearchScope, SessionMessage } from "@shared/sessions";
 import { type UtilityProcess, utilityProcess } from "electron";
 import * as inProcess from "./search";
 import type { WorkerRequest, WorkerResponse } from "./search-worker";
+import * as sessionRead from "./session-read";
 
 /**
- * Main-process handle on the search utility process. Falls back to the in-process index
- * if the worker cannot be started, so search keeps working either way.
+ * Main-process handle on the utility process that does PID's file reading, and falls back to
+ * reading in this process if the worker cannot be started, so both keep working either way.
  */
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; owner: UtilityProcess };
 
@@ -63,6 +65,28 @@ export async function searchSessions(query: string, scope: SearchScope): Promise
     return await request<SearchHit[]>({ type: "search", query, scope });
   } catch {
     return inProcess.searchSessions(query, scope);
+  }
+}
+
+/**
+ * A session file read through the worker. The handlers that serve the window used to read the
+ * file on the IPC thread, which is where search's own reading was moved off for good reason.
+ */
+export async function readSessionBranch(path: string): Promise<AgentMessage[]> {
+  if (failed) return sessionRead.readSessionBranch(path);
+  try {
+    return await request<AgentMessage[]>({ type: "readBranch", path });
+  } catch {
+    return sessionRead.readSessionBranch(path);
+  }
+}
+
+export async function readSessionMessages(path: string): Promise<SessionMessage[]> {
+  if (failed) return sessionRead.readSessionMessages(path);
+  try {
+    return await request<SessionMessage[]>({ type: "readMessages", path });
+  } catch {
+    return sessionRead.readSessionMessages(path);
   }
 }
 
