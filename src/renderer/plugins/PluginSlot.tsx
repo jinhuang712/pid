@@ -1,9 +1,31 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { PageShell } from "../pages/PageShell";
 import type { Proc } from "../state/workspace";
-import type { Mount, Registered } from "./api";
+import type { Mount, PluginContext, Registered } from "./api";
 import { PluginBoundary } from "./Boundary";
 import { usePluginContext } from "./usePlugins";
+
+/**
+ * The plugin's own render function, called one level below the boundary rather than in the slot's
+ * body.
+ *
+ * React consults a boundary only for errors raised in its descendants, so `spec.render(ctx)`
+ * written inline throws *above* PluginBoundary and takes the whole window down — the one outcome
+ * the boundary exists to prevent. The tool mount wraps its renderers the same way, for the same
+ * reason.
+ */
+function PluginRender({
+  render,
+  ctx,
+}: {
+  render: (ctx: PluginContext) => ReactNode;
+  ctx: PluginContext;
+}): ReactNode {
+  return <>{render(ctx)}</>;
+}
+
+/** Exported for the test that asserts a plugin's render runs below the boundary, not above it. */
+export { PluginRender };
 
 /**
  * One plugin drawing at one mount point.
@@ -33,7 +55,11 @@ export function PluginSlot({
   }
   const spec = where === "header" ? plugin.header : plugin.strip;
   if (!spec) return null;
-  return <PluginBoundary id={plugin.id}>{spec.render(ctx)}</PluginBoundary>;
+  return (
+    <PluginBoundary id={plugin.id}>
+      <PluginRender render={spec.render} ctx={ctx} />
+    </PluginBoundary>
+  );
 }
 
 /**
@@ -70,13 +96,21 @@ export function PluginPage({
   return (
     <PageShell
       title={spec.label ?? plugin.id}
-      note={spec.note && <PluginBoundary id={plugin.id}>{spec.note(ctx)}</PluginBoundary>}
+      note={
+        spec.note && (
+          <PluginBoundary id={plugin.id}>
+            <PluginRender render={spec.note} ctx={ctx} />
+          </PluginBoundary>
+        )
+      }
       search={spec.search === undefined ? undefined : query}
       searchPlaceholder={spec.search}
       onSearch={spec.search === undefined ? undefined : setQuery}
       onClose={onClose}
     >
-      <PluginBoundary id={plugin.id}>{spec.render(ctx)}</PluginBoundary>
+      <PluginBoundary id={plugin.id}>
+        <PluginRender render={spec.render} ctx={ctx} />
+      </PluginBoundary>
     </PageShell>
   );
 }
