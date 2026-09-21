@@ -188,6 +188,10 @@ export function Composer(p: ComposerProps) {
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While an IME is composing, the keys belong to it: Enter commits the candidate, the arrows
+    // move between candidates, Escape cancels. Acting on any of them here would answer a key the
+    // user pressed to finish a word.
+    if (e.nativeEvent.isComposing) return;
     if (token && items.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -216,7 +220,7 @@ export function Composer(p: ComposerProps) {
       p.onRemoveAttachment(attachments[attachments.length - 1].path);
       return;
     }
-    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    if (e.key !== "Enter") return;
     if (e.shiftKey) return; // newline
     const mod = e.metaKey || e.ctrlKey;
     if (!enterSends && !mod) return; // Enter is a newline in this mode
