@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { resolveLink } from "../src/renderer/components/Markdown";
-import { isWebUrl } from "../src/shared/url";
+import { isProgramPath, isWebUrl } from "../src/shared/url";
 
 const CWD = "/Users/me/dev/app";
+
+/**
+ * What a click inside a transcript is allowed to hand the OS. A link there is untrusted text, so
+ * the decision is made once, in `@shared/url`, and the main process re-checks it.
+ */
+describe("isProgramPath", () => {
+  it("treats apps and scripts as programs rather than documents", () => {
+    expect(isProgramPath("/Applications/Calculator.app")).toBe(true);
+    expect(isProgramPath("/Applications/Calculator.app/Contents/MacOS/Calculator")).toBe(true);
+    expect(isProgramPath("/tmp/build.command")).toBe(true);
+    expect(isProgramPath("/tmp/setup.SH")).toBe(true);
+  });
+
+  it("leaves documents alone, including dotted names and dotfiles", () => {
+    expect(isProgramPath("/tmp/report.pdf")).toBe(false);
+    expect(isProgramPath("/tmp/notes.md")).toBe(false);
+    expect(isProgramPath("/tmp/v1.2.3/readme")).toBe(false);
+    expect(isProgramPath("/tmp/.zshrc")).toBe(false);
+    expect(isProgramPath("/tmp/app.txt")).toBe(false);
+  });
+});
 
 describe("resolveLink", () => {
   it("sends http and https links to the browser", () => {

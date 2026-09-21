@@ -7,7 +7,7 @@ import type { NotifyRequest } from "@shared/notifications";
 import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protocol";
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
-import { isWebUrl } from "@shared/url";
+import { isProgramPath, isWebUrl } from "@shared/url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { installDebugDump } from "./debug-dump";
@@ -181,7 +181,14 @@ ipcMain.handle("notify:show", (_e, req: NotifyRequest) =>
 );
 ipcMain.handle("notify:openSettings", () => openNotificationSettings());
 ipcMain.handle("shell:reveal", (_e, path: string) => shell.showItemInFolder(expandHome(path)));
-ipcMain.handle("shell:openPath", (_e, path: string) => shell.openPath(expandHome(path)));
+ipcMain.handle("shell:openPath", (_e, path: string) => {
+  const full = expandHome(path);
+  // A transcript link is untrusted text (a model wrote it, or a file it quoted), and `openPath`
+  // hands the path to LaunchServices. Revealing a program is a click the user still chooses;
+  // launching it is not.
+  if (isProgramPath(full)) return shell.showItemInFolder(full);
+  return shell.openPath(full);
+});
 ipcMain.handle("shell:openExternal", async (_e, url: string) => {
   if (isWebUrl(url)) await shell.openExternal(url);
 });
