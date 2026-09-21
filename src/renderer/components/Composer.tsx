@@ -83,6 +83,8 @@ export function Composer(p: ComposerProps) {
   // the user can toggle it, and a manual collapse holds until the draft is sent.
   const [expanded, setExpanded] = useState(false);
   const pinnedCompact = useRef(false);
+  /** False when the last text change came from somewhere other than the textarea itself. */
+  const typed = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -129,7 +131,13 @@ export function Composer(p: ComposerProps) {
   useEffect(() => {
     if (document.activeElement === ref.current) {
       const el = ref.current;
-      if (el && el.selectionStart === 0 && text.length > 0) el.setSelectionRange(text.length, text.length);
+      // A draft that arrives whole — a fork's text, a restored draft, a signature — should leave
+      // the caret at its end. A keystroke or a delete is the user's own caret, wherever they left
+      // it: moving it to the end turned deleting the first character into a jump to the bottom.
+      if (!typed.current && el && el.selectionStart === 0 && text.length > 0) {
+        el.setSelectionRange(text.length, text.length);
+      }
+      typed.current = false;
       refreshToken();
     }
   }, [text, refreshToken]);
@@ -350,6 +358,7 @@ export function Composer(p: ComposerProps) {
             value={text}
             disabled={p.disabled}
             onChange={(e) => {
+              typed.current = true;
               const el = e.target;
               // A URL the user just left (whitespace after it) folds into its "🔗host/…" token.
               const folded = collapseLinks(el.value, p.links, { caret: el.selectionStart });
