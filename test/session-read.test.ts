@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readSessionBranch, readSessionMessages } from "../src/main/pi/session-read";
+import { readSessionBranch, readSessionMessages, readSessionTranscript } from "../src/main/pi/session-read";
 
 const line = (o: unknown) => JSON.stringify(o);
 
@@ -61,5 +61,12 @@ describe("readSessionMessages", () => {
 
     // The text view has no role to report a summary under, so it carries what a person typed.
     expect((await readSessionMessages(file)).map((m) => m.text)).toEqual(["new question"]);
+
+    // Search wants recall, so it reads the branch whatever the context still carries.
+    expect((await readSessionTranscript(file)).map((m) => m.text)).toEqual([
+      "old question",
+      "old answer",
+      "new question",
+    ]);
   });
 });

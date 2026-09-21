@@ -9,42 +9,76 @@ import {
 import type { SessionMessage } from "@shared/sessions";
 
 /**
- * Read-only view of a Pi session file's active branch. Parses the JSONL directly; never writes.
+ * Read-only views of a Pi session file's active branch. Parses the JSONL directly; never writes.
  * The file remains the source of truth.
  *
- * Pi's own reader walks the tree, and it is the one to ask. The branch is the leaf's ancestry, and
- * a compaction stands in for everything before it. PID filtered the raw entries itself, which
- * showed messages the session had already summarized away and hid what Pi's context carries — a
- * compaction summary, an extension's custom message — so the preview disagreed with `get_messages`
- * a moment later, once the process reported its own messages.
+ * Two questions get two answers, because they disagree: what would Pi resume (the timeline's
+ * preview), and what did anyone ever say here (search). Pi's own reader answers the first — the
+ * branch is the leaf's ancestry, and a compaction stands in for everything before it — and it
+ * exports no walker for the second, which is the one thing below that is PID's own.
  */
 
-/** The active branch as full agent messages — what `get_messages` would return once pi is up. */
-export async function readSessionBranch(path: string): Promise<AgentMessage[]> {
+/** The file's entries, header removed. `undefined` when the file is not there yet. */
+async function fileEntries(path: string): Promise<SessionEntry[] | undefined> {
   let raw: string;
   try {
     raw = await readFile(path, "utf8");
   } catch (e) {
     // a session pi has not written yet has no file; the timeline just starts empty
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw e;
   }
   // The header line names the session; everything after it is the tree.
-  const entries = parseSessionEntries(raw).filter((e): e is SessionEntry => e.type !== "session");
+  return parseSessionEntries(raw).filter((e): e is SessionEntry => e.type !== "session");
+}
+
+/** The active branch as full agent messages — what `get_messages` would return once pi is up. */
+export async function readSessionBranch(path: string): Promise<AgentMessage[]> {
+  const entries = await fileEntries(path);
+  if (!entries) return [];
   return buildContextEntries(entries).flatMap((entry) => sessionEntryToContextMessages(entry));
 }
 
 /**
- * User/assistant text only, for explicit $session references and search. The same branch as
- * `readSessionBranch`, minus what a person did not type or read: a compaction's summary and an
- * extension's custom message have a role of their own and none of their own text to report here.
+ * Every user/assistant message on the active branch, whether or not the branch's own context still
+ * carries it.
+ *
+ * Search wants recall: "that thing I remember typing" is often exactly what a compaction folded
+ * away, and the file still holds it. That is why this is not `readSessionMessages` — the two reads
+ * answer different questions on purpose.
+ */
+export async function readSessionTranscript(path: string): Promise<SessionMessage[]> {
+  const entries = await fileEntries(path);
+  if (!entries) return [];
+  const byId = new Map(entries.filter((e) => e.id).map((e) => [e.id, e] as const));
+  const branch: SessionEntry[] = [];
+  // The last entry appended is the leaf; a parent is the entry it names.
+  for (let cur = entries.at(-1); cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) {
+    branch.push(cur);
+  }
+  return textOfEntries(branch.reverse());
+}
+
+/**
+ * User/assistant text only, and only what Pi's context still carries. This is the read for explicit
+ * $session references: a compaction's summary and an extension's custom message have a role of
+ * their own and none of their own text to report here.
  */
 export async function readSessionMessages(path: string): Promise<SessionMessage[]> {
+  const entries = await fileEntries(path);
+  if (!entries) return [];
+  return textOfEntries(buildContextEntries(entries));
+}
+
+/** The user/assistant text of the given entries, in order. */
+function textOfEntries(entries: SessionEntry[]): SessionMessage[] {
   const out: SessionMessage[] = [];
-  for (const m of await readSessionBranch(path)) {
-    if (m.role !== "user" && m.role !== "assistant") continue;
-    const text = textOf(m.content);
-    if (text.trim()) out.push({ role: m.role, text });
+  for (const entry of entries) {
+    if (entry.type !== "message") continue;
+    const { role, content } = entry.message as { role: string; content: unknown };
+    if (role !== "user" && role !== "assistant") continue;
+    const text = textOf(content);
+    if (text.trim()) out.push({ role, text });
   }
   return out;
 }

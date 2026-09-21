@@ -1,5 +1,5 @@
 import type { SearchHit, SearchScope, SessionSummary } from "@shared/sessions";
-import { readSessionMessages } from "./session-read";
+import { readSessionTranscript } from "./session-read";
 
 /**
  * BM25 over Pi session files: one document per message plus one per session title.
@@ -101,7 +101,9 @@ async function docsFor(s: Info): Promise<Doc[]> {
   const title = makeDoc(session, "title", `${s.name ?? ""} ${s.firstMessage}`);
   if (title) docs.push(title);
   try {
-    for (const m of await readSessionMessages(s.path)) {
+    // The whole branch, not just what the session's context still carries: a compaction folding
+    // messages away must not take them out of the search results.
+    for (const m of await readSessionTranscript(s.path)) {
       const d = makeDoc(session, "message", m.text.slice(0, 4000), m.role);
       if (d) docs.push(d);
     }
