@@ -21,6 +21,8 @@ export interface SessionProcessOptions extends WorkerStartOptions {
  */
 export class SessionProcess {
   readonly cwd: string;
+  /** The Pi session file this worker owns, when it resumes one. Two workers must never share it. */
+  readonly sessionPath?: string;
   private child: UtilityProcess;
   private stderr = "";
   private pending = new Map<string, Pending>();
@@ -32,6 +34,7 @@ export class SessionProcess {
 
   constructor(private opts: SessionProcessOptions) {
     this.cwd = opts.cwd;
+    this.sessionPath = opts.sessionPath;
     this.child = utilityProcess.fork(join(__dirname, "session-worker.js"), [], {
       serviceName: "pid-session",
       stdio: "pipe",

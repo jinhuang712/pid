@@ -21,7 +21,27 @@ export class PiRegistry {
 
   constructor(private win: () => BrowserWindow | undefined) {}
 
+  /**
+   * One worker per session file.
+   *
+   * A renderer reload (⌘R) forgets the keys it was holding, so the window asks for the same
+   * session again; adopting the worker that already owns the file is what keeps a single writer
+   * on it. Pi's session format assumes that — it takes no lock, and two runtimes appending to one
+   * file turn it into sibling branches nothing resumes. A session with no file yet always gets a
+   * worker of its own.
+   */
   async start(opts: StartPiOptions) {
+    const existing = opts.sessionPath ? this.liveFor(opts.sessionPath) : undefined;
+    if (existing) {
+      const { key, proc } = existing;
+      const earlyEvents: PiEvent[] = [];
+      try {
+        return { key, cwd: proc.cwd, state: await proc.started, earlyEvents };
+      } catch (err) {
+        this.discard(key, proc);
+        throw new Error(this.why(err, proc));
+      }
+    }
     const key = randomUUID();
     let early: PiEvent[] | undefined = [];
     await warmShellEnv(); // never probe the login shell synchronously on the IPC thread
@@ -44,10 +64,8 @@ export class PiRegistry {
     } catch (err) {
       // A failed runtime build, an early crash, or a worker that never answered: leave nothing
       // running and surface why.
-      this.procs.delete(key);
-      proc.kill();
-      const detail = proc.stderrTail.trim();
-      throw new Error(detail ? `${(err as Error).message}\n${detail}` : (err as Error).message);
+      this.discard(key, proc);
+      throw new Error(this.why(err, proc));
     }
     const earlyEvents = early;
     early = undefined;
@@ -88,6 +106,26 @@ export class PiRegistry {
     const p = this.procs.get(key);
     if (!p) throw new Error(`unknown session worker ${key}`);
     return p;
+  }
+
+  /** The live worker that already owns this session file, if any. */
+  private liveFor(sessionPath: string): { key: string; proc: SessionProcess } | undefined {
+    for (const [key, proc] of this.procs) {
+      if (proc.sessionPath === sessionPath && !proc.exited) return { key, proc };
+    }
+    return undefined;
+  }
+
+  /** Forget a worker and make sure nothing is left running under it. */
+  private discard(key: string, proc: SessionProcess) {
+    this.procs.delete(key);
+    proc.kill();
+  }
+
+  /** Why a start failed, including the worker's own output when it left any. */
+  private why(err: unknown, proc: SessionProcess): string {
+    const detail = proc.stderrTail.trim();
+    return detail ? `${(err as Error).message}\n${detail}` : (err as Error).message;
   }
 
   private send(channel: string, payload: unknown) {
