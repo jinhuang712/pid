@@ -1,5 +1,11 @@
-/** Tiny subsequence fuzzy match. Returns a score (higher is better) or -1 for no match. */
-export function fuzzyScore(query: string, text: string): number {
+/**
+ * Tiny subsequence fuzzy match.
+ *
+ * A score is not a matchedness test: the length tie-breaker can make a genuine match negative on
+ * a long description, so "no match" is `undefined` rather than a number the penalty can also
+ * produce. Ranking is the only thing the score decides.
+ */
+export function fuzzyScore(query: string, text: string): number | undefined {
   if (!query) return 0;
   const q = query.toLowerCase();
   const t = text.toLowerCase();
@@ -15,7 +21,7 @@ export function fuzzyScore(query: string, text: string): number {
       streak = 0;
     }
   }
-  if (qi < q.length) return -1;
+  if (qi < q.length) return undefined;
   return score - t.length * 0.01;
 }
 
@@ -23,7 +29,7 @@ export function fuzzyFilter<T>(items: T[], query: string, text: (item: T) => str
   if (!query) return items;
   return items
     .map((item) => ({ item, s: fuzzyScore(query, text(item)) }))
-    .filter((x) => x.s >= 0)
+    .filter((x): x is { item: T; s: number } => x.s !== undefined)
     .sort((a, b) => b.s - a.s)
     .map((x) => x.item);
 }
