@@ -8,7 +8,7 @@ import type { PiCommand, PiDialogResponse, StartPiOptions } from "@shared/protoc
 import type { SearchScope } from "@shared/sessions";
 import type { PidSettings } from "@shared/settings";
 import { isProgramPath, isWebUrl } from "@shared/url";
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, session, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import { installDebugDump } from "./debug-dump";
 import { listFiles, saveClipboardImage, statPaths, thumbnail } from "./files";
@@ -340,6 +340,10 @@ app.whenReady().then(() => {
   // A headless run hides the window, but on macOS the Dock icon alone steals focus from whatever
   // the user is doing — which is the popup, as far as they are concerned. Hide that too.
   if (process.env.PID_HEADLESS || process.env.PID_DUMP_DIR) void app.dock?.hide();
+  // Nothing in PID asks for a device: the window draws a conversation and a plugin composes PID's
+  // own primitives. Electron approves permission requests by default, so the refusal is explicit.
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
   installDebugDump();
   applyTheme(); // decide the theme before the first frame
   serveApp();
