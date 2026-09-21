@@ -263,8 +263,12 @@ export function App() {
         }
         dispatch({ type: "add", handle, replaces: pendingKey });
         if (pendingKey) composerRef.current.move(pendingKey, handle.key);
-        for (const ev of handle.earlyEvents)
+        for (const ev of handle.earlyEvents) {
           if (ev.type === "dialog" && ev.method === "notify") toast(ev.message, ev.notifyType);
+          // The reducer drops an extension's error — it is not conversation state — so for one
+          // raised while the session was starting, this toast is the only place it can appear.
+          if (ev.type === "extension_error") toast(`${base(ev.extensionPath)}: ${ev.error}`, "error");
+        }
         if (sessionPath) {
           const { messages } = await bridge.pi.command(handle.key, { type: "get_messages" });
           dispatch({ type: "messages", key: handle.key, conv: fromMessages(messages) });
