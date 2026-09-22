@@ -148,6 +148,13 @@ implement → verify → inspect → commit → next
 
 Small commits, one concern each. `GITFLOW.md` has the branch and message discipline.
 
+**A worktree shares the main checkout's pnpm workspace.** `pnpm-workspace.yaml` sits at the repo
+root, so in a worktree under `.claude/worktrees/` pnpm resolves the workspace to the main checkout:
+`pnpm install` fills the main `node_modules`, and `pnpm add` would edit the shared lockfile. Run
+`pnpm exec …` freely in a worktree, but add a dependency by editing `package.json` and regenerate
+the lockfile in the main checkout after landing. electron-builder in a worktree cannot read the
+Electron version; pass `-c.electronVersion=<version>`.
+
 ## Documents
 
 | File | Answers |
